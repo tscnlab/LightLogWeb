@@ -312,21 +312,32 @@ importServer <-
         new_names
       }) |>  shiny::bindEvent(input$file)
 
-      # import and import message
-      data <- shiny::reactive({
-        req(input$device)
-        #actual import
-        data <- import_Dataset(input$device,
-                               new_names(),
-                               tz = input$tz,
-                               not.before = input$not_before,
-                               dst_adjustment = "dst_jumps" %in% input$options,
-                               remove_duplicates = "remove_duplicates" %in% input$options,
-                               auto.plot = FALSE,
-                               print_n = Inf
-                               )
-        data
-      }) |>  bindEvent(input$import)
+      # Import handling:
+      # - capture the console output from import_Dataset() for the summary panel
+      # - return the imported data for the table and overview plot
+      import_result <- shiny::eventReactive(input$import, {
+        shiny::req(input$device)
+        import_msg <- character()
+        imported_data <- NULL
+
+        import_msg <- capture.output({
+          imported_data <- import_Dataset(
+            input$device,
+            new_names(),
+            tz = input$tz,
+            not.before = input$not_before,
+            dst_adjustment = "dst_jumps" %in% input$options,
+            remove_duplicates = "remove_duplicates" %in% input$options,
+            auto.plot = FALSE,
+            print_n = Inf
+          )
+        })
+
+        list(
+          data = imported_data,
+          msg = import_msg
+        )
+      })
 
       shiny::observe({
         shiny::showNotification(
@@ -338,8 +349,9 @@ importServer <-
         shiny::bindEvent(input$import)
 
       #outputs p1
-      output$import_msg <- shiny::renderPrint({
-        invisible(data())
+      output$import_msg <- shiny::renderText({
+        shiny::req(import_result())
+        paste(import_result()$msg, collapse = "\n")
       })
 
       shiny::observe({
@@ -352,14 +364,16 @@ importServer <-
           ),
         )
       }) |>
-        shiny::bindEvent(data())
+        shiny::bindEvent(import_result())
 
       output$import_table <-  gt::render_gt({
-        data()
+        shiny::req(import_result())
+        gt::gt(import_result()$data)
       })
 
       output$plot_overview <- shiny::renderPlot({
-        data() %>% gg_overview()
+        shiny::req(import_result())
+        import_result()$data %>% gg_overview()
       })
 
 
