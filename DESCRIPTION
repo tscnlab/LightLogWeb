@@ -29,4 +29,5 @@ Imports:
     tibble,
     tidyr
 Suggests: 
+    pkgload,
     rsconnect
