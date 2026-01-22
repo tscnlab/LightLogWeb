@@ -14,13 +14,14 @@ LightLogWeb <- function(...) {
   #add a resource path to the www folder
   shiny::addResourcePath(
     "extr", system.file("app/www", package = "LightLogWeb"))
-  on.exit(shiny::removeResourcePath("extr"), add = TRUE)
+  # on.exit(shiny::removeResourcePath("extr"), add = TRUE)
 
   ui <- bslib::page_navbar(
     # App title ----
     title = shiny::h1("LightLogWeb"),
     footer = footer,
     selected = "Import",
+    fillable = FALSE,
     bslib::nav_spacer(),
     bslib::nav_panel("Import",
                      importUI("import")
