@@ -221,6 +221,16 @@ importUI <- function(id) {
           bslib::card_header("Imported table", container = htmltools::h4) |>
             tooltip("This table shows the first and last 50 rows of the imported data"),
           gt::gt_output(ns("import_table"))
+        ),
+        shiny::p(
+          shiny::actionButton(
+            ns("add_dataset"),
+            shiny::span(shiny::strong("Add dataset to library")),
+            icon = shiny::icon("database"),
+            width = "50%",
+            class = "btn-primary btn-lg"
+          ),
+          style = "text-align:center;"
         )
       )
     )
@@ -470,11 +480,21 @@ importServer <-
         paste(import_result()$msg, collapse = "\n")
       })
 
+      add_dataset <- shiny::eventReactive(input$add_dataset, {
+        shiny::req(import_result()$data, input$dataset_name)
+        list(
+          name = input$dataset_name,
+          data = import_result()$data
+        )
+      })
+
       #Return_Value
       # shiny::reactive(
       #   list(in1 = (input$zu_Import1),
       #        in2 = (input$zu_Import2)
       #   ))
+
+      list(add_dataset = add_dataset)
 
     })
   }
