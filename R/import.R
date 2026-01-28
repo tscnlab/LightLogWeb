@@ -177,7 +177,7 @@ importUI <- function(id) {
               "Number of files",
               value = shiny::textOutput(ns("n_files")),
               showcase = bsicons::bs_icon("journals"),
-              theme = "tertiary",
+              theme = bslib::value_box_theme(bg =  "#d3d3d350"),
               shiny::textOutput(ns("filenames"))
             ),
             #show extracted ids
@@ -186,18 +186,19 @@ importUI <- function(id) {
                 tooltip("Based on the prior settings and file names (irrelevant if `Id` column is present in the data"),
               value = shiny::textOutput(ns("n_ids")),
               showcase = bsicons::bs_icon("search"),
-              theme = "tertiary",
+              theme = bslib::value_box_theme(bg =  "#d3d3d350"),
               shiny::textOutput(ns("pattern"))
             )
         ),
         #import button
         shiny::p(
-          shiny::actionButton(
+          bslib::input_task_button(
             ns("import"),
             shiny::span(shiny::strong("Import")),
             icon = shiny::icon("file-import"),
             width = "50%",
-            class = "btn-primary btn-lg"
+            class = "btn-primary btn-lg",
+            style = "width: 50%;"
           ),
           style = "text-align:center;"
         ),
@@ -216,6 +217,16 @@ importUI <- function(id) {
             shiny::plotOutput(ns("plot_overview")),
             min_height = "400px"
           )
+        ),
+        shiny::p(
+          shiny::actionButton(
+            ns("add_dataset"),
+            shiny::span(shiny::strong("Add dataset to library")),
+            icon = shiny::icon("database"),
+            width = "50%",
+            class = "btn-primary btn-lg"
+          ),
+          style = "text-align:center;"
         ),
         bslib::card(
           bslib::card_header("Imported table", container = htmltools::h4) |>
@@ -350,13 +361,13 @@ importServer <-
       # - return the imported data for the table and overview plot
       import_result <- shiny::eventReactive(input$import, {
 
+        import_msg <- character()
+        imported_data <- NULL
+
         shiny::req(input$device,
                    input$file,
                    input$device != "",
                    input$dataset_name != "")
-
-        import_msg <- character()
-        imported_data <- NULL
 
         conditional_arg <-
           list(print_n = Inf)
@@ -470,11 +481,37 @@ importServer <-
         paste(import_result()$msg, collapse = "\n")
       })
 
-      #Return_Value
-      # shiny::reactive(
-      #   list(in1 = (input$zu_Import1),
-      #        in2 = (input$zu_Import2)
-      #   ))
+      add_dataset <- shiny::eventReactive(input$add_dataset, {
+
+        shiny::req(import_result()$data,
+                   input$dataset_name,
+                   input$device,
+                   input$tz)
+        list(
+          name = input$dataset_name,
+          data = import_result()$data,
+          device = input$device,
+          tz = input$tz
+        )
+      })
+
+      shiny::observe({
+        res <- tryCatch(
+          import_result(),
+          error = function(e) NULL
+        )
+
+        if (is.null(res) || is.null(res$data) || !is.data.frame(res$data)) {
+          shiny::showNotification(
+            "Please provide a valid import.",
+            type = "warning",
+            duration = 5
+          )}
+          }) |> shiny::bindEvent(input$add_dataset)
+
+      # Return value -------------
+
+      list(add_dataset = add_dataset)
 
     })
   }
