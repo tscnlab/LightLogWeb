@@ -453,7 +453,7 @@ importServer <-
         shiny::showModal(
           shiny::modalDialog(
             title = icon("check", style = "font-size: 60px;"),
-            easy_close = TRUE,
+            easyClose = TRUE,
             shiny::strong("Import successful!"),
             shiny::p(glue::glue("The imported table measures {dimensions[2]|> prettyNum()} x {dimensions[1]|> prettyNum()} (columns x rows).")),
             shiny::p("Please check the import message and overview plot and continue to the analysis tab if satisfied.")

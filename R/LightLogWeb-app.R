@@ -66,9 +66,11 @@ LightLogWeb <- function(...) {
                         variable_name = "",
                         variable_unit = "",
                         tz = new_dataset$tz,
-                        device = new_dataset$tz)
+                        device = new_dataset$device)
       )
-      shiny::showNotification("Dataset added to the library.", type = "message")
+      shiny::showNotification(
+      shiny::p("Dataset ", shiny::strong(dataset_name), " added to the library."),
+      type = "message")
     })
 
     #Dataset handling
@@ -82,6 +84,23 @@ LightLogWeb <- function(...) {
 
     #close the waiting screen
     # waiter::waiter_hide()
+
+    # UI navigation updates
+
+    #when starting a new import
+    shiny::observe({
+      bslib::nav_select("main_nav", selected = "Import")
+      bslib::accordion_panel_open("import-import_accordion", "import_specs")
+    }) |> shiny::bindEvent(input$`datasets-import_newdata`,
+                           input$`details-to_import`)
+
+    #when data were loaded in
+    shiny::observe({
+      bslib::nav_select("main_nav", selected = "prepare")
+    }) |> shiny::bindEvent(input$`import-add_dataset`,
+                           input$`datasets-import_testdata`,
+                           ignoreInit = TRUE
+                           )
 
   }
 

@@ -4,7 +4,14 @@ datasetDetailUI <- function(id) {
 
   shiny::tagList(
   shiny::uiOutput(ns("dataset_detail")),
-  shiny::selectInput(
+  bslib::accordion(
+    multiple = FALSE,
+    id = ns("prepare_accordion"),
+    #first accordion panel with import specs
+    bslib::accordion_panel(
+      shiny::h3("Variable"),
+      value = "variable",
+      shiny::selectInput(
     ns("variable_select"),
     label = "Relevant variable",
     choices = "",
@@ -29,6 +36,8 @@ datasetDetailUI <- function(id) {
     )
   )
   )
+  )
+  )
 
 }
 
@@ -50,11 +59,11 @@ datasetDetailServer <- function(id,
               shiny::icon("question", style = "font-size: 60px;"),
               shiny::icon("bowl-food", style = "font-size: 30px;"),
               ),
-            easy_close = TRUE,
+            easyClose = TRUE,
             shiny::strong("Missing dataset!"),
             shiny::p("No dataset is available/selected. Please import a dataset."
             ),
-            shiny::actionButton(session$ns("to_import"), "Go to import",
+            shiny::actionButton(session$ns("to_import"), "Buckle up and go to import",
                                 icon = shiny::icon("file-import"),
                                 width = "100%"),
             footer = NULL
@@ -62,6 +71,10 @@ datasetDetailServer <- function(id,
         )
       }
       })
+
+    shiny::observe({
+      shiny::removeModal()
+    }) |> shiny::bindEvent(input$to_import)
 
     #create the ui of the dataset detail
     output$dataset_detail <- shiny::renderUI({
