@@ -19,17 +19,18 @@ LightLogWeb <- function(...) {
   ui <- bslib::page_navbar(
     # App title ----
     title = shiny::h1("LightLogWeb"),
+    id = "main_nav",
     footer = footer,
     selected = "Import",
     fillable = FALSE,
+    sidebar = datasetSidebarUI("datasets"),
     bslib::nav_spacer(),
     bslib::nav_panel("Import",
-                     bslib::layout_sidebar(
-                       sidebar = datasetSidebarUI("datasets"),
-                       importUI("import"),
-                       datasetDetailUI("datasets")
-                     )
-    )
+                       importUI("import")
+                     ),
+    bslib::nav_panel("Prepare", value = "prepare",
+                       datasetDetailUI("details")
+                       )
   )
 
   # Server ------------------------------------------------------------------
@@ -41,9 +42,8 @@ LightLogWeb <- function(...) {
     session$allowReconnect(TRUE)
 
     #Import
-    datasets <- shiny::reactiveValues()
     light <- importServer("import")
-    datasetManagerServer("datasets", datasets)
+    datasets <- shiny::reactiveValues()
 
     shiny::observeEvent(light$add_dataset(), {
       new_dataset <- light$add_dataset()
@@ -62,10 +62,23 @@ LightLogWeb <- function(...) {
 
       datasets[[dataset_name]] <- list(
         data = new_dataset$data,
-        metadata = list(variable = NULL, variable_name = "", variable_unit = "")
+        metadata = list(variable = NULL,
+                        variable_name = "",
+                        variable_unit = "",
+                        tz = new_dataset$tz,
+                        device = new_dataset$tz)
       )
       shiny::showNotification("Dataset added to the library.", type = "message")
     })
+
+    #Dataset handling
+    selected_dataset <- datasetManagerServer("datasets", datasets)
+
+    #Dataset Detail
+    datasetDetailServer("details",
+                        datasets = datasets,
+                        selected_dataset =selected_dataset,
+                        active_panel = shiny::reactive(input$main_nav))
 
     #close the waiting screen
     # waiter::waiter_hide()

@@ -2,27 +2,66 @@ datasetSidebarUI <- function(id) {
   ns <- shiny::NS(id)
 
   bslib::sidebar(
-    title = "Imported datasets",
+    shiny::h5("Imported datasets"),
     shiny::uiOutput(ns("dataset_list")),
+    shiny::hr(),
+    shiny::h5("Add datasets"),
+    shiny::actionButton(
+      ns("import_newdata"),
+      "Start new import" |>
+        tooltip("Takes you to the import module"),
+      icon = shiny::icon("file-import"),
+    ),
+    shiny::actionButton(
+      ns("import_testdata"),
+      "Load test data" |>
+        tooltip("Testdata are two one week long datasets, one containing participant data, one environmental data (collected on the rooftop in the same general area as the participant)"),
+      icon = shiny::icon("file-medical"),
+    ),
+    shiny::hr(),
+    shiny::h5("Danger zone"),
+    shiny::actionButton(
+      ns("rename_dataset"),
+      "Rename dataset"|>
+        tooltip("This button will allow you to rename the current dataset"),
+      icon = shiny::icon("file-signature"),
+    ),
+    shiny::actionButton(
+      ns("merge_dataset"),
+      "Merge dataset" |>
+        tooltip("This button will allow you to merge the current dataset with another"),
+      icon = shiny::icon("code-merge"),
+      class = "btn-outline-warning"
+    ),
+    shiny::actionButton(
+      ns("delete_dataset"),
+      "Delete dataset" |>
+        tooltip("Clicking this button will delete the selected dataset permanently! No additional warning will be given."),
+      icon = shiny::icon("trash"),
+      class = "btn-outline-danger"
+    ),
     open = "desktop",
     width = 300
   )
 }
 
-datasetDetailUI <- function(id) {
-  ns <- shiny::NS(id)
-
-  shiny::uiOutput(ns("dataset_detail"))
-}
-
 datasetManagerServer <- function(id, datasets) {
   shiny::moduleServer(id, function(input, output, session) {
+
+    # Imported datasets -------------
+
+    #create a hull for selected dataset names
     selected_dataset <- shiny::reactiveVal(NULL)
 
+    #collect all dataset names
     dataset_names <- shiny::reactive({
-      names(shiny::reactiveValuesToList(datasets))
+      names_datasets <-
+        shiny::reactiveValuesToList(datasets) |>
+        purrr::map_lgl(is.null)
+      names_datasets |> subset(subset = !names_datasets) |> names()
     })
 
+    #if dataset_names updates, make certain a valid dataset name is chosen
     shiny::observeEvent(dataset_names(), {
       if (length(dataset_names()) == 0) {
         selected_dataset(NULL)
@@ -31,11 +70,14 @@ datasetManagerServer <- function(id, datasets) {
       }
     })
 
+    #create the dataset list
     output$dataset_list <- shiny::renderUI({
+      #initial state
       if (length(dataset_names()) == 0) {
         return(shiny::p("No datasets imported yet."))
       }
 
+      #create the list
       shiny::radioButtons(
         session$ns("dataset_select"),
         label = NULL,
@@ -45,100 +87,21 @@ datasetManagerServer <- function(id, datasets) {
       )
     })
 
+    #update the selected dataset based on the radio buttons
     shiny::observeEvent(input$dataset_select, {
       selected_dataset(input$dataset_select)
     }, ignoreInit = TRUE)
 
-    output$dataset_detail <- shiny::renderUI({
-      if (is.null(selected_dataset())) {
-        return(
-          bslib::card(
-            bslib::card_header("Dataset overview", container = htmltools::h4),
-            shiny::p("Select a dataset from the sidebar to manage it.")
-          )
-        )
-      }
+    # Add datasets -------------
 
-      dataset <- datasets[[selected_dataset()]]
-      if (is.null(dataset)) {
-        return(
-          bslib::card(
-            bslib::card_header("Dataset overview", container = htmltools::h4),
-            shiny::p("The selected dataset is no longer available.")
-          )
-        )
-      }
+    shiny::observe({
 
-      metadata <- rlang::`%||%`(
-        dataset$metadata,
-        list(variable = NULL, variable_name = "", variable_unit = "")
-      )
 
-      bslib::card(
-        bslib::card_header("Dataset overview", container = htmltools::h4),
-        shiny::h4(selected_dataset()),
-        bslib::navset_pill(
-          bslib::nav_panel(
-            "Adjust data",
-            shiny::p("Prepare or clean the dataset here.")
-          ),
-          bslib::nav_panel(
-            "Visualise",
-            shiny::p("Explore the dataset through visual summaries.")
-          ),
-          bslib::nav_panel(
-            "Metrics",
-            shiny::p("Calculate metrics for the selected dataset.")
-          )
-        ),
-        shiny::hr(),
-        shiny::selectInput(
-          session$ns("variable_select"),
-          label = "Relevant variable",
-          choices = names(dataset$data),
-          selected = metadata$variable
-        ),
-        shiny::textInput(
-          session$ns("variable_name"),
-          label = "Variable name",
-          value = metadata$variable_name
-        ),
-        shiny::textInput(
-          session$ns("variable_unit"),
-          label = "Variable unit",
-          value = metadata$variable_unit
-        ),
-        shiny::p(
-          shiny::actionButton(
-            session$ns("save_variable"),
-            "Save variable details",
-            icon = shiny::icon("save"),
-            class = "btn-primary"
-          ),
-          shiny::actionButton(
-            session$ns("delete_dataset"),
-            "Delete dataset",
-            icon = shiny::icon("trash"),
-            class = "btn-outline-danger"
-          )
-        )
-      )
-    })
+    }) |> shiny::bindEvent(input$import_newdata)
 
-    shiny::observeEvent(input$save_variable, {
-      shiny::req(selected_dataset())
-      dataset <- datasets[[selected_dataset()]]
-      shiny::req(dataset)
+    # Danger zone -------------
 
-      dataset$metadata <- list(
-        variable = input$variable_select,
-        variable_name = input$variable_name,
-        variable_unit = input$variable_unit
-      )
-      datasets[[selected_dataset()]] <- dataset
-      shiny::showNotification("Variable details saved.", type = "message")
-    })
-
+    #remove dataset
     shiny::observeEvent(input$delete_dataset, {
       shiny::req(selected_dataset())
       datasets[[selected_dataset()]] <- NULL
@@ -149,5 +112,10 @@ datasetManagerServer <- function(id, datasets) {
         selected_dataset(dataset_names()[1])
       }
     })
+
+    # Return -------------
+
+    selected_dataset
+
   })
 }
