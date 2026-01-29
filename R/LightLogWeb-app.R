@@ -30,7 +30,10 @@ LightLogWeb <- function(...) {
                      ),
     bslib::nav_panel("Prepare", value = "prepare",
                        datasetDetailUI("details")
-                       )
+                       ),
+    bslib::nav_panel("Report",
+                     reportUI("report")
+                     )
   )
 
   # Server ------------------------------------------------------------------
@@ -66,7 +69,9 @@ LightLogWeb <- function(...) {
                         variable_name = "",
                         variable_unit = "",
                         tz = new_dataset$tz,
-                        device = new_dataset$device)
+                        device = new_dataset$device),
+        import_specs = new_dataset$import_specs,
+        import_call = new_dataset$import_call
       )
       shiny::showNotification(
       shiny::p("Dataset ", shiny::strong(dataset_name), " added to the library."),
@@ -81,6 +86,8 @@ LightLogWeb <- function(...) {
                         datasets = datasets,
                         selected_dataset =selected_dataset,
                         active_panel = shiny::reactive(input$main_nav))
+
+    reportServer("report", datasets)
 
     #close the waiting screen
     # waiter::waiter_hide()

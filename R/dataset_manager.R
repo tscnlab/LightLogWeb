@@ -108,7 +108,16 @@ datasetManagerServer <- function(id, datasets) {
                           variable_name = "melanopic EDI",
                           variable_unit = "lx",
                           tz = "Europe/Berlin",
-                          device = "ActLumus")
+                          device = "ActLumus"),
+          import_specs = list(
+            file_names = "LightLogR::sample.data.environment",
+            options = character(),
+            version = NA_character_,
+            not_before = NA_character_,
+            id_strategy = "sample",
+            id_value = NA_character_
+          ),
+          import_call = shinymeta::metaExpr(LightLogR::sample.data.environment)
         )
       shiny::showNotification(
         shiny::p("Test dataset",

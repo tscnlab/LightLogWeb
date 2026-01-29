@@ -25,6 +25,7 @@ Imports:
     purrr,
     rlang,
     shiny,
+    shinymeta,
     stringr,
     tibble,
     tidyr

@@ -1,3 +1,37 @@
+build_import_call <- function(device,
+                              file_names,
+                              tz,
+                              not_before,
+                              options,
+                              version,
+                              conditional_args) {
+  options <- rlang::`%||%`(options, character())
+  conditional_args <- rlang::`%||%`(conditional_args, list())
+
+  args <- list(
+    device = device,
+    filename = file_names,
+    tz = tz,
+    not.before = not_before,
+    dst_adjustment = "dst_jumps" %in% options,
+    remove_duplicates = "remove_duplicates" %in% options,
+    auto.plot = FALSE,
+    version = version
+  )
+
+  if (length(conditional_args) > 0) {
+    args <- c(args, conditional_args)
+  }
+
+  import_call <- rlang::call2(
+    .fn = "import_Dataset",
+    .ns = "LightLogR",
+    !!!args
+  )
+
+  shinymeta::metaExpr(import_call)
+}
+
 importUI <- function(id) {
   ns <- shiny::NS(id)
 
@@ -356,6 +390,27 @@ importServer <-
         new_names
       }) |>  shiny::bindEvent(input$file)
 
+      conditional_args <- shiny::reactive({
+        args <- list()
+
+        if (input$device == "VEET") {
+          args <- append(args, list(modality = input$veet_modality))
+        }
+
+        if (input$id == "manual") {
+          args <- append(args, list(manual.id = input$Id_manual))
+        } else if (input$id == "extract") {
+          args <- append(args, list(auto.id = input$Id_extract))
+        } else if (input$id == "automated" && length(Id_preview()) > 0) {
+          args <- append(
+            args,
+            list(auto.id = paste0(".{", nchar(Id_preview()[1]), "}"))
+          )
+        }
+
+        args
+      })
+
       # Import handling:
       # - capture the console output from import_Dataset() for the summary panel
       # - return the imported data for the table and overview plot
@@ -369,22 +424,7 @@ importServer <-
                    input$device != "",
                    input$dataset_name != "")
 
-        conditional_arg <-
-          list(print_n = Inf)
-        if(input$device == "VEET") {
-          conditional_arg <-
-            append(conditional_arg, list(modality = input$veet_modality))
-        }
-        conditional_arg <-
-        if(input$id == "manual") {
-            append(conditional_arg, list(manual.id = input$Id_manual))
-        } else if(input$id == "extract"){
-            append(conditional_arg, list(auto.id = input$Id_extract))
-        } else {
-            append(conditional_arg,
-                   list(auto.id = paste0(".{",nchar(Id_preview()[1])  ,"}"))
-                   )
-        }
+        conditional_arg <- append(list(print_n = Inf), conditional_args())
 
         rlang::inject({
         import_msg <- capture.output({
@@ -487,11 +527,40 @@ importServer <-
                    input$dataset_name,
                    input$device,
                    input$tz)
+
+        id_value <- if (input$id == "manual") {
+          input$Id_manual
+        } else if (input$id == "extract") {
+          input$Id_extract
+        } else {
+          NA_character_
+        }
+
+        import_specs <- list(
+          file_names = input$file$name,
+          options = input$options,
+          version = input$version,
+          not_before = input$not_before,
+          id_strategy = input$id,
+          id_value = id_value
+        )
+
+        import_call <- build_import_call(
+          device = input$device,
+          file_names = input$file$name,
+          tz = input$tz,
+          not_before = input$not_before,
+          options = input$options,
+          version = input$version,
+          conditional_args = conditional_args()
+        )
         list(
           name = input$dataset_name,
           data = import_result()$data,
           device = input$device,
-          tz = input$tz
+          tz = input$tz,
+          import_specs = import_specs,
+          import_call = import_call
         )
       })
 
