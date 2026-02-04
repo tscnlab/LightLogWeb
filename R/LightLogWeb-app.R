@@ -12,23 +12,23 @@ LightLogWeb <- function(...) {
   #setting the upload limit to 100 MB
   options(shiny.maxRequestSize=100*1024^2)
   #add a resource path to the www folder
-  shiny::addResourcePath(
+  addResourcePath(
     "extr", system.file("app/www", package = "LightLogWeb"))
-  # on.exit(shiny::removeResourcePath("extr"), add = TRUE)
+  # on.exit(removeResourcePath("extr"), add = TRUE)
 
-  ui <- bslib::page_navbar(
+  ui <- page_navbar(
     # App title ----
-    title = shiny::h1("LightLogWeb"),
+    title = h1("LightLogWeb"),
     id = "main_nav",
     footer = footer,
     selected = "Import",
     fillable = FALSE,
     sidebar = datasetSidebarUI("datasets"),
-    bslib::nav_spacer(),
-    bslib::nav_panel("Import",
+    nav_spacer(),
+    nav_panel("Import",
                        importUI("import")
                      ),
-    bslib::nav_panel("Prepare", value = "prepare",
+    nav_panel("Prepare", value = "prepare",
                        datasetDetailUI("details")
                        )
   )
@@ -43,35 +43,11 @@ LightLogWeb <- function(...) {
 
     #Import
     light <- importServer("import")
-    datasets <- shiny::reactiveValues()
+    datasets <- reactiveValues()
 
-    shiny::observeEvent(light$add_dataset(), {
-      new_dataset <- light$add_dataset()
-      shiny::req(new_dataset)
-      dataset_name <- new_dataset$name
-
-      if (is.null(dataset_name) || dataset_name == "") {
-        shiny::showNotification("Please provide a dataset name before saving.", type = "error")
-        return()
-      }
-
-      if (!is.null(datasets[[dataset_name]])) {
-        shiny::showNotification("A dataset with this name already exists.", type = "error")
-        return()
-      }
-
-      datasets[[dataset_name]] <- list(
-        data = new_dataset$data,
-        metadata = list(variable = NULL,
-                        variable_name = "",
-                        variable_unit = "",
-                        tz = new_dataset$tz,
-                        device = new_dataset$device)
-      )
-      shiny::showNotification(
-      shiny::p("Dataset ", shiny::strong(dataset_name), " added to the library."),
-      type = "message")
-    })
+    observe({
+      adding_dataset(datasets, light$add_dataset)
+    }) |> bindEvent(light$add_dataset(), ignoreInit = TRUE)
 
     #Dataset handling
     selected_dataset <- datasetManagerServer("datasets", datasets)
@@ -80,7 +56,7 @@ LightLogWeb <- function(...) {
     datasetDetailServer("details",
                         datasets = datasets,
                         selected_dataset =selected_dataset,
-                        active_panel = shiny::reactive(input$main_nav))
+                        active_panel = reactive(input$main_nav))
 
     #close the waiting screen
     # waiter::waiter_hide()
@@ -88,22 +64,21 @@ LightLogWeb <- function(...) {
     # UI navigation updates
 
     #when starting a new import
-    shiny::observe({
-      bslib::nav_select("main_nav", selected = "Import")
-      bslib::accordion_panel_open("import-import_accordion", "import_specs")
-    }) |> shiny::bindEvent(input$`datasets-import_newdata`,
+    observe({
+      nav_select("main_nav", selected = "Import")
+      accordion_panel_open("import-import_accordion", "import_specs")
+    }) |> bindEvent(input$`datasets-import_newdata`,
                            input$`details-to_import`)
 
-    #when data were loaded in
-    shiny::observe({
-      bslib::nav_select("main_nav", selected = "prepare")
-    }) |> shiny::bindEvent(input$`import-add_dataset`,
-                           input$`datasets-import_testdata`,
+    #when testdata were loaded in
+    observe({
+      nav_select("main_nav", selected = "prepare")
+    }) |> bindEvent(input$`datasets-import_testdata`,
                            ignoreInit = TRUE
                            )
 
   }
 
   # App ---------------------------------------------------------------------
-  shiny::shinyApp(ui, server, ...)
+  shinyApp(ui, server, ...)
 }
