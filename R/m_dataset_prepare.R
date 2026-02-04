@@ -42,7 +42,8 @@ datasetDetailUI <- function(id) {
     id = ns("prepare_accordion"),
     accordion_panel(value = "metadata",
                            h3("Metadata"),
-                           metadataUI(ns("metadata"))),
+                           metadataUI(ns("metadata"))
+                    ),
     UI_accordion_quality(ns)
   )
   )
@@ -55,6 +56,9 @@ datasetDetailServer <- function(id,
                                 datasets,
                                 selected_dataset,
                                 active_panel) {
+  stopifnot(is.reactive(selected_dataset),
+            is.reactivevalues(datasets),
+            is.reactive(active_panel))
   moduleServer(id, function(input, output, session) {
 
     #check whether a dataset is selected
@@ -75,10 +79,12 @@ datasetDetailServer <- function(id,
     #collect the current dataset
 
     #metadata module
-    # dataset <- reactive(datasets[[selected_dataset()]])
+    # dataset <- reactive({datasets[[selected_dataset()]])
 
     metadataServer("metadata",
-                   dataset_lens(datasets, selected_dataset())
+                   datasets,
+                   selected_dataset,
+                   ignoreInit = FALSE
                    )
 
     #add metadata back into dataset
@@ -96,11 +102,14 @@ datasetDetail <- function(...) {
     page_navbar(
       title = h1("datasetDetail module"),
       nav_panel_hidden("Detail",
-                       datasetDetailUI("Detail"))
+                       datasetDetailUI("Detail")
+                       )
     )
   server <- function(input, output, session) {
 
     datasets <- reactiveValues()
+
+    timer <- reactiveTimer(1000)
 
     observe(load_testdata(datasets, notifications = FALSE))
 
