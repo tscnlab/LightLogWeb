@@ -557,7 +557,7 @@
         "Config/testthat/start-first": "zzzz-bs-sass, fonts, zzz-precompile,\ntheme-*, rmd-*",
         "Encoding": "UTF-8",
         "RoxygenNote": "7.3.2",
-        "Collate": "'accordion.R' 'breakpoints.R' 'bs-current-theme.R'\n'bs-dependencies.R' 'bs-global.R' 'bs-remove.R'\n'bs-theme-layers.R' 'bs-theme-preset-bootswatch.R'\n'bs-theme-preset-brand.R' 'bs-theme-preset-builtin.R'\n'bs-theme-preset.R' 'utils.R' 'bs-theme-preview.R'\n'bs-theme-update.R' 'bs-theme.R' 'bslib-package.R' 'buttons.R'\n'card.R' 'deprecated.R' 'files.R' 'fill.R' 'imports.R'\n'input-dark-mode.R' 'input-switch.R' 'layout.R' 'nav-items.R'\n'nav-update.R' 'navbar_options.R' 'navs-legacy.R' 'navs.R'\n'onLoad.R' 'page.R' 'popover.R' 'precompiled.R' 'print.R'\n'shiny-devmode.R' 'sidebar.R' 'staticimports.R' 'tooltip2.R'\n'utils-deps.R' 'utils-shiny.R' 'utils-tags.R' 'value-box.R'\n'version-default.R' 'versions.R'",
+        "Collate": "'accordion.R' 'breakpoints.R' 'bs-current-theme.R'\n'bs-dependencies.R' 'bs-global.R' 'bs-remove.R'\n'bs-theme-layers.R' 'bs-theme-preset-bootswatch.R'\n'bs-theme-preset-brand.R' 'bs-theme-preset-builtin.R'\n'bs-theme-preset.R' 'utils.R' 'bs-theme-preview.R'\n'bs-theme-update.R' 'bs-theme.R' 'bslib-package.R' 'buttons.R'\n'card.R' 'deprecated.R' 'files.R' 'fill.R' 'imports.R'\n'input-dark-mode.R' 'input-switch.R' 'layout.R' 'nav-items.R'\n'nav-update.R' 'navbar_options.R' 'navs-legacy.R' 'navs.R'\n'onLoad.R' 'page.R' 'popover.R' 'precompiled.R' 'print.R'\n'shiny-devmode.R' 'sidebar.R' 'staticimports.R' 'tooltip.R'\n'utils-deps.R' 'utils-shiny.R' 'utils-tags.R' 'value-box.R'\n'version-default.R' 'versions.R'",
         "NeedsCompilation": "no",
         "Packaged": "2025-01-30 22:04:52 UTC; garrick",
         "Author": "Carson Sievert [aut, cre] (<https://orcid.org/0000-0002-4958-2844>),\n  Joe Cheng [aut],\n  Garrick Aden-Buie [aut] (<https://orcid.org/0000-0002-7111-0077>),\n  Posit Software, PBC [cph, fnd],\n  Bootstrap contributors [ctb] (Bootstrap library),\n  Twitter, Inc [cph] (Bootstrap library),\n  Javi Aguilar [ctb, cph] (Bootstrap colorpicker library),\n  Thomas Park [ctb, cph] (Bootswatch library),\n  PayPal [ctb, cph] (Bootstrap accessibility plugin)",
@@ -4177,13 +4177,13 @@
       "checksum": "fe704aeb7ae33f3b96dfecfaae69e842"
     },
     ".Rprofile": {
-      "checksum": "7a0f338f3c767310cfbe930663cdd07a"
+      "checksum": "07820f4e59f5f4d5c56cb127ce82319a"
     },
     "app.R": {
       "checksum": "587c70a00b82da88c00f4c8abe45b764"
     },
     "DESCRIPTION": {
-      "checksum": "725308f8c43ba0d167f18327d85516c2"
+      "checksum": "9e114e8664ad2f17973872e94b25ec24"
     },
     "inst/app/www/logo_banner2.png": {
       "checksum": "770ef2b6457cc69a3d1fe857c5bc1df5"
@@ -4207,28 +4207,79 @@
       "checksum": "67ddb60f63929f8ed54cf44090c1ba30"
     },
     "NAMESPACE": {
-      "checksum": "69e77dbf507d3a4779cd051bf623249b"
+      "checksum": "286cc9767199344295e35000c681d6c8"
     },
-    "R/import.R": {
-      "checksum": "d6bb3b2deb8e74e5eb62b6614e3515f2"
+    "R/adding_dataset.R": {
+      "checksum": "4a16325f57b3394650d51af87388f8ed"
     },
-    "R/LightLogWeb-app.R": {
-      "checksum": "84705e10a11866c3d960a4849ad4e48c"
+    "R/collect_dataset_names.R": {
+      "checksum": "b400b018c362c21c64aba8c54405e81e"
     },
-    "R/LightLogWeb-package.R": {
-      "checksum": "7da2700cc0a4b235f5d604d743cea8a2"
+    "R/create_dataset_name.R": {
+      "checksum": "7e98256a383f65a3a5de08fea6cb2941"
     },
-    "R/popover.R": {
-      "checksum": "911587b1f0e48543bfd625e6cb43cdfd"
+    "R/dataset_lens.R": {
+      "checksum": "b9baff3df2f0cd7122480b607acddec3"
     },
-    "R/UI_overall.R": {
-      "checksum": "8c49e10311753b4caf5a55f368f7942c"
+    "R/delete_dataset.R": {
+      "checksum": "9bebe54414eb3d0d42215ec0bbe8d6a9"
     },
-    "R/unique_prefix.R": {
+    "R/get_versions.R": {
+      "checksum": "a3f28fcea23330c6f4517ae1c4ab4bc8"
+    },
+    "R/helper.R": {
       "checksum": "539ec6f3da6793428739a8cf58da6349"
     },
+    "R/import_data.R": {
+      "checksum": "99e4000a6dcf2e12f10e752df895a135"
+    },
+    "R/import_modal.R": {
+      "checksum": "382a04116455fbc5d071d379c0b5b182"
+    },
+    "R/import_notification.R": {
+      "checksum": "fe9019545bd51b6e63fdc52eb6d28f90"
+    },
+    "R/LightLogWeb-app.R": {
+      "checksum": "91f9642188017f9b37a3f271af2cb63d"
+    },
+    "R/LightLogWeb-package.R": {
+      "checksum": "408c93ffc85a899d1c7309ed1c85bbfd"
+    },
+    "R/load_testdata.R": {
+      "checksum": "5ce80ca661d0cecb7e86bbb986bccdce"
+    },
+    "R/m_dataset_manager.R": {
+      "checksum": "9e5a45d47b4d77eaa58a92d393b7830b"
+    },
+    "R/m_dataset_prepare.R": {
+      "checksum": "7e14690e3fd133a02bd02a3b56621ea8"
+    },
+    "R/m_import.R": {
+      "checksum": "e55ff490d39e5c21f1fe3e7c49273bf9"
+    },
+    "R/m_metadata.R": {
+      "checksum": "017b0587f0f27195b7d78e5eba33356e"
+    },
+    "R/no_dataset_modal.R": {
+      "checksum": "1eb312bf8e1d2f6d64550afd3aa8a494"
+    },
+    "R/rename_dataset.R": {
+      "checksum": "150ecdcf5d61813399aab1513c43e004"
+    },
+    "R/rename_files.R": {
+      "checksum": "7e73902a6369b44da4d27c9689c03dd4"
+    },
+    "R/set_Id_preview.R": {
+      "checksum": "abc6eff4651d3777a25b61e5137c7a26"
+    },
+    "R/tooltip.R": {
+      "checksum": "2e711ec51cca1b4b1e45430705f2068e"
+    },
+    "R/UI_overall.R": {
+      "checksum": "60e7b13e7ed5e68727ae6cd8797f4aed"
+    },
     "renv.lock": {
-      "checksum": "bf1add8cc5f1a7296be2df25362d29f3"
+      "checksum": "1e3286e8de45751049e76314bac49af4"
     }
   },
   "users": null
