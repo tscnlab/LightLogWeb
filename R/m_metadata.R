@@ -144,12 +144,11 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
       lat <- input$latitude
       leaflet::leaflet() |>
         leaflet::addTiles() |>
-        leaflet::setView(lng, lat, zoom = 5) |>
+        leaflet::setView(lng, lat, zoom = 4) |>
         leaflet::addMiniMap(width = 100, height = 100) |>
         leaflet::addAwesomeMarkers(lng, lat,
                                    popup = format_coordinates(c(lat, lng))
                                    )
-
     })
 
     #print output

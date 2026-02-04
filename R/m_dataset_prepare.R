@@ -39,6 +39,7 @@ datasetDetailUI <- function(id) {
   uiOutput(ns("dataset_detail")),
   accordion(
     multiple = FALSE,
+    height = "100%",
     id = ns("prepare_accordion"),
     accordion_panel(value = "metadata",
                            h3("Metadata"),
