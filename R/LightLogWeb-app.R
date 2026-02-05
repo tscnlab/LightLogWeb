@@ -15,7 +15,7 @@ LightLogWeb <- function(...) {
   options(shiny.maxRequestSize=100*1024^2)
   #add a resource path to the www folder
   addResourcePath(
-    "extr", system.file("app/www", package = "LightLogWeb"))
+    "extr", resolve_www_path())
   # on.exit(removeResourcePath("extr"), add = TRUE)
 
   ui <- page_navbar(
