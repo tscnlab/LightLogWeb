@@ -1,5 +1,7 @@
 #' Bring LightLogR to the web with shiny
 #'
+#' @param ... Arguments passed to [shinyApp()]
+#'
 #' @returns Open a viewer with the shiny app
 #' @export
 #'

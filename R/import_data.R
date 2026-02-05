@@ -21,7 +21,7 @@ import_data <- function(input, Id_preview, new_names) {
     }
 
   rlang::inject({
-    import_msg <- capture.output({
+    import_msg <- utils::capture.output({
       tryCatch({
         imported_data <- import_Dataset(
           device = input$device,

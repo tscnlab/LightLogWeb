@@ -3,3 +3,6 @@
 ^LightLogWeb\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^live$
+^app.R
+^manifest.json

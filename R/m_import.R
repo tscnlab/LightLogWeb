@@ -206,12 +206,12 @@ UI_accordion_summary <- function(ns) {
     value = "import_summary",
     layout_column_wrap(
       card(
-        card_header("Import message", container = htmltools::h4),
+        card_header("Import message", container = h4),
         verbatimTextOutput(ns("import_msg")),
         min_height = "400px"
       ),
       card(
-        card_header("Overview Plot", container = htmltools::h4),
+        card_header("Overview Plot", container = h4),
         plotOutput(ns("plot_overview")),
         min_height = "400px"
       )
@@ -227,7 +227,7 @@ UI_accordion_summary <- function(ns) {
       style = "text-align:center;"
     ),
     card(
-      card_header("Imported table", container = htmltools::h4) |>
+      card_header("Imported table", container = h4) |>
         tooltip2("This table shows the first and last 50 rows of the imported data"),
       gt::gt_output(ns("import_table"))
     )

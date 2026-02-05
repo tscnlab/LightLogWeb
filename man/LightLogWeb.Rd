@@ -6,6 +6,9 @@
 \usage{
 LightLogWeb(...)
 }
+\arguments{
+\item{...}{Arguments passed to \code{\link[shiny:shinyApp]{shiny::shinyApp()}}}
+}
 \value{
 Open a viewer with the shiny app
 }

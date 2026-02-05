@@ -17,7 +17,7 @@ load_testdata <- function(datasets, notifications = TRUE) {
                       latitude = 48.52,
                       longitude = 9.06,
                       country = "Germany",
-                      site = "Tübingen",
+                      site = "T\u{00fc}bingen",
                       tz = "Europe/Berlin",
                       device = "ActLumus"
                       )

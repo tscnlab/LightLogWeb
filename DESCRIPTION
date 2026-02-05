@@ -15,11 +15,15 @@ Authors@R: c(
 Description: What the package does (one paragraph).
 License: MIT + file LICENSE
 Encoding: UTF-8
+Depends: R (>= 4.1.0)
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports: 
+    bsicons,
+    bslib,
     dplyr,
     glue,
+    gt,
     leaflet,
     LightLogR,
     lubridate,
@@ -27,8 +31,7 @@ Imports:
     rlang,
     shiny,
     stringr,
-    tibble,
-    tidyr
+    tibble
 Suggests: 
     pkgload,
     rsconnect
