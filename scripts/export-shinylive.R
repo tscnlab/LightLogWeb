@@ -66,7 +66,7 @@ parse_description_field <- function(field_value) {
     strsplit(",") |>
     unlist(use.names = FALSE) |>
     trimws() |>
-    gsub("\\s*\\(.*\\)$", "", ., perl = TRUE)
+    gsub("\\s*\\(.*\\)$", "", x =_, perl = TRUE)
 
   cleaned[nzchar(cleaned)]
 }
@@ -88,7 +88,7 @@ build_shinylive_entrypoint <- function(dependencies) {
   c(
     sprintf("deps <- c(%s)", dependency_literal),
     "invisible(lapply(deps, library, character.only = TRUE))",
-    "r_files <- list.files('R', pattern = '\\.[Rr]$', full.names = TRUE)",
+    "r_files <- list.files('R', pattern = '\\\\.[Rr]$', full.names = TRUE)",
     "invisible(lapply(r_files, source, local = globalenv()))",
     "LightLogWeb()"
   )
