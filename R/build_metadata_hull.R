@@ -1,0 +1,41 @@
+build_metadata_hull <-
+  function(data,
+           variable = NA,
+           variable_name = NA,
+           variable_unit = NA,
+           variable_factor = NA,
+           variable_offset = NA,
+           latitude = NA,
+           longitude = NA,
+           country = NA,
+           site = NA,
+           tz = NA,
+           device = NA,
+           ds.name = NA,
+           import.time = Sys.time() |> format(),
+           threshold.missing = 0.2,
+           ...
+           ) {
+  reactiveValues(
+    data = data,
+    metadata = reactiveValues(variable = variable,
+                              variable_name = variable_name,
+                              variable_unit = variable_unit,
+                              variable_factor = variable_factor,
+                              variable_offset = variable_offset,
+                              latitude = latitude,
+                              longitude = longitude,
+                              country = country,
+                              site = site,
+                              tz = tz,
+                              device = device,
+                              ds.name = ds.name,
+                              import.time = import.time,
+                              threshold.missing = threshold.missing,
+                              ...),
+    summaries = reactiveValues(overview = tibble::tibble(),
+                               has_gaps = logical(0),
+                               has_irregulars = logical(0),
+                               dominantEpoch = tibble::tibble())
+  )
+}

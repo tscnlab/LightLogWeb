@@ -11,7 +11,7 @@
   },
   "environment": {
     "r": {
-      "requires": "~=4.5.0"
+      "requires": ">= 4.1.0"
     }
   },
   "packages": {
@@ -4403,16 +4403,16 @@
   },
   "files": {
     ".Rbuildignore": {
-      "checksum": "fe704aeb7ae33f3b96dfecfaae69e842"
+      "checksum": "8e2e6a841c2cc451b51eca594c86c537"
     },
     ".Rprofile": {
-      "checksum": "d400d5b88b5687cfbeca0e09ba8954ce"
+      "checksum": "cfb47f61696ec0d62f2730216575810f"
     },
     "app.R": {
-      "checksum": "587c70a00b82da88c00f4c8abe45b764"
+      "checksum": "c3bee4557904cfc7d7e9e95012537770"
     },
     "DESCRIPTION": {
-      "checksum": "9e114e8664ad2f17973872e94b25ec24"
+      "checksum": "af6db8e9c00695e67ecbd90175c07b93"
     },
     "inst/app/www/logo_banner2.png": {
       "checksum": "770ef2b6457cc69a3d1fe857c5bc1df5"
@@ -4433,13 +4433,19 @@
       "checksum": "462e17fd7e53e34ea7871a7c45530dc4"
     },
     "man/LightLogWeb.Rd": {
-      "checksum": "67ddb60f63929f8ed54cf44090c1ba30"
+      "checksum": "de595878092399c76aca8bd32eda4c6c"
     },
     "NAMESPACE": {
       "checksum": "286cc9767199344295e35000c681d6c8"
     },
+    "R/aaa.R": {
+      "checksum": "afd2d2d1c2de082a53668bcb7e9edf30"
+    },
     "R/adding_dataset.R": {
-      "checksum": "4a16325f57b3394650d51af87388f8ed"
+      "checksum": "0c8c24cb2d58bc98ac16000bcc03a350"
+    },
+    "R/build_metadata_hull.R": {
+      "checksum": "3b1fd2186a048b54f2536f2c00eb8272"
     },
     "R/collect_dataset_names.R": {
       "checksum": "b400b018c362c21c64aba8c54405e81e"
@@ -4460,7 +4466,7 @@
       "checksum": "539ec6f3da6793428739a8cf58da6349"
     },
     "R/import_data.R": {
-      "checksum": "99e4000a6dcf2e12f10e752df895a135"
+      "checksum": "ac71cdf99ea3123245f3d57a4cf6cb7e"
     },
     "R/import_modal.R": {
       "checksum": "382a04116455fbc5d071d379c0b5b182"
@@ -4469,31 +4475,37 @@
       "checksum": "fe9019545bd51b6e63fdc52eb6d28f90"
     },
     "R/LightLogWeb-app.R": {
-      "checksum": "91f9642188017f9b37a3f271af2cb63d"
+      "checksum": "9536304aa3903e31b0c4101e24641aa4"
     },
     "R/LightLogWeb-package.R": {
       "checksum": "408c93ffc85a899d1c7309ed1c85bbfd"
     },
     "R/load_testdata.R": {
-      "checksum": "5ce80ca661d0cecb7e86bbb986bccdce"
+      "checksum": "58cf805ff8962a826c8790e62231d240"
+    },
+    "R/m_dataset_dashboard.R": {
+      "checksum": "a7edac49a15dd21a0bb80e67810e1c0b"
     },
     "R/m_dataset_manager.R": {
-      "checksum": "9e5a45d47b4d77eaa58a92d393b7830b"
-    },
-    "R/m_dataset_prepare.R": {
-      "checksum": "7e14690e3fd133a02bd02a3b56621ea8"
+      "checksum": "9674b8d72bb1393b83bdff53a5690997"
     },
     "R/m_import.R": {
-      "checksum": "e55ff490d39e5c21f1fe3e7c49273bf9"
+      "checksum": "11bd7394f50372a9c5755eb8f6102b74"
     },
     "R/m_metadata.R": {
-      "checksum": "017b0587f0f27195b7d78e5eba33356e"
+      "checksum": "9ce7f8aa0950eb6a63bc60155d864bf3"
+    },
+    "R/m_summaries.R": {
+      "checksum": "baba336fa3443ac89f9e0e029f064559"
     },
     "R/no_dataset_modal.R": {
       "checksum": "1eb312bf8e1d2f6d64550afd3aa8a494"
     },
+    "R/prepare_quality_metrics.R": {
+      "checksum": "cfdef56d29c8eabcdf67818d0fbcd2c3"
+    },
     "R/rename_dataset.R": {
-      "checksum": "150ecdcf5d61813399aab1513c43e004"
+      "checksum": "3d21c5ebc1711ed09750faa2877a8657"
     },
     "R/rename_files.R": {
       "checksum": "7e73902a6369b44da4d27c9689c03dd4"

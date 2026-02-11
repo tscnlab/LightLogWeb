@@ -3,12 +3,13 @@
 metadataUI <- function(id) {
   ns <- NS(id)
   tagList(
-    bslib::layout_column_wrap(
-      bslib::card(
-        card_header(h4("Primary variable"))|> tooltip2(
+    # fluidRow(
+    layout_column_wrap(
+      card(
+        h5("Primary variable") |> tooltip2(
           "Set information about the variable you want to focus on in the analyses?"
         ),
-        card_body(
+        # card_body(
         selectInput(
           ns("variable"),
           label = "Relevant variable",
@@ -36,13 +37,22 @@ metadataUI <- function(id) {
         ) |> tooltip2(
           "You can set an offset that will be applied to the variable. Note that all outputs will contain this offset."
         ),
-      )
       ),
-      bslib::card(
-        card_header(h4("Location"))|> tooltip2(
+      card(
+        h5("Location") |>  tooltip2(
           "Location information will be used in various functions, both for programmatic and labeling purposes."
         ),
-        card_body(
+        # card_body(
+        selectizeInput(
+            ns("tz"),
+            "Time zone",
+            choices = OlsonNames(),
+            width = "100%",
+            selected = "UTC"
+          ) |>
+            tooltip2(
+              "Select the time zone of data collection. Overwrites the current time zone in the dataset! Set to a common time zone (like 'UTC') when merging data from two different time zones."
+            ),
         bslib::layout_column_wrap(
           fill = FALSE,
           numericInput(
@@ -74,28 +84,18 @@ metadataUI <- function(id) {
           textInput(ns("site"), "Site", width = "100%") |>
             tooltip2("Enter the site or city of measurement. Will be used in labels")
         ),
-        selectizeInput(
-          ns("tz"),
-          "Time zone",
-          choices = OlsonNames(),
-          width = "100%",
-          selected = "UTC"
-        ) |>
-          tooltip2(
-            "Select the time zone of data collection. Overwrites the current time zone in the dataset! Set to a common time zone (like 'UTC') when merging data from two different time zones."
-          )
+      # )
+      ),
+      card(
+        h5("Metadata table") |> tooltip2("Shows the current medata. Only what is listed here is relevant for calculations. Change options by setting the relevant fields and clicking the 'Save metadata details' button."),
+        # card_body(
+          tableOutput(ns("metadata_table"))
+        # )
       )
-      ),
-      bslib::card(
-        card_header(
-                    h4("Metadata table"))|>
-          tooltip2("Contains all the medata"),
-        card_body(tableOutput(ns("metadata_table"))
-        )
-      ),
+    # )
     ),
-    shiny::fluidRow(
-    shiny::column(8,
+      shiny::fluidRow(
+        column(width = 8,
       actionButton(
         ns("save_metadata"),
         div("Save metadata details ", icon("circle-right")),
@@ -103,7 +103,7 @@ metadataUI <- function(id) {
         class = "btn-primary",
         width = "100%"
       ) |> tooltip2("this will overwrite the current metadata onto the dataset")),
-    column(4,
+      column(width = 4,
       actionButton(
         ns("restore_metadata"),
         "Restore metadata details",
@@ -112,8 +112,9 @@ metadataUI <- function(id) {
         width = "100%"
       ) |> tooltip2(
         "this will restore the metadata from the dataset (cannot restore overwritten metdata)"
-      ),
-    ))
+    )
+      )
+  )
   )
 }
 
@@ -154,6 +155,7 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
     #print output
     output$metadata_table <- renderTable({
       ds()$metadata |>
+        reactiveValuesToList() |>
         purrr::map_chr(as.character) |>
         tibble::enframe("Metadata variable", "Value")
     })
@@ -163,7 +165,9 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
       dataset <- ds()$data
       md <- ds()$metadata
       updateSelectInput(inputId = "variable",
-                        choices = names(dataset),
+                        choices = setdiff(names(dataset),
+                                          c("Datetime",
+                                            dplyr::group_vars(dataset))),
                         selected = md$variable)
       purrr::walk(metadata.Variables[c(2:3,8:10)],
                   \(x) updateTextInput(inputId = x, value = md[[x]]))
@@ -175,9 +179,11 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
     observe({
       dataset <- ds()
       md <- purrr::map(metadata.Variables,\(x) {input[[x]]})
-      dataset$metadata[names(md)] <- md
-      datasets[[selected_dataset()]] <- dataset
-      showNotification("Variable details saved.", type = "message")
+      purrr::imap(md, \(x, idx) {
+        dataset$metadata[[idx]] <- x
+      }
+                  )
+      showNotification("Metadata details saved.", type = "message")
     }) |> bindEvent(input$save_metadata)
 
     #restore metadata
@@ -188,6 +194,28 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
                   \(x) updateTextInput(inputId = x, value = ds()$metadata[[x]]))
       purrr::walk(metadata.Variables[4:7],
                   \(x) updateTextInput(inputId = x, value = ds()$metadata[[x]]))
+      showNotification("Metadata details restored.", type = "message")
     }) |> bindEvent(input$restore_metadata)
+
+  #adjust time zone if set
+  observe({
+    dataset <- ds()
+    dataset$data <-
+      dataset$data |>
+      dplyr::mutate(Datetime = lubridate::force_tz(Datetime, dataset$metadata$tz))
+  }) |> bindEvent(ds()$data, ds()$metadata$tz, ignoreInit = TRUE)
+
+  #adjust coordinates if changing
+  observe({
+    dataset <- ds()
+    req(dataset$metadata$latitude, dataset$metadata$longitude)
+    dataset$summaries$overview <-
+      summary_overview(dataset$data,
+                       !!rlang::sym(dataset$metadata$variable),
+                       threshold.missing =
+                         dataset$metadata$threshold.missing
+      )
+    }) |> bindEvent(ds()$metadata$latitude, ds()$metadata$longitude, ignoreInit = TRUE)
+
   })
 }

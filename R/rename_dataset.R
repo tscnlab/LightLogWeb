@@ -39,6 +39,7 @@ rename_dataset <- function(datasets, selected_dataset, dataset_names, input){
   }
 
   datasets[[input$rename_name]] <- datasets[[selected_dataset()]]
+  datasets[[input$rename_name]]$metadata$ds.name <- input$rename_name
   datasets[[selected_dataset()]] <- NULL
 
   removeModal()

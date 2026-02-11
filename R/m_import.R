@@ -217,7 +217,7 @@ UI_accordion_summary <- function(ns) {
       )
     ),
     p(
-      actionButton(
+      input_task_button(
         ns("add_dataset"),
         span(strong("Add dataset to library (and proceed to metadata)")),
         icon = icon("database"),
@@ -381,22 +381,51 @@ importServer <- function(id) {
 
       # Return dataset -------------
 
-      #collect the imported data and send it to the next higher module
-      add_dataset <- reactive({
+      #choose a variable of interest
+      observe({
 
         import_add_notification(import_result)
 
         req(import_result()$data,
-                   input$dataset_name,
-                   input$device,
-                   input$tz)
+            input$dataset_name,
+            input$device,
+            input$tz)
+
+        showModal(
+          modalDialog(
+            title = "Please choose a primary variable for analysis from the dataset",
+            easyClose = TRUE,
+            selectizeInput(session$ns("variable"),
+                           "Primary variable",
+                           choices = setdiff(names(import_result()$data),
+                                             c("Id", "Datetime", "file.name")),
+                           selected = "MEDI",
+                           width = "100%"
+                           ),
+            p("The primary variable can be changed later on",
+            ),
+            actionButton(session$ns("add_variable"),
+                         ("Select this variable"),
+                         class = "btn-primary btn-lg",
+                         icon = icon("check"),
+                         width = "100%"),
+          )
+        )
+
+      }) |> bindEvent(input$add_dataset)
+
+      observe(removeModal()) |> bindEvent(input$add_variable)
+
+      #collect the imported data and send it to the next higher module
+      add_dataset <- reactive({
         list(
           name = input$dataset_name,
           data = import_result()$data,
           device = input$device,
-          tz = input$tz
+          tz = input$tz,
+          variable = input$variable
         )
-      }) |> bindEvent(input$add_dataset)
+      }) |> bindEvent(input$add_variable)
 
       #return
       list(add_dataset = add_dataset)

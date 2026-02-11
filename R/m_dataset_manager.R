@@ -32,7 +32,7 @@ datasetSidebarUI <- function(id) {
       ns("merge_dataset"),
       "Merge dataset" |>
         tooltip2("This button will allow you to merge the current dataset with another"),
-      icon = icon("code-merge"),
+      icon = icon("code-pull-request"),
       class = "btn-outline-warning"
     ),
     actionButton(
@@ -49,7 +49,7 @@ datasetSidebarUI <- function(id) {
 
 # Server ------------------------------------------------------------------
 
-datasetManagerServer <- function(id, datasets) {
+datasetManagerServer <- function(id, datasets, newest_set) {
   moduleServer(id, function(input, output, session) {
 
     # Imported datasets -------------
@@ -88,8 +88,13 @@ datasetManagerServer <- function(id, datasets) {
 
     #load testdata
     observe({
-      load_testdata(datasets)
+      load_testdata(datasets, selected_dataset)
     }) |> bindEvent(input$import_testdata)
+
+    #update name with new addition
+    observe({
+     selected_dataset(newest_set())
+    }) |> bindEvent(newest_set())
 
     # Danger zone -------------
 

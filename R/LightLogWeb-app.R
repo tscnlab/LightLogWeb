@@ -20,18 +20,18 @@ LightLogWeb <- function(...) {
 
   ui <- page_navbar(
     # App title ----
-    title = h1("LightLogWeb"),
+    title = h1("LightLogWeb "),
     id = "main_nav",
-    footer = footer,
+    # footer = footer,
     selected = "Import",
-    fillable = FALSE,
+    # fillable = FALSE,
     sidebar = datasetSidebarUI("datasets"),
-    nav_spacer(),
+    # nav_spacer(),
     nav_panel("Import",
                        importUI("import")
                      ),
-    nav_panel("Prepare", value = "prepare",
-                       datasetDetailUI("details")
+    nav_panel("Dashboard", value = "dashboard",
+                       datasetDashboardUI("dashboard")
                        )
   )
 
@@ -46,16 +46,18 @@ LightLogWeb <- function(...) {
     #Import
     light <- importServer("import")
     datasets <- reactiveValues()
+    newest_set <- reactiveVal(NULL)
 
     observe({
       adding_dataset(datasets, light$add_dataset)
-    }) |> bindEvent(light$add_dataset(), ignoreInit = TRUE)
+      newest_set(light$add_dataset()$name)
+    }) |> bindEvent(light$add_dataset())
 
     #Dataset handling
-    selected_dataset <- datasetManagerServer("datasets", datasets)
+    selected_dataset <- datasetManagerServer("datasets", datasets, newest_set)
 
-    #Dataset Detail
-    datasetDetailServer("details",
+    #Dataset Dashboard
+    datasetDashboardServer("dashboard",
                         datasets = datasets,
                         selected_dataset =selected_dataset,
                         active_panel = reactive(input$main_nav))
@@ -70,11 +72,11 @@ LightLogWeb <- function(...) {
       nav_select("main_nav", selected = "Import")
       accordion_panel_open("import-import_accordion", "import_specs")
     }) |> bindEvent(input$`datasets-import_newdata`,
-                           input$`details-to_import`)
+                           input$`dashboard-to_import`)
 
     #when testdata were loaded in
     observe({
-      nav_select("main_nav", selected = "prepare")
+      nav_select("main_nav", selected = "dashboard")
     }) |> bindEvent(input$`datasets-import_testdata`,
                            ignoreInit = TRUE
                            )
