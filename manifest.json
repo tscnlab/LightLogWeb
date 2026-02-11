@@ -3761,6 +3761,78 @@
         "RemoteSha": "1.0.1"
       }
     },
+    "svglite": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "svglite",
+        "Title": "An 'SVG' Graphics Device",
+        "Version": "2.2.2",
+        "Authors@R": "c(\n    person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = \"aut\"),\n    person(\"Lionel\", \"Henry\", , \"lionel@posit.co\", role = \"aut\"),\n    person(\"Thomas Lin\", \"Pedersen\", , \"thomas.pedersen@posit.co\", role = c(\"cre\", \"aut\"),\n           comment = c(ORCID = \"0000-0002-5147-4711\")),\n    person(\"T Jake\", \"Luciani\", , \"jake@apache.org\", role = \"aut\"),\n    person(\"Matthieu\", \"Decorde\", , \"matthieu.decorde@ens-lyon.fr\", role = \"aut\"),\n    person(\"Vaudor\", \"Lise\", , \"lise.vaudor@ens-lyon.fr\", role = \"aut\"),\n    person(\"Tony\", \"Plate\", role = \"ctb\",\n           comment = \"Early line dashing code\"),\n    person(\"David\", \"Gohel\", role = \"ctb\",\n           comment = \"Line dashing code and early raster code\"),\n    person(\"Yixuan\", \"Qiu\", role = \"ctb\",\n           comment = \"Improved styles; polypath implementation\"),\n    person(\"Håkon\", \"Malmedal\", role = \"ctb\",\n           comment = \"Opacity code\"),\n    person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"),\n           comment = c(ROR = \"03wc8by49\"))\n  )",
+        "Description": "A graphics device for R that produces 'Scalable Vector\n    Graphics'. 'svglite' is a fork of the older 'RSvgDevice' package.",
+        "License": "GPL (>= 2)",
+        "URL": "https://svglite.r-lib.org, https://github.com/r-lib/svglite",
+        "BugReports": "https://github.com/r-lib/svglite/issues",
+        "Depends": "R (>= 4.1)",
+        "Imports": "base64enc, cli, lifecycle, rlang (>= 1.1.0), systemfonts (>=\n1.3.0), textshaping (>= 0.3.0)",
+        "Suggests": "covr, fontquiver (>= 0.2.0), htmltools, knitr, rmarkdown,\ntestthat (>= 3.0.0), xml2 (>= 1.0.0)",
+        "LinkingTo": "cpp11, systemfonts, textshaping",
+        "VignetteBuilder": "knitr",
+        "Config/build/compilation-database": "true",
+        "Config/Needs/website": "tidyverse/tidytemplate",
+        "Config/testthat/edition": "3",
+        "Config/usethis/last-upkeep": "2025-04-25",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.3.2",
+        "SystemRequirements": "libpng",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-10-20 15:57:25 UTC; thomas",
+        "Author": "Hadley Wickham [aut],\n  Lionel Henry [aut],\n  Thomas Lin Pedersen [cre, aut] (ORCID:\n    <https://orcid.org/0000-0002-5147-4711>),\n  T Jake Luciani [aut],\n  Matthieu Decorde [aut],\n  Vaudor Lise [aut],\n  Tony Plate [ctb] (Early line dashing code),\n  David Gohel [ctb] (Line dashing code and early raster code),\n  Yixuan Qiu [ctb] (Improved styles; polypath implementation),\n  Håkon Malmedal [ctb] (Opacity code),\n  Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
+        "Maintainer": "Thomas Lin Pedersen <thomas.pedersen@posit.co>",
+        "Repository": "RSPM",
+        "Date/Publication": "2025-10-21 16:10:02 UTC",
+        "Built": "R 4.5.0; x86_64-pc-linux-gnu; 2026-01-21 05:18:21 UTC; unix"
+      }
+    },
+    "systemfonts": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Type": "Package",
+        "Package": "systemfonts",
+        "Title": "System Native Font Finding",
+        "Version": "1.3.1",
+        "Authors@R": "c(\n    person(\"Thomas Lin\", \"Pedersen\", , \"thomas.pedersen@posit.co\", role = c(\"aut\", \"cre\"),\n           comment = c(ORCID = \"0000-0002-5147-4711\")),\n    person(\"Jeroen\", \"Ooms\", , \"jeroen@berkeley.edu\", role = \"aut\",\n           comment = c(ORCID = \"0000-0002-4035-0289\")),\n    person(\"Devon\", \"Govett\", role = \"aut\",\n           comment = \"Author of font-manager\"),\n    person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"),\n           comment = c(ROR = \"03wc8by49\"))\n  )",
+        "Description": "Provides system native access to the font catalogue. As font\n    handling varies between systems it is difficult to correctly locate\n    installed fonts across different operating systems. The 'systemfonts'\n    package provides bindings to the native libraries on Windows, macOS\n    and Linux for finding font files that can then be used further by e.g.\n    graphic devices. The main use is intended to be from compiled code but\n    'systemfonts' also provides access from R.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://github.com/r-lib/systemfonts,\nhttps://systemfonts.r-lib.org",
+        "BugReports": "https://github.com/r-lib/systemfonts/issues",
+        "Depends": "R (>= 3.2.0)",
+        "Imports": "base64enc, grid, jsonlite, lifecycle, tools, utils",
+        "Suggests": "covr, farver, ggplot2, graphics, knitr, ragg, rmarkdown,\nsvglite, testthat (>= 2.1.0)",
+        "LinkingTo": "cpp11 (>= 0.2.1)",
+        "VignetteBuilder": "knitr",
+        "Config/build/compilation-database": "true",
+        "Config/Needs/website": "tidyverse/tidytemplate",
+        "Config/usethis/last-upkeep": "2025-04-23",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.3.2",
+        "SystemRequirements": "fontconfig, freetype2",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-10-01 11:58:08 UTC; thomas",
+        "Author": "Thomas Lin Pedersen [aut, cre] (ORCID:\n    <https://orcid.org/0000-0002-5147-4711>),\n  Jeroen Ooms [aut] (ORCID: <https://orcid.org/0000-0002-4035-0289>),\n  Devon Govett [aut] (Author of font-manager),\n  Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
+        "Maintainer": "Thomas Lin Pedersen <thomas.pedersen@posit.co>",
+        "Repository": "CRAN",
+        "Date/Publication": "2025-10-01 14:00:02 UTC",
+        "Built": "R 4.5.0; aarch64-apple-darwin20; 2025-10-07 14:49:39 UTC; unix",
+        "Archs": "systemfonts.so.dSYM",
+        "RemoteType": "standard",
+        "RemotePkgRef": "systemfonts",
+        "RemoteRef": "systemfonts",
+        "RemoteRepos": "https://cran.rstudio.com",
+        "RemoteSha": "1.3.1"
+      }
+    },
     "terra": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",
@@ -3790,6 +3862,45 @@
         "Repository": "RSPM",
         "Date/Publication": "2026-01-12 06:10:03 UTC",
         "Built": "R 4.5.0; x86_64-pc-linux-gnu; 2026-01-13 05:16:24 UTC; unix"
+      }
+    },
+    "textshaping": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "textshaping",
+        "Title": "Bindings to the 'HarfBuzz' and 'Fribidi' Libraries for Text\nShaping",
+        "Version": "1.0.4",
+        "Authors@R": "c(\n    person(\"Thomas Lin\", \"Pedersen\", , \"thomas.pedersen@posit.co\", role = c(\"cre\", \"aut\"),\n           comment = c(ORCID = \"0000-0002-5147-4711\")),\n    person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"),\n           comment = c(ROR = \"03wc8by49\"))\n  )",
+        "Description": "Provides access to the text shaping functionality in the\n    'HarfBuzz' library and the bidirectional algorithm in the 'Fribidi'\n    library. 'textshaping' is a low-level utility package mainly for\n    graphic devices that expands upon the font tool-set provided by the\n    'systemfonts' package.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://github.com/r-lib/textshaping",
+        "BugReports": "https://github.com/r-lib/textshaping/issues",
+        "Depends": "R (>= 3.2.0)",
+        "Imports": "lifecycle, stats, stringi, systemfonts (>= 1.3.0), utils",
+        "Suggests": "covr, grDevices, grid, knitr, rmarkdown, testthat (>= 3.0.0)",
+        "LinkingTo": "cpp11 (>= 0.2.1), systemfonts (>= 1.0.0)",
+        "VignetteBuilder": "knitr",
+        "Config/build/compilation-database": "true",
+        "Config/testthat/edition": "3",
+        "Config/usethis/last-upkeep": "2025-04-23",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.3.2",
+        "SystemRequirements": "freetype2, harfbuzz, fribidi",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-10-10 07:33:22 UTC; thomas",
+        "Author": "Thomas Lin Pedersen [cre, aut] (ORCID:\n    <https://orcid.org/0000-0002-5147-4711>),\n  Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
+        "Maintainer": "Thomas Lin Pedersen <thomas.pedersen@posit.co>",
+        "Repository": "RSPM",
+        "Date/Publication": "2025-10-10 08:00:02 UTC",
+        "Built": "R 4.5.0; x86_64-pc-linux-gnu; 2025-10-11 04:54:34 UTC; unix",
+        "RemoteType": "standard",
+        "RemoteRef": "textshaping",
+        "RemotePkgRef": "textshaping",
+        "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "aarch64-apple-darwin20",
+        "RemoteSha": "1.0.4"
       }
     },
     "tibble": {
@@ -4440,13 +4551,13 @@
       "checksum": "8e2e6a841c2cc451b51eca594c86c537"
     },
     ".Rprofile": {
-      "checksum": "98b71116f9d2a778832832341d2ce9e3"
+      "checksum": "9041a842b289b30705ad324bf796ec89"
     },
     "app.R": {
       "checksum": "c3bee4557904cfc7d7e9e95012537770"
     },
     "DESCRIPTION": {
-      "checksum": "3955f1d75c0d89d705059253ea161c3f"
+      "checksum": "3fd7ae8783b8c872b6467c45d4662532"
     },
     "inst/app/www/logo_banner2.png": {
       "checksum": "770ef2b6457cc69a3d1fe857c5bc1df5"
@@ -4554,7 +4665,7 @@
       "checksum": "60e7b13e7ed5e68727ae6cd8797f4aed"
     },
     "renv.lock": {
-      "checksum": "932110e49c03faf00aae24790e38b6bd"
+      "checksum": "ad5981bfbed6528695a6328e5e0efead"
     }
   },
   "users": null

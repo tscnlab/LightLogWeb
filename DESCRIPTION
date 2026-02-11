@@ -32,8 +32,8 @@ Imports:
     rlang,
     shiny,
     stringr,
+    svglite,
     tibble
 Suggests: 
     pkgload,
     rsconnect
-    svglite
