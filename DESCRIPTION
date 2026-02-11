@@ -22,6 +22,7 @@ Imports:
     bsicons,
     bslib,
     dplyr,
+    DT,
     glue,
     gt,
     leaflet,
