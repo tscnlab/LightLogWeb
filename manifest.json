@@ -3559,6 +3559,32 @@
         "RemoteSha": "1.11.1"
       }
     },
+    "shinycssloaders": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "shinycssloaders",
+        "Title": "Add Loading Animations to a 'shiny' Output While It's\nRecalculating",
+        "Version": "1.1.0",
+        "Authors@R": "c(\n    person(\"Dean\",\"Attali\",email=\"daattali@gmail.com\",role=c(\"aut\",\"cre\"),\n        comment = c(\"Maintainer/developer of shinycssloaders since 2019\", ORCID=\"0000-0002-5645-3493\")),\n    person(\"Andras\",\"Sali\",email=\"andras.sali@alphacruncher.hu\",role=c(\"aut\"),comment=\"Original creator of shinycssloaders package\"),\n    person(\"Luke\",\"Hass\",role=c(\"ctb\",\"cph\"),comment=\"Author of included CSS loader code\")\n    )",
+        "Description": "When a 'Shiny' output (such as a plot, table, map, etc.) is recalculating, it remains \n    visible but gets greyed out. Using 'shinycssloaders', you can add a loading animation (\"spinner\")\n    to outputs instead. By wrapping a 'Shiny' output in 'withSpinner()', a spinner will automatically\n    appear while the output is recalculating. You can also manually show and hide the spinner, or add\n    a full-page spinner to cover the entire page.\n    See the demo online at <https://daattali.com/shiny/shinycssloaders-demo/>.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://github.com/daattali/shinycssloaders,\nhttps://daattali.com/shiny/shinycssloaders-demo/",
+        "BugReports": "https://github.com/daattali/shinycssloaders/issues",
+        "Depends": "R (>= 3.1)",
+        "Imports": "digest, glue, grDevices, htmltools (>= 0.3.5), shiny",
+        "Suggests": "knitr, shinydisconnect, shinyjs",
+        "RoxygenNote": "7.2.3",
+        "Encoding": "UTF-8",
+        "NeedsCompilation": "no",
+        "Packaged": "2024-07-30 18:52:48 UTC; Dean",
+        "Author": "Dean Attali [aut, cre] (Maintainer/developer of shinycssloaders since\n    2019, <https://orcid.org/0000-0002-5645-3493>),\n  Andras Sali [aut] (Original creator of shinycssloaders package),\n  Luke Hass [ctb, cph] (Author of included CSS loader code)",
+        "Maintainer": "Dean Attali <daattali@gmail.com>",
+        "Repository": "RSPM",
+        "Date/Publication": "2024-07-30 22:30:02 UTC",
+        "Built": "R 4.5.0; ; 2025-04-08 03:12:37 UTC; unix"
+      }
+    },
     "slider": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",
@@ -4551,13 +4577,13 @@
       "checksum": "8e2e6a841c2cc451b51eca594c86c537"
     },
     ".Rprofile": {
-      "checksum": "9041a842b289b30705ad324bf796ec89"
+      "checksum": "b440302e0e64681a39c141f43acec952"
     },
     "app.R": {
       "checksum": "c3bee4557904cfc7d7e9e95012537770"
     },
     "DESCRIPTION": {
-      "checksum": "3fd7ae8783b8c872b6467c45d4662532"
+      "checksum": "b5406aec80eaefe870385348d78d9812"
     },
     "inst/app/www/logo_banner2.png": {
       "checksum": "770ef2b6457cc69a3d1fe857c5bc1df5"
@@ -4590,7 +4616,7 @@
       "checksum": "0c8c24cb2d58bc98ac16000bcc03a350"
     },
     "R/build_metadata_hull.R": {
-      "checksum": "3b1fd2186a048b54f2536f2c00eb8272"
+      "checksum": "6ade98e54752fe999b97f321869d614e"
     },
     "R/collect_dataset_names.R": {
       "checksum": "b400b018c362c21c64aba8c54405e81e"
@@ -4620,7 +4646,7 @@
       "checksum": "fe9019545bd51b6e63fdc52eb6d28f90"
     },
     "R/LightLogWeb-app.R": {
-      "checksum": "9536304aa3903e31b0c4101e24641aa4"
+      "checksum": "7ab76dde909fe910ffe30134ad129914"
     },
     "R/LightLogWeb-package.R": {
       "checksum": "408c93ffc85a899d1c7309ed1c85bbfd"
@@ -4629,16 +4655,16 @@
       "checksum": "58cf805ff8962a826c8790e62231d240"
     },
     "R/m_dataset_dashboard.R": {
-      "checksum": "a7edac49a15dd21a0bb80e67810e1c0b"
+      "checksum": "45976839de37945ff51548d5c6f765de"
     },
     "R/m_dataset_manager.R": {
       "checksum": "9674b8d72bb1393b83bdff53a5690997"
     },
     "R/m_import.R": {
-      "checksum": "11bd7394f50372a9c5755eb8f6102b74"
+      "checksum": "eb4df5045f9c7f01c0ab7c00800b805f"
     },
     "R/m_metadata.R": {
-      "checksum": "9ce7f8aa0950eb6a63bc60155d864bf3"
+      "checksum": "a9a1d669255698490453ba8cf9006a28"
     },
     "R/m_summaries.R": {
       "checksum": "baba336fa3443ac89f9e0e029f064559"
@@ -4665,7 +4691,7 @@
       "checksum": "60e7b13e7ed5e68727ae6cd8797f4aed"
     },
     "renv.lock": {
-      "checksum": "ad5981bfbed6528695a6328e5e0efead"
+      "checksum": "d3784c4809ecd14aacae8407a8cbfc66"
     }
   },
   "users": null
