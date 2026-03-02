@@ -12,7 +12,11 @@
 LightLogWeb <- function(...) {
 
   #setting the upload limit to 100 MB
-  options(shiny.maxRequestSize=100*1024^2)
+  ops <-
+    options(shiny.maxRequestSize=100*1024^2,
+            spinner.caption = "Calculating..."
+          )
+  on.exit(options(ops))
   #add a resource path to the www folder
   addResourcePath(
     "extr", system.file("app/www", package = "LightLogWeb"))

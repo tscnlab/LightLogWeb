@@ -3,8 +3,10 @@ build_metadata_hull <-
            variable = NA,
            variable_name = NA,
            variable_unit = NA,
-           variable_factor = NA,
-           variable_offset = NA,
+           variable_factor = 1,
+           variable_offset = 0,
+           variable_min = 0,
+           variable_max = 10^5,
            latitude = NA,
            longitude = NA,
            country = NA,
@@ -14,6 +16,7 @@ build_metadata_hull <-
            ds.name = NA,
            import.time = Sys.time() |> format(),
            threshold.missing = 0.2,
+           scaling = "symlog",
            ...
            ) {
   reactiveValues(
@@ -23,6 +26,9 @@ build_metadata_hull <-
                               variable_unit = variable_unit,
                               variable_factor = variable_factor,
                               variable_offset = variable_offset,
+                              variable_scaling = "symlog",
+                              variable_min = variable_min,
+                              variable_max = variable_max,
                               latitude = latitude,
                               longitude = longitude,
                               country = country,
@@ -36,6 +42,7 @@ build_metadata_hull <-
     summaries = reactiveValues(overview = tibble::tibble(),
                                has_gaps = logical(0),
                                has_irregulars = logical(0),
-                               dominantEpoch = tibble::tibble())
+                               dominantEpoch = tibble::tibble()),
+    data_processed = data
   )
 }

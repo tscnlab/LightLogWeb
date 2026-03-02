@@ -51,12 +51,12 @@ datasetDashboardUI <- function(id) {
     ),
     nav_panel(
       title = "Plot",
-      plotOutput(ns("plot"))
+      plotOutput(ns("plot")) |> shinycssloaders::withSpinner()
     ),
     nav_panel(
       title = "Summary Metrics",
       fluidRow(
-      gt::gt_output(ns("summarytable"))
+      gt::gt_output(ns("summarytable")) |> shinycssloaders::withSpinner()
       )
       ),
     nav_panel(
@@ -87,6 +87,7 @@ datasetDashboardServer <- function(id,
       req(active_panel() == "dashboard")
       no_dataset_modal(selected_dataset, session)
       })
+
     observe({
       removeModal()
     }) |> bindEvent(input$to_import)
@@ -99,7 +100,7 @@ datasetDashboardServer <- function(id,
 
     output$plot <- renderPlot({
       req(selected_dataset())
-      datasets[[selected_dataset()]]$data |>
+      datasets[[selected_dataset()]]$data_processed |>
         gg_days(
           y.axis = !!rlang::sym(datasets[[selected_dataset()]]$metadata$variable),
                   aes_col = Id) |>
@@ -109,15 +110,14 @@ datasetDashboardServer <- function(id,
         ))
     })
 
-
     output$table <- DT::renderDataTable({
       req(selected_dataset())
-      datasets[[selected_dataset()]]$data
+      datasets[[selected_dataset()]]$data_processed
     })
 
     output$summarytable <- gt::render_gt({
       req(selected_dataset())
-      datasets[[selected_dataset()]]$data |>
+      datasets[[selected_dataset()]]$data_processed |>
         summary_table(
           Variable.colname = !!rlang::sym(datasets[[selected_dataset()]]$metadata$variable),
           coordinates = c(
@@ -160,7 +160,7 @@ datasetDashboard <- function(...) {
       title = h1("datasetDashboard module"),
       nav_panel_hidden("Dashboard",
                        datasetDashboardUI("Dashboard")
-                       )
+                       ),
     )
   server <- function(input, output, session) {
 
@@ -169,7 +169,9 @@ datasetDashboard <- function(...) {
 
     timer <- reactiveTimer(1000)
 
-    observe(load_testdata(datasets, selected_dataset, notifications = FALSE))
+    observe(load_testdata(datasets, selected_dataset, notifications = FALSE),
+            ) |>
+      bindEvent(TRUE, once = TRUE)
 
     datasetDashboardServer("Dashboard",
                         active_panel = reactive("dashboard"),

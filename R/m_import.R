@@ -207,12 +207,12 @@ UI_accordion_summary <- function(ns) {
     layout_column_wrap(
       card(
         card_header("Import message", container = h4),
-        verbatimTextOutput(ns("import_msg")),
+        verbatimTextOutput(ns("import_msg"))|> shinycssloaders::withSpinner(),
         min_height = "400px"
       ),
       card(
         card_header("Overview Plot", container = h4),
-        plotOutput(ns("plot_overview")),
+        plotOutput(ns("plot_overview"))|> shinycssloaders::withSpinner(),
         min_height = "400px"
       )
     ),
@@ -229,7 +229,7 @@ UI_accordion_summary <- function(ns) {
     card(
       card_header("Imported table", container = h4) |>
         tooltip2("This table shows the first and last 50 rows of the imported data"),
-      gt::gt_output(ns("import_table"))
+      gt::gt_output(ns("import_table"))|> shinycssloaders::withSpinner()
     )
   )
 }
