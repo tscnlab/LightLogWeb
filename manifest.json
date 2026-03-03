@@ -3559,6 +3559,33 @@
         "RemoteSha": "1.11.1"
       }
     },
+    "shinyWidgets": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "shinyWidgets",
+        "Title": "Custom Inputs Widgets for Shiny",
+        "Version": "0.9.0",
+        "Authors@R": "c(\n  person(\"Victor\", \"Perrier\", email = \"victor.perrier@dreamrs.fr\", role = c(\"aut\", \"cre\", \"cph\")),\n  person(\"Fanny\", \"Meyer\", role = \"aut\"),\n  person(\"David\", \"Granjon\", role = \"aut\"),\n  person(\"Ian\", \"Fellows\", role = \"ctb\", comment = \"Methods for mutating vertical tabs & updateMultiInput\"),\n  person(\"Wil\", \"Davis\", role = \"ctb\", comment = \"numericRangeInput function\"),\n  person(\"Spencer\", \"Matthews\", role = \"ctb\", comment = \"autoNumeric methods\"),\n  person(family = \"JavaScript and CSS libraries authors\", role = c(\"ctb\", \"cph\"), comment = \"All authors are listed in LICENSE.md\")\n  )",
+        "Description": "Collection of custom input controls and user interface components for 'Shiny' applications. \n  Give your applications a unique and colorful style !",
+        "URL": "https://github.com/dreamRs/shinyWidgets,\nhttps://dreamrs.github.io/shinyWidgets/",
+        "BugReports": "https://github.com/dreamRs/shinyWidgets/issues",
+        "License": "GPL-3",
+        "Encoding": "UTF-8",
+        "LazyData": "true",
+        "RoxygenNote": "7.3.2",
+        "Depends": "R (>= 3.1.0)",
+        "Imports": "bslib, sass, shiny (>= 1.6.0), htmltools (>= 0.5.1), jsonlite,\ngrDevices, rlang",
+        "Suggests": "testthat, covr, ggplot2, DT, scales, shinydashboard,\nshinydashboardPlus",
+        "NeedsCompilation": "no",
+        "Packaged": "2025-02-21 09:09:48 UTC; perri",
+        "Author": "Victor Perrier [aut, cre, cph],\n  Fanny Meyer [aut],\n  David Granjon [aut],\n  Ian Fellows [ctb] (Methods for mutating vertical tabs &\n    updateMultiInput),\n  Wil Davis [ctb] (numericRangeInput function),\n  Spencer Matthews [ctb] (autoNumeric methods),\n  JavaScript and CSS libraries authors [ctb, cph] (All authors are listed\n    in LICENSE.md)",
+        "Maintainer": "Victor Perrier <victor.perrier@dreamrs.fr>",
+        "Repository": "RSPM",
+        "Date/Publication": "2025-02-21 12:30:02 UTC",
+        "Built": "R 4.5.0; ; 2025-04-09 06:37:36 UTC; unix"
+      }
+    },
     "shinycssloaders": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",
@@ -4577,13 +4604,13 @@
       "checksum": "8e2e6a841c2cc451b51eca594c86c537"
     },
     ".Rprofile": {
-      "checksum": "b440302e0e64681a39c141f43acec952"
+      "checksum": "cf3a8092aa71bbb6824d4fb71e21bd93"
     },
     "app.R": {
       "checksum": "c3bee4557904cfc7d7e9e95012537770"
     },
     "DESCRIPTION": {
-      "checksum": "b5406aec80eaefe870385348d78d9812"
+      "checksum": "4e460a5eaa5be0a4c5db8f5ccdcfd19e"
     },
     "inst/app/www/logo_banner2.png": {
       "checksum": "770ef2b6457cc69a3d1fe857c5bc1df5"
@@ -4616,7 +4643,7 @@
       "checksum": "0c8c24cb2d58bc98ac16000bcc03a350"
     },
     "R/build_metadata_hull.R": {
-      "checksum": "6ade98e54752fe999b97f321869d614e"
+      "checksum": "c6a3826281a6d1795d58ee47c26a6719"
     },
     "R/collect_dataset_names.R": {
       "checksum": "b400b018c362c21c64aba8c54405e81e"
@@ -4652,10 +4679,10 @@
       "checksum": "408c93ffc85a899d1c7309ed1c85bbfd"
     },
     "R/load_testdata.R": {
-      "checksum": "58cf805ff8962a826c8790e62231d240"
+      "checksum": "e4aba06b71e1658219f1b7c29f4c451d"
     },
     "R/m_dataset_dashboard.R": {
-      "checksum": "45976839de37945ff51548d5c6f765de"
+      "checksum": "33e62074c35a8590267d12ca04d4c661"
     },
     "R/m_dataset_manager.R": {
       "checksum": "9674b8d72bb1393b83bdff53a5690997"
@@ -4664,7 +4691,10 @@
       "checksum": "eb4df5045f9c7f01c0ab7c00800b805f"
     },
     "R/m_metadata.R": {
-      "checksum": "a9a1d669255698490453ba8cf9006a28"
+      "checksum": "2d4216e0883fcf5ee461a69a54dc911f"
+    },
+    "R/m_preprocessing.R": {
+      "checksum": "ce97ca52edf3ce13aee82dc01f3d41ef"
     },
     "R/m_summaries.R": {
       "checksum": "baba336fa3443ac89f9e0e029f064559"
@@ -4691,7 +4721,7 @@
       "checksum": "60e7b13e7ed5e68727ae6cd8797f4aed"
     },
     "renv.lock": {
-      "checksum": "d3784c4809ecd14aacae8407a8cbfc66"
+      "checksum": "b99ef6b0b04510f322bd2133f411c4d9"
     }
   },
   "users": null
