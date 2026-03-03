@@ -142,11 +142,11 @@ metadataUI <- function(id) {
         column(width = 8,
       actionButton(
         ns("save_metadata"),
-        div("Save metadata details ", icon("circle-right")),
+        div("Save metadata details & reset preprocessing", icon("circle-right")),
         # icon = ,
         class = "btn-primary",
         width = "100%"
-      ) |> tooltip2("this will overwrite the current metadata onto the dataset")),
+      ) |> tooltip2("this will overwrite the current metadata onto the dataset & reset all preprocessing")),
       column(width = 4,
       actionButton(
         ns("restore_metadata"),
@@ -183,19 +183,27 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
 
     #map output
     output$map <- leaflet::renderLeaflet({
-      validate(
-        need(input$latitude, "Please provide a latitude"),
-        need(input$longitude, "Please provide a longitude")
-      )
+
+      if(!all(is.na(c(input$longitude, input$latitude)))) {
       lng <- input$longitude
       lat <- input$latitude
       leaflet::leaflet() |>
         leaflet::addTiles() |>
-        leaflet::setView(lng, lat, zoom = 4) |>
+        leaflet::setView(lng, lat, zoom = 6) |>
         leaflet::addMiniMap(width = 100, height = 100) |>
         leaflet::addAwesomeMarkers(lng, lat,
                                    popup = format_coordinates(c(lat, lng))
                                    )
+      } else {
+        leaflet::leaflet() |>
+          leaflet::addTiles()
+      }
+    })
+
+    #map reactivity
+    observeEvent(input$map_click, {
+      updateNumericInput(inputId = "latitude", value = input$map_click$lat)
+      updateNumericInput(inputId = "longitude", value = input$map_click$lng)
     })
 
     #print output
@@ -216,35 +224,40 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
         }
       }
                   )
-      showNotification("Metadata details saved.", type = "message")
-    }) |> bindEvent(input$save_metadata)
 
-    #adjust time zone if necessary
-    observe({
-      dataset <- ds()
-      if(dataset$metadata$tz != lubridate::tz(dataset$data_processed$Datetime)){
+      if(dataset$metadata$tz != lubridate::tz(dataset$data$Datetime)){
+        dataset$data <-
+          dataset$data |>
+          dplyr::mutate(
+            dplyr::across(
+              tidyselect::where(
+                lubridate::is.POSIXct),
+              \(x) lubridate::force_tz(x, dataset$metadata$tz)
+            )
+          )
+      }
+
+      dataset$data_processed <-
+        dataset$data |>
+        dplyr::select(
+          tidyselect::all_of(c("Id", "Datetime", dataset$metadata$variable))
+          ) |>
+        dplyr::mutate(!!dataset$metadata$variable :=
+                        (!!rlang::sym(dataset$metadata$variable))*
+                        dataset$metadata$variable_factor +
+                        dataset$metadata$variable_offset
+        )
+
+      showNotification("Metadata details saved & preprocessing reset.", type = "message")
+
+      #add photoperiod to data
+      req(dataset$metadata$latitude, dataset$metadata$longitude)
       dataset$data_processed <-
         dataset$data_processed |>
-        dplyr::mutate(
-          dplyr::across(
-            tidyselect::where(
-              lubridate::is.POSIXct),
-            \(x) lubridate::force_tz(x, dataset$metadata$tz)
-            )
-          )
-      }
-      if(dataset$metadata$tz != lubridate::tz(dataset$data$Datetime)){
-      dataset$data <-
-        dataset$data |>
-        dplyr::mutate(
-          dplyr::across(
-            tidyselect::where(
-              lubridate::is.POSIXct),
-            \(x) lubridate::force_tz(x, dataset$metadata$tz)
-            )
-          )
-      }
-    }) |> bindEvent(ds()$data, ds()$metadata$tz, ignoreInit = TRUE)
+        add_photoperiod(c(dataset$metadata$latitude, dataset$metadata$longitude),
+                        overwrite = TRUE)
+
+    }) |> bindEvent(input$save_metadata, ignoreInit = TRUE)
 
     #restore metadata
     observe({
@@ -262,31 +275,17 @@ metadataServer <- function(id, datasets, selected_dataset, ignoreInit = TRUE) {
       showNotification("Metadata details restored.", type = "message")
     }) |> bindEvent(input$restore_metadata, ds()$data, ds()$metadata)
 
-  #adjust time zone if set
-  # observe({
-  #   dataset <- ds()
-  #   dataset$data <-
-  #     dataset$data |>
-  #     dplyr::mutate(Datetime = lubridate::force_tz(Datetime, dataset$metadata$tz))
-  # }) |> bindEvent(ds()$data, ds()$metadata$tz, ignoreInit = TRUE)
-
-  #adjust coordinates if changing
+  #adjust summayry if data changes
   observe({
     dataset <- ds()
-    req(dataset$metadata$latitude, dataset$metadata$longitude)
+    req(ds()$metadata$threshold.missing)
     dataset$summaries$overview <-
       summary_overview(dataset$data_processed,
                        !!rlang::sym(dataset$metadata$variable),
-                       coordinates = c(dataset$metadata$latitude, dataset$metadata$longitude),
                        threshold.missing =
                          dataset$metadata$threshold.missing
       )
-    # #add photoperiod to data
-    # dataset$data <-
-    #   dataset$data |>
-    #   add_photoperiod(c(dataset$metadata$latitude, dataset$metadata$longitude),
-    #                   overwrite = TRUE)
-    }) |> bindEvent(ds()$metadata$latitude, ds()$metadata$longitude, ds()$metadata$threshold.missing, ignoreInit = TRUE)
+    }) |> bindEvent(ds()$data_processed, ignoreInit = TRUE)
 
   })
 }

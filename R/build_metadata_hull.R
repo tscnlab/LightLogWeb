@@ -16,7 +16,7 @@ build_metadata_hull <-
            ds.name = NA,
            import.time = Sys.time() |> format(),
            threshold.missing = 0.2,
-           scaling = "symlog",
+           variable_scaling = "symlog",
            ...
            ) {
   reactiveValues(
@@ -26,7 +26,7 @@ build_metadata_hull <-
                               variable_unit = variable_unit,
                               variable_factor = variable_factor,
                               variable_offset = variable_offset,
-                              variable_scaling = "symlog",
+                              variable_scaling = variable_scaling,
                               variable_min = variable_min,
                               variable_max = variable_max,
                               latitude = latitude,

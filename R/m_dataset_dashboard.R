@@ -1,36 +1,5 @@
 # UI ------------------------------------------------------------------
 
-UI_preprocessing <- function(ns) {
-  #second accordion panel with quality metrics
-  card(
-    h3("Quality control"),
-    selectInput(
-      ns("123"),
-      label = "Relevant variable",
-      choices = "",
-      # selected = metadata$variable
-    ),
-    textInput(
-      ns("1234"),
-      label = "Variable name",
-      # value = metadata$variable_name
-    ),
-    textInput(
-      ns("12345"),
-      label = "Variable unit",
-      # value = metadata$variable_unit
-    ),
-    p(
-      actionButton(
-        ns("123567"),
-        "Save variable details",
-        icon = icon("save"),
-        class = "btn-primary"
-      )
-    )
-  )
-}
-
 datasetDashboardUI <- function(id) {
   ns <- NS(id)
 
@@ -47,7 +16,7 @@ datasetDashboardUI <- function(id) {
     ),
     nav_panel(
       title = "Preprocessing",
-      UI_preprocessing(ns)
+      preprocessingUI(ns("preprocessing"))
     ),
     nav_panel(
       title = "Plot",
@@ -141,6 +110,12 @@ datasetDashboardServer <- function(id,
                    datasets,
                    selected_dataset,
                    ignoreInit = FALSE
+                   )
+
+    #preprocessing module
+    preprocessingServer("preprocessing",
+                   datasets,
+                   selected_dataset
                    )
 
     #valueboxes module
