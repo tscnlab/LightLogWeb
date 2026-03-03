@@ -10,6 +10,7 @@ datasetDashboardUI <- function(id) {
   # ),
   fluidRow(
   navset_card_pill(
+    id = ns("dashboard"),
     nav_panel(
       title = "Metadata",
       metadataUI(ns("metadata"))
@@ -144,7 +145,9 @@ datasetDashboard <- function(...) {
 
     timer <- reactiveTimer(1000)
 
-    observe(load_testdata(datasets, selected_dataset, notifications = FALSE),
+    observe({load_testdata(datasets, selected_dataset, notifications = FALSE)
+            nav_select("Dashboard-dashboard", "Preprocessing")
+    }
             ) |>
       bindEvent(TRUE, once = TRUE)
 
