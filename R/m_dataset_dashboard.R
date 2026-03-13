@@ -45,22 +45,10 @@ datasetDashboardUI <- function(id) {
 
 datasetDashboardServer <- function(id,
                                 datasets,
-                                selected_dataset,
-                                active_panel) {
+                                selected_dataset) {
   stopifnot(is.reactive(selected_dataset),
-            is.reactivevalues(datasets),
-            is.reactive(active_panel))
+            is.reactivevalues(datasets))
   moduleServer(id, function(input, output, session) {
-
-    #check whether a dataset is selected
-    observe({
-      req(active_panel() == "dashboard")
-      no_dataset_modal(selected_dataset, session)
-      })
-
-    observe({
-      removeModal()
-    }) |> bindEvent(input$to_import)
 
     #create the ui of the dataset heading
     output$dataset_name <- renderUI({
@@ -152,7 +140,6 @@ datasetDashboard <- function(...) {
       bindEvent(TRUE, once = TRUE)
 
     datasetDashboardServer("Dashboard",
-                        active_panel = reactive("dashboard"),
                         selected_dataset = selected_dataset,
                         datasets = datasets)
   }
