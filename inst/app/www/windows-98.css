@@ -1,0 +1,500 @@
+/* Windows 98 inspired cosmetic skin for LightLogWeb.
+   The app keeps its existing Shiny/bslib structure; this stylesheet only
+   changes colors, borders, spacing, and control chrome. */
+
+:root {
+  --win98-desktop: #008080;
+  --win98-face: #c0c0c0;
+  --win98-light: #ffffff;
+  --win98-mid: #dfdfdf;
+  --win98-shadow: #808080;
+  --win98-dark: #0a0a0a;
+  --win98-blue: #000080;
+  --win98-blue-light: #1084d0;
+  --win98-text: #000000;
+  --win98-danger: #800000;
+  --win98-warning: #808000;
+  --win98-success: #008000;
+  --bs-body-font-family: "MS Sans Serif", Tahoma, Verdana, Arial, sans-serif;
+  --bs-body-font-size: 13px;
+  --bs-body-color: var(--win98-text);
+  --bs-body-bg: var(--win98-desktop);
+  --bs-border-radius: 0;
+  --bs-border-radius-sm: 0;
+  --bs-border-radius-lg: 0;
+}
+
+html,
+body,
+.bslib-page-navbar {
+  min-height: 100%;
+  background: var(--win98-desktop);
+  color: var(--win98-text);
+  image-rendering: pixelated;
+}
+
+body {
+  font-family: var(--bs-body-font-family);
+  font-size: var(--bs-body-font-size);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.navbar-brand,
+.btn,
+.form-control,
+.form-select,
+.selectize-input,
+.selectize-dropdown,
+.dropdown-menu,
+.card,
+.accordion,
+.modal-content,
+.value-box {
+  font-family: var(--bs-body-font-family);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 700;
+}
+
+.win98-outset,
+.navbar,
+.sidebar,
+.card,
+.accordion-item,
+.value-box,
+.modal-content,
+.dropdown-menu,
+.popover,
+.tooltip-inner,
+.dataTables_wrapper,
+.gt_table {
+  background: var(--win98-face);
+  border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light);
+  border-style: solid;
+  border-width: 2px;
+  border-radius: 0;
+  box-shadow: inset -1px -1px 0 var(--win98-shadow), inset 1px 1px 0 var(--win98-mid);
+}
+
+.win98-inset,
+.form-control,
+.form-select,
+.selectize-input,
+.selectize-dropdown,
+textarea,
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+input[type="file"],
+pre,
+.well,
+.gt_table,
+.dataTables_scrollBody,
+.leaflet-container,
+.shiny-plot-output,
+.shiny-bound-output:has(svg),
+.shiny-bound-output:has(canvas) {
+  background: var(--win98-light);
+  color: var(--win98-text);
+  border-color: var(--win98-shadow) var(--win98-light) var(--win98-light) var(--win98-shadow);
+  border-style: solid;
+  border-width: 2px;
+  border-radius: 0;
+  box-shadow: inset -1px -1px 0 var(--win98-mid), inset 1px 1px 0 var(--win98-dark);
+}
+
+.navbar {
+  align-items: stretch;
+  min-height: 42px;
+  padding: 3px 4px;
+  background: var(--win98-face) !important;
+}
+
+.navbar::before,
+.card-header::before,
+.accordion-button::before,
+.modal-header::before {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  content: "";
+  display: inline-block;
+  flex: 0 0 16px;
+  background:
+    linear-gradient(90deg, transparent 0 2px, #f00 2px 4px, transparent 4px),
+    linear-gradient(#ff0 0 4px, #0f0 4px 8px, #00f 8px 12px, #f0f 12px 16px);
+  border: 1px solid var(--win98-dark);
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  min-width: 260px;
+  margin: 0 8px 0 0;
+  padding: 4px 8px;
+  color: var(--win98-light) !important;
+  background: linear-gradient(90deg, var(--win98-blue), var(--win98-blue-light));
+  border: 1px solid var(--win98-shadow);
+}
+
+.navbar-brand h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.1;
+  color: inherit;
+  text-shadow: none;
+}
+
+.navbar-nav .nav-link,
+.nav-pills .nav-link,
+.nav-tabs .nav-link {
+  margin: 2px;
+  padding: 5px 12px;
+  color: var(--win98-text) !important;
+  background: var(--win98-face);
+  border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light);
+  border-style: solid;
+  border-width: 2px;
+  border-radius: 0;
+  box-shadow: inset -1px -1px 0 var(--win98-shadow), inset 1px 1px 0 var(--win98-mid);
+}
+
+.navbar-nav .nav-link.active,
+.nav-pills .nav-link.active,
+.nav-tabs .nav-link.active,
+.navbar-nav .nav-link:focus,
+.nav-pills .nav-link:focus,
+.nav-tabs .nav-link:focus {
+  color: var(--win98-light) !important;
+  background: var(--win98-blue) !important;
+  border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+  box-shadow: inset -1px -1px 0 var(--win98-mid), inset 1px 1px 0 var(--win98-shadow);
+}
+
+.bslib-sidebar-layout,
+.bslib-sidebar-layout > .main {
+  background: transparent;
+}
+
+.sidebar {
+  padding: 10px;
+}
+
+.sidebar h5,
+.card-header,
+.accordion-header,
+.modal-header {
+  margin: 0 0 8px;
+  color: var(--win98-light);
+  background: linear-gradient(90deg, var(--win98-blue), var(--win98-blue-light));
+}
+
+.sidebar h5 {
+  padding: 3px 6px;
+  font-size: 0.95rem;
+}
+
+hr {
+  height: 2px;
+  margin: 12px 0;
+  border: 0;
+  background: var(--win98-shadow);
+  box-shadow: 0 1px 0 var(--win98-light);
+  opacity: 1;
+}
+
+.card,
+.accordion-item,
+.value-box {
+  margin-bottom: 12px;
+}
+
+.card-header,
+.accordion-button,
+.modal-header {
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 8px;
+  color: var(--win98-light);
+  background: linear-gradient(90deg, var(--win98-blue), var(--win98-blue-light));
+  border: 0;
+  border-radius: 0 !important;
+  box-shadow: none;
+}
+
+.card-header h4,
+.accordion-button h3,
+.modal-title {
+  margin: 0;
+  color: inherit;
+  font-size: 1rem;
+}
+
+.card-body,
+.accordion-body,
+.modal-body,
+.value-box-area {
+  color: var(--win98-text);
+  background: var(--win98-face);
+}
+
+.accordion-button:not(.collapsed) {
+  color: var(--win98-light);
+  background: linear-gradient(90deg, var(--win98-blue), var(--win98-blue-light));
+  box-shadow: none;
+}
+
+.accordion-button::after {
+  filter: grayscale(1) contrast(4);
+}
+
+.btn,
+.action-button,
+.btn-default,
+.btn-primary,
+.btn-secondary,
+.btn-outline-danger,
+.btn-outline-warning,
+.btn-outline-primary,
+button,
+input[type="button"],
+input[type="submit"] {
+  min-height: 28px;
+  padding: 4px 12px;
+  color: var(--win98-text) !important;
+  background: var(--win98-face) !important;
+  border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light) !important;
+  border-style: solid !important;
+  border-width: 2px !important;
+  border-radius: 0 !important;
+  box-shadow: inset -1px -1px 0 var(--win98-shadow), inset 1px 1px 0 var(--win98-mid) !important;
+  text-decoration: none;
+}
+
+.btn:hover,
+.action-button:hover,
+button:hover {
+  background: var(--win98-mid) !important;
+}
+
+.btn:active,
+.btn.active,
+.action-button:active,
+button:active {
+  padding-top: 5px;
+  padding-left: 13px;
+  border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark) !important;
+  box-shadow: inset -1px -1px 0 var(--win98-mid), inset 1px 1px 0 var(--win98-shadow) !important;
+}
+
+.btn-outline-danger,
+.btn-danger {
+  color: var(--win98-danger) !important;
+}
+
+.btn-outline-warning,
+.btn-warning {
+  color: var(--win98-warning) !important;
+}
+
+label,
+.control-label,
+.form-label {
+  margin-bottom: 3px;
+  font-weight: 700;
+}
+
+.form-control,
+.form-select,
+.selectize-input,
+select,
+textarea,
+input {
+  min-height: 28px;
+  border-radius: 0 !important;
+}
+
+.form-control:focus,
+.form-select:focus,
+.selectize-input.focus,
+.selectize-control.single .selectize-input.input-active {
+  border-color: var(--win98-shadow) var(--win98-light) var(--win98-light) var(--win98-shadow);
+  box-shadow: inset -1px -1px 0 var(--win98-mid), inset 1px 1px 0 var(--win98-dark), 0 0 0 1px var(--win98-blue);
+}
+
+.selectize-dropdown .active,
+.selectize-dropdown .option:hover {
+  color: var(--win98-light);
+  background: var(--win98-blue);
+}
+
+.form-check-input {
+  width: 14px;
+  height: 14px;
+  margin-top: 0.2rem;
+  background-color: var(--win98-light);
+  border: 2px solid;
+  border-color: var(--win98-shadow) var(--win98-light) var(--win98-light) var(--win98-shadow);
+  border-radius: 0 !important;
+}
+
+.form-check-input:checked {
+  background-color: var(--win98-light);
+  background-image: none;
+  box-shadow: inset 0 0 0 2px var(--win98-light), inset 0 0 0 7px var(--win98-dark);
+}
+
+.form-check-input[type="radio"] {
+  border-radius: 50% !important;
+}
+
+.value-box {
+  color: var(--win98-text) !important;
+}
+
+.value-box .value-box-showcase,
+.value-box .bi,
+.value-box svg,
+.btn svg,
+.nav-link svg {
+  color: currentColor;
+  filter: grayscale(1) contrast(1.2);
+}
+
+.bg-light,
+.text-bg-light,
+.value-box.bg-light,
+.value-box .bg-light {
+  color: var(--win98-text) !important;
+  background-color: var(--win98-face) !important;
+}
+
+.text-primary,
+.text-secondary,
+.text-success,
+.text-warning,
+.text-danger {
+  color: var(--win98-text) !important;
+}
+
+.text-success::before,
+.text-warning::before,
+.text-danger::before,
+.text-primary::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  content: "";
+  border: 1px solid var(--win98-dark);
+}
+
+.text-success::before {
+  background: var(--win98-success);
+}
+
+.text-warning::before {
+  background: #ffff00;
+}
+
+.text-danger::before {
+  background: #ff0000;
+}
+
+.text-primary::before {
+  background: var(--win98-blue-light);
+}
+
+pre,
+code,
+.gt_table,
+.dataTable,
+.dataTables_wrapper {
+  font-family: "Courier New", monospace;
+}
+
+.table,
+.dataTable,
+.gt_table {
+  --bs-table-bg: var(--win98-light);
+  --bs-table-color: var(--win98-text);
+  border-collapse: collapse !important;
+}
+
+.table th,
+.table td,
+.dataTable th,
+.dataTable td,
+.gt_table th,
+.gt_table td {
+  border: 1px solid var(--win98-shadow) !important;
+}
+
+.table thead th,
+.dataTable thead th,
+.gt_col_heading,
+.gt_group_heading {
+  background: var(--win98-face) !important;
+  border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light) !important;
+  border-style: solid !important;
+  border-width: 2px !important;
+}
+
+.pagination .page-link {
+  color: var(--win98-text);
+  background: var(--win98-face);
+  border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light);
+  border-style: solid;
+  border-width: 2px;
+  border-radius: 0 !important;
+}
+
+.pagination .active .page-link,
+.pagination .page-link:focus {
+  color: var(--win98-light);
+  background: var(--win98-blue);
+  box-shadow: none;
+}
+
+.tooltip-inner,
+.popover {
+  color: var(--win98-text);
+  background: #ffffe1;
+  border-width: 1px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.spinner-border,
+.load-container .loader {
+  color: var(--win98-blue) !important;
+}
+
+img {
+  image-rendering: auto;
+}
+
+@media (max-width: 767.98px) {
+  .navbar-brand {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .navbar-nav .nav-link,
+  .nav-pills .nav-link,
+  .nav-tabs .nav-link {
+    display: block;
+  }
+}

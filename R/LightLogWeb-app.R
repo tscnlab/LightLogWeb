@@ -23,6 +23,9 @@ LightLogWeb <- function(...) {
   # on.exit(removeResourcePath("extr"), add = TRUE)
 
   ui <- page_navbar(
+    header = tags$head(
+      tags$link(rel = "stylesheet", href = "extr/windows-98.css")
+    ),
     # App title ----
     title = h1("LightLogWeb "),
     id = "main_nav",
