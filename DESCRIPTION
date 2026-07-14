@@ -1,6 +1,6 @@
 Package: LightLogWeb
-Title: Brings LightLogR to a shiny web-based interface
-Version: 0.0.0.9000
+Title: Reproducible Shiny Workflows for Personal Light Exposure
+Version: 0.1.0
 Authors@R: c(
     person("Johannes", "Zauner", 
       email = "johannes.zauner@tum.de", role = c("aut", "cre"),
@@ -12,30 +12,52 @@ Authors@R: c(
     person("Wellcome Trust", role = "fnd", comment = "LightLogR's development is supported by the Wellcome Trust (www.wellcome.org), 226787/2/22/Z."),
     person("Reality Labs Research", role = "fnd", comment = "LightLogR's development is supported by the GLEE project (Global Light Exposure Engine, www.visualdiet.org) funded by Reality Labs Research."),    
     person("Translational Sensory and Circadian Neuroscience Unit (MPS/TUM/TUMCREATE)", comment = c(URL = "www.tscnlab.org"), role = "cph"))
-Description: What the package does (one paragraph).
+Description: A research-centred Shiny interface and reproducible console API
+    for importing, validating, preparing, grouping, analysing, visualising,
+    and exporting personal light exposure data with 'LightLogR'. Analyses are
+    represented as versioned recipes, can be saved as local project bundles,
+    and can be extended with startup-provided Shiny analysis modules.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Depends: R (>= 4.1.0)
+Depends: R (>= 4.3)
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
+RoxygenNote: 7.3.2
+URL: https://github.com/tscnlab/LightLogWeb,
+    https://tscnlab.github.io/LightLogWeb/
+BugReports: https://github.com/tscnlab/LightLogWeb/issues
 Imports: 
     bsicons,
     bslib,
     dplyr,
     DT,
+    ggplot2,
     glue,
     gt,
-    leaflet,
-    LightLogR,
+    jsonlite,
+    LightLogR (>= 0.10.3),
     lubridate,
     purrr,
     rlang,
+    scales,
     shiny,
-    shinycssloaders,
     shinyWidgets,
     stringr,
     svglite,
-    tibble
+    tibble,
+    tidyselect,
+    zip
 Suggests: 
+    knitr,
+    leaflet,
+    melidosData (>= 1.0.0),
     pkgload,
-    rsconnect
+    rmarkdown,
+    rsconnect,
+    shinycssloaders,
+    shinytest2,
+    testthat (>= 3.0.0),
+    vdiffr,
+    webshot2,
+    withr
+Config/testthat/edition: 3
+VignetteBuilder: knitr

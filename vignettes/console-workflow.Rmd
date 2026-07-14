@@ -1,0 +1,73 @@
+---
+title: "Reproducible console workflow"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Reproducible console workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(LightLogWeb)
+```
+
+LightLogWeb uses the same plain functions in R and in Shiny. An `llw_dataset` retains an immutable raw stage and a separately prepared stage.
+
+```{r}
+dataset <- llw_dataset(
+  LightLogR::sample.data.environment,
+  metadata = list(
+    variable = "MEDI",
+    variable_name = "Melanopic EDI",
+    variable_unit = "lx",
+    timezone = "Europe/Berlin",
+    coordinates = c(48.52, 9.06)
+  ),
+  name = "sample.data.environment"
+)
+quality <- llw_quality(dataset)
+quality$value$overview
+```
+
+Preparation never overwrites `dataset$raw_data` and never imputes light values. Gaps can become explicit `NA` observations, implausible values can be invalidated with a reason, and participant-days can be filtered by a declared coverage rule.
+
+```{r}
+prepared <- llw_prepare(
+  dataset,
+  gap_policy = "explicit_na",
+  value_range = c(0, 200000),
+  interval = "5 min",
+  daily_missing_max = 0.2
+)
+grouped <- llw_group(prepared, dimensions = c("participant", "date"))
+```
+
+Metric wrappers call the authoritative LightLogR functions. The registry supplies requirements, defaults, units, cautions, and online documentation links.
+
+```{r}
+llw_metric_registry()[, c("id", "requirement", "units", "documentation")]
+metrics <- llw_metrics(
+  grouped,
+  list(
+    list(id = "duration_above_threshold", parameters = list(threshold = 250)),
+    list(id = "dose")
+  )
+)
+metrics$value
+```
+
+A recipe makes the complete execution order portable.
+
+```{r}
+recipe <- llw_recipe() |>
+  llw_recipe_add("preparation", list(gap_policy = "explicit_na", interval = "5 min")) |>
+  llw_recipe_add("grouping", list(dimensions = c("participant", "date"))) |>
+  llw_recipe_add("metric", list(metrics = list(list(id = "dose")))) |>
+  llw_recipe_add("visualization", list(type = "timeline", id = "Participant"))
+
+analysis <- llw_run(dataset, recipe)
+script <- llw_build_script(recipe, data_expression = "LightLogR::sample.data.environment")
+```
+
+`llw_export()` writes CSV/RDS results and PNG/SVG/PDF figures. `llw_manifest()` records parameters, versions, citations, source fingerprints, and session information.

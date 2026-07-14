@@ -1,0 +1,86 @@
+---
+title: "Authoring a custom analysis module"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Authoring a custom analysis module}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+A custom module combines a namespaced Shiny screen with three plain functions: `validate()`, `run()`, and `code()`. `run()` must return `llw_result`; `code()` must return parseable R code. Startup modules are trusted R code. The interface controls state mutation and records reproducibility information, but it is not a process sandbox.
+
+```{r}
+library(LightLogWeb)
+
+daily_mean_module <- llw_module(
+  id = "daily_mean",
+  title = "Daily mean exposure",
+  version = "1.0.0",
+  required_columns = c("Id", "Datetime", "MEDI"),
+  docs_url = "https://example.org/daily-mean",
+
+  ui = function(id) {
+    ns <- shiny::NS(id)
+    shiny::tagList(
+      shiny::numericInput(ns("offset"), "Offset", 0),
+      shiny::actionButton(ns("commit"), "Add to recipe")
+    )
+  },
+
+  server = function(id, context) {
+    shiny::moduleServer(id, function(input, output, session) {
+      shiny::observeEvent(input$commit, {
+        context$commit(list(offset = input$offset), label = "Daily mean exposure")
+      })
+    })
+  },
+
+  validate = function(data, metadata, params) {
+    stopifnot(is.numeric(params$offset), length(params$offset) == 1)
+    TRUE
+  },
+
+  run = function(data, metadata, params) {
+    table <- data |>
+      dplyr::mutate(Date = as.Date(.data$Datetime, tz = metadata$timezone)) |>
+      dplyr::group_by(.data$Id, .data$Date) |>
+      dplyr::summarise(mean_exposure = mean(.data[[metadata$variable]], na.rm = TRUE) + params$offset, .groups = "drop")
+    llw_result(
+      "table", table,
+      label = "Daily mean exposure",
+      units = metadata$variable_unit,
+      parameters = params,
+      grouping = c("Id", "Date"),
+      source = "daily_mean",
+      data = table
+    )
+  },
+
+  code = function(params) {
+    paste0(
+      "data |> dplyr::mutate(Date = as.Date(Datetime)) |>",
+      " dplyr::group_by(Id, Date) |>",
+      " dplyr::summarise(mean_exposure = mean(MEDI, na.rm = TRUE) + ",
+      params$offset, ", .groups = 'drop')"
+    )
+  }
+)
+```
+
+The module is fully testable without Shiny.
+
+```{r}
+dataset <- llw_dataset(LightLogR::sample.data.environment)
+result <- llw_run_module(dataset, daily_mean_module, list(offset = 0))
+head(result$value)
+```
+
+Pass modules at startup in the order they should appear after Visualize.
+
+```{r, eval=FALSE}
+LightLogWeb(modules = list(daily_mean_module))
+```
+
+The server receives read-only reactives at `context$raw`, `prepared`, `grouped`, `metadata`, `recipe`, and `selection`. It may request a controlled recipe change with `context$commit(params)` and publish an `llw_result` with `context$publish(result)`. It must not mutate core objects directly.
+
+Duplicate IDs fail at startup. Missing required columns fail before calculation. A project with a missing or version-incompatible module retains the stored step in a disabled state with an actionable warning.

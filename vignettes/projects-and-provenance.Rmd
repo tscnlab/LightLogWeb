@@ -1,0 +1,33 @@
+---
+title: "Projects, exports, and provenance"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Projects, exports, and provenance}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+An `.llw` project is a versioned ZIP bundle. It contains a manifest, metadata, recipe in RDS and JSON forms, annotation tables, result objects, exported metric tables, figures and plotted data when present, module IDs/versions/parameters, and source fingerprints.
+
+```{r, eval=FALSE}
+analysis <- llw_run(dataset, recipe)
+llw_save_project(analysis, path = "analysis.llw")
+project <- llw_load_project("analysis.llw", modules = modules)
+```
+
+Raw and prepared participant data are excluded by default. This is deliberate: a data-free bundle can be shared as an analysis specification without duplicating participant records. On reload, import the source files again and call `llw_relink_project()`; hashes must match.
+
+```{r, eval=FALSE}
+project <- llw_load_project("analysis.llw")
+source <- llw_import(files, device = "ActLumus", timezone = "Europe/Berlin")
+project <- llw_relink_project(project, source)
+analysis <- llw_run(project$dataset, project$recipe)
+```
+
+Set `include_data = TRUE` only after making an explicit privacy decision. LightLogWeb does not add accounts, authentication, a database, or server-side storage.
+
+## MeLiDos fixture provenance
+
+The installed `extdata/melidos` directory contains small offline fixtures from TUM, KNUST, UCR, and RISE. Together they represent eye/chest/wrist positions, European DST-aware zones, equatorial conditions, a negative UTC offset, high-latitude photoperiod, and wear/sleep intervals. All are derived from public CC BY 4.0 datasets.
+
+`manifest.csv` records repository URL, release, exact commit, DOI, `melidosData` version, extraction description, selected rows, and MD5 checksums. The generator is `data-raw/build-melidos-fixtures.R`. Live source checks require `LIGHTLOGWEB_LIVE_MELIDOS=true` and are intentionally separate from ordinary offline package checks.

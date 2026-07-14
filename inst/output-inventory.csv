@@ -1,0 +1,25 @@
+screen,ui_output,console_function,result_contract,expected_result_test,download_formats
+Import,import_device_options,LightLogR::supported_devices / supported_versions,device registry,test-plots-fixtures-app.R,
+Import,import_id_preview,llw_preview_ids,table,test-classes-import-quality.R,
+Import,import_report,llw_import + llw_quality,diagnostic,test-classes-import-quality.R,RDS
+Import,import_preview,llw_import,data,test-classes-import-quality.R,RDS
+Overview,overview_values,llw_quality,diagnostic overview,test-classes-import-quality.R,JSON manifest
+Overview,quality_strip,llw_quality,diagnostic overview,test-classes-import-quality.R,JSON manifest
+Overview,overview_plot,llw_plot(type='timeline'),plot,test-plots-fixtures-app.R,PNG/SVG/PDF/CSV
+Overview,availability_table,llw_quality,diagnostic by_day,test-classes-import-quality.R,CSV/RDS
+Prepare,prepare_preview_stats,llw_prepare + llw_quality,dataset and diagnostic,test-preparation-grouping.R,CSV/RDS
+Prepare,prepare_preview_plot,llw_prepare + llw_plot,plot,test-preparation-grouping.R,PNG/SVG/PDF/CSV
+Group,group_preview,llw_group,data,test-preparation-grouping.R,CSV/RDS
+Metrics,metric_definition,llw_metric_registry,registry row,test-metrics.R,
+Metrics,metric_parameters,llw_metric_registry,parameter schema,test-metrics.R,recipe JSON/R script
+Metrics,metric_results,llw_metrics,metrics result,test-metrics.R,CSV/RDS
+Visualize,visual_plot,llw_plot,plot,test-plots-fixtures-app.R,PNG/SVG/PDF/CSV
+Metadata,metadata editor,llw_dataset,dataset metadata,test-classes-import-quality.R,JSON manifest
+Raw data,raw_table,llw_dataset,raw data,test-classes-import-quality.R,RDS
+Raw data,prepared downloads,llw_prepare,prepared data,test-preparation-grouping.R,CSV/RDS
+Recipe,recipe_step_detail,llw_recipe_schema + llw_recipe,recipe step,test-recipe-project-module-export.R,JSON
+Recipe,script_preview,llw_build_script,R code,test-recipe-project-module-export.R,R script
+Recipe,analysis manifest,llw_manifest,manifest,test-recipe-project-module-export.R,JSON
+Projects,dataset_library,llw_dataset + llw_merge,dataset,test-classes-import-quality.R,RDS
+Projects,project_status,llw_save_project + llw_load_project,project,test-recipe-project-module-export.R,.llw ZIP
+Custom module,module screen,llw_run_module,llw_result,test-recipe-project-module-export.R,module-defined

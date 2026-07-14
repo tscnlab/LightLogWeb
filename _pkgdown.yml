@@ -1,0 +1,33 @@
+url: https://tscnlab.github.io/LightLogWeb/
+template:
+  bootstrap: 5
+  bootswatch: flatly
+navbar:
+  structure:
+    left: [intro, reference, articles]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/tscnlab/LightLogWeb
+articles:
+  - title: Workflows
+    navbar: Workflows
+    contents:
+      - console-workflow
+      - application-workflow
+      - projects-and-provenance
+      - module-authoring
+reference:
+  - title: Application
+    contents: [LightLogWeb]
+  - title: Data, quality, and preparation
+    contents: [llw_dataset, llw_import, llw_preview_ids, llw_quality, llw_prepare, llw_annotate, llw_group, llw_merge, llw_fixture]
+  - title: Metrics and visualizations
+    contents: [llw_metric_registry, llw_metrics, llw_plot]
+  - title: Recipes and execution
+    contents: [llw_recipe, llw_recipe_add, llw_recipe_update, llw_recipe_move, llw_recipe_undo, llw_recipe_schema, llw_run, llw_build_script]
+  - title: Results and exports
+    contents: [llw_result, llw_manifest, llw_export, llw_save_project, llw_load_project, llw_relink_project]
+  - title: Custom modules
+    contents: [llw_module, llw_run_module]

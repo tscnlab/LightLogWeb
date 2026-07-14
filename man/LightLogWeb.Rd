@@ -2,21 +2,27 @@
 % Please edit documentation in R/LightLogWeb-app.R
 \name{LightLogWeb}
 \alias{LightLogWeb}
-\title{Bring LightLogR to the web with shiny}
+\title{Launch LightLogWeb}
 \usage{
-LightLogWeb(...)
+LightLogWeb(modules = list(), project = NULL, ...)
 }
 \arguments{
-\item{...}{Arguments passed to \code{\link[shiny:shinyApp]{shiny::shinyApp()}}}
+\item{modules}{A list of custom modules created with \code{\link[=llw_module]{llw_module()}}.}
+
+\item{project}{Optional \code{.llw} project path or an object returned by
+\code{\link[=llw_load_project]{llw_load_project()}}.}
+
+\item{...}{Arguments passed to \code{\link[shiny:shinyApp]{shiny::shinyApp()}}.}
 }
 \value{
-Open a viewer with the shiny app
+A Shiny app object.
 }
 \description{
-Bring LightLogR to the web with shiny
+\code{LightLogWeb()} launches the production Shiny application. Custom analyses
+can be supplied at startup as validated \code{\link[=llw_module]{llw_module()}} specifications.
 }
 \examples{
-if(interactive()) {
-LightLogWeb()
+if (interactive()) {
+  LightLogWeb()
 }
 }

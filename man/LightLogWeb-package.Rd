@@ -3,9 +3,18 @@
 \docType{package}
 \name{LightLogWeb-package}
 \alias{LightLogWeb-package}
-\title{LightLogWeb: Brings LightLogR to a shiny web-based interface}
+\title{LightLogWeb: Reproducible Shiny Workflows for Personal Light Exposure}
 \description{
-What the package does (one paragraph).
+A research-centred Shiny interface and reproducible console API for importing, validating, preparing, grouping, analysing, visualising, and exporting personal light exposure data with 'LightLogR'. Analyses are represented as versioned recipes, can be saved as local project bundles, and can be extended with startup-provided Shiny analysis modules.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/tscnlab/LightLogWeb}
+  \item \url{https://tscnlab.github.io/LightLogWeb/}
+  \item Report bugs at \url{https://github.com/tscnlab/LightLogWeb/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: Johannes Zauner \email{johannes.zauner@tum.de} (\href{https://orcid.org/0000-0003-2171-4566}{ORCID})

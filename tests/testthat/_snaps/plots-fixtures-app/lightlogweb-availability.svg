@@ -1,0 +1,57 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' class='svglite' data-engine-version='2.0' width='720.00pt' height='576.00pt' viewBox='0 0 720.00 576.00'>
+<defs>
+  <style type='text/css'><![CDATA[
+    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite rect, .svglite circle {
+      fill: none;
+      stroke: #000000;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-miterlimit: 10.00;
+    }
+  ]]></style>
+</defs>
+<rect width='100%' height='100%' style='stroke: none; fill: #FFFFFF;'/>
+<defs>
+  <clipPath id='cpMC4wMHw3MjAuMDB8MC4wMHw1NzYuMDA='>
+    <rect x='0.00' y='0.00' width='720.00' height='576.00' />
+  </clipPath>
+</defs>
+<g clip-path='url(#cpMC4wMHw3MjAuMDB8MC4wMHw1NzYuMDA=)'>
+</g>
+<defs>
+  <clipPath id='cpMTE3Ljg0fDcwMC4wN3wzMS4yN3w1MzIuNzg='>
+    <rect x='117.84' y='31.27' width='582.23' height='501.51' />
+  </clipPath>
+</defs>
+<g clip-path='url(#cpMTE3Ljg0fDcwMC4wN3wzMS4yN3w1MzIuNzg=)'>
+<polyline points='117.84,282.03 700.07,282.03 ' style='stroke-width: 1.07; stroke: #FAFAFA; stroke-linecap: butt;' />
+<polyline points='144.31,532.78 144.31,31.27 ' style='stroke-width: 1.07; stroke: #FAFAFA; stroke-linecap: butt;' />
+<polyline points='276.68,532.78 276.68,31.27 ' style='stroke-width: 1.07; stroke: #FAFAFA; stroke-linecap: butt;' />
+<polyline points='409.05,532.78 409.05,31.27 ' style='stroke-width: 1.07; stroke: #FAFAFA; stroke-linecap: butt;' />
+<polyline points='541.42,532.78 541.42,31.27 ' style='stroke-width: 1.07; stroke: #FAFAFA; stroke-linecap: butt;' />
+<polyline points='673.79,532.78 673.79,31.27 ' style='stroke-width: 1.07; stroke: #FAFAFA; stroke-linecap: butt;' />
+<line x1='144.31' y1='282.03' x2='673.61' y2='282.03' style='stroke-width: 2.13; stroke-linecap: butt;' />
+<circle cx='144.31' cy='282.03' r='2.58' style='stroke-width: 0.90; fill: #000000;' />
+<circle cx='673.61' cy='282.03' r='2.58' style='stroke-width: 0.90; fill: #000000;' />
+</g>
+<g clip-path='url(#cpMC4wMHw3MjAuMDB8MC4wMHw1NzYuMDA=)'>
+<polyline points='117.84,532.78 117.84,31.27 ' style='stroke-width: 1.07; stroke-linecap: square;' />
+<text x='111.37' y='286.16' text-anchor='end' style='font-size: 12.00px; font-family: sans;' textLength='85.38px' lengthAdjust='spacingAndGlyphs'>TUM_fixture_01</text>
+<polyline points='114.36,282.03 117.84,282.03 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='117.84,532.78 700.07,532.78 ' style='stroke-width: 1.07; stroke-linecap: square;' />
+<polyline points='144.31,536.27 144.31,532.78 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='276.68,536.27 276.68,532.78 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='409.05,536.27 409.05,532.78 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='541.42,536.27 541.42,532.78 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='673.79,536.27 673.79,532.78 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<text x='144.31' y='547.52' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='72.73px' lengthAdjust='spacingAndGlyphs'>May 14 00:00</text>
+<text x='276.68' y='547.52' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='72.73px' lengthAdjust='spacingAndGlyphs'>May 14 12:00</text>
+<text x='409.05' y='547.52' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='72.73px' lengthAdjust='spacingAndGlyphs'>May 15 00:00</text>
+<text x='541.42' y='547.52' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='72.73px' lengthAdjust='spacingAndGlyphs'>May 15 12:00</text>
+<text x='673.79' y='547.52' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='72.73px' lengthAdjust='spacingAndGlyphs'>May 16 00:00</text>
+<text x='408.96' y='563.13' text-anchor='middle' style='font-size: 14.00px; font-family: sans;' textLength='56.03px' lengthAdjust='spacingAndGlyphs'>Datetime</text>
+<text transform='translate(19.60,282.03) rotate(-90)' text-anchor='middle' style='font-size: 14.00px; font-family: sans;' textLength='11.68px' lengthAdjust='spacingAndGlyphs'>Id</text>
+<text x='117.84' y='20.97' style='font-size: 16.00px; font-weight: bold; font-family: sans;' textLength='172.55px' lengthAdjust='spacingAndGlyphs'>LightLogWeb availability</text>
+</g>
+</svg>

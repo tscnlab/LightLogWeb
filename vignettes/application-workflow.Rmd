@@ -1,0 +1,34 @@
+---
+title: "Application workflow"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Application workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+Launch the application with `LightLogWeb()`. The main workflow is Overview → Prepare → Group → Metrics → Visualize. Metadata, Raw data, Recipe, Projects, and startup-provided modules support those steps.
+
+## Import
+
+Device families and versions are read from LightLogR at runtime. The importer accepts multiple logger files or normalized CSV, TSV, TXT, and RDS tables. Before committing an import, review proposed participant IDs, timezone and DST interpretation, primary measurement variable, duplicate handling, and the import report.
+
+A normalized table needs `Id`, a parseable `Datetime`, and a numeric measurement column. Device imports retain source names, sizes, modification times, hashes, and arguments as provenance.
+
+## Quality and preparation
+
+Overview reports epochs, duplicates, implicit gaps, irregular timestamps, explicit missingness, DST offset changes, daily coverage, participant-day validity, and invalidated ranges. Preparation previews its effect before adding a step to the recipe. Original values remain in the raw stage.
+
+LightLogWeb does not automatically impute light values. Gap handling inserts explicit `NA` observations; range invalidation records `.llw_invalid_reason`. Sleep, wear, protocol, and event CSVs use `Id`, `start`, `end`, and `State`, with inclusive starts and exclusive ends.
+
+## Group, calculate, and visualize
+
+Grouping defines what each metric row represents: participant/stream, local date, weekday/weekend, a possibly cross-midnight clock window, photoperiod, or imported annotation states. Missing prerequisites are errors rather than silent fallbacks.
+
+The metric catalog includes the eligible one-variable LightLogR families. Each card links directly to its official function documentation. Multiple metric steps can be independently parameterized, disabled, removed, or reordered.
+
+Figures cover availability, day overlays, timelines, gaps, heatmaps, double plots, daily profiles, histograms, cumulative distributions, photoperiod, and annotated states. Every figure includes its plotted data.
+
+## Handoff
+
+The header downloads readable R code. The Recipe screen adds machine-readable JSON and a manifest. Tables and results use CSV/RDS; figures use PNG/SVG/PDF plus CSV; Projects create or load local `.llw` bundles. At 320 px the header actions retain visible names, controls wrap, plots keep their full card width, and long catalogs remain searchable.
