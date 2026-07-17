@@ -1,160 +1,205 @@
-# UI ------------------------------------------------------------------
-
 datasetDashboardUI <- function(id) {
   ns <- NS(id)
 
   tagList(
-    # bslib::page_fixed(
-  uiOutput(ns("dataset_name")),
-  summariesUI(ns("summaries")),
-  # ),
-  fluidRow(
-  navset_card_pill(
-    id = ns("dashboard"),
-    nav_panel(
-      title = "Metadata",
-      metadataUI(ns("metadata"))
-    ),
-    nav_panel(
-      title = "Preprocessing",
-      preprocessingUI(ns("preprocessing"))
-    ),
-    nav_panel(
-      title = "Plot",
-      plotOutput(ns("plot")) |> shinycssloaders::withSpinner()
-    ),
-    nav_panel(
-      title = "Summary Metrics",
-      fluidRow(
-      gt::gt_output(ns("summarytable")) |> shinycssloaders::withSpinner()
-      )
+    uiOutput(ns("dataset_name")),
+    layout_column_wrap(
+      fill = FALSE,
+      value_box(
+        title = "Stable dataset ID",
+        value = textOutput(ns("dataset_id")),
+        showcase = icon("fingerprint"),
+        theme = "text-secondary",
+        class = "bg-light"
       ),
-    nav_panel(
-      title = "Raw Table",
-      fluidRow(
-      DT::dataTableOutput(ns("table"), height = "600px")
+      value_box(
+        title = "Revision",
+        value = textOutput(ns("revision")),
+        showcase = icon("code-branch"),
+        theme = "text-primary",
+        class = "bg-light"
+      ),
+      value_box(
+        title = "Canonical raw rows",
+        value = textOutput(ns("raw_rows")),
+        showcase = icon("database"),
+        theme = "text-secondary",
+        class = "bg-light"
+      ),
+      value_box(
+        title = "Prepared rows",
+        value = textOutput(ns("prepared_rows")),
+        showcase = icon("table"),
+        theme = "text-secondary",
+        class = "bg-light"
+      )
+    ),
+    navset_card_pill(
+      id = ns("dashboard"),
+      nav_panel(
+        title = "Architecture status",
+        tableOutput(ns("record_status"))
+      ),
+      nav_panel(
+        title = "Prepared data",
+        DT::dataTableOutput(ns("prepared_table"), height = "600px")
+      ),
+      nav_panel(
+        title = "Canonical raw data",
+        DT::dataTableOutput(ns("raw_table"), height = "600px")
       )
     )
   )
-  )
-  )
-
 }
 
-# Server ------------------------------------------------------------------
+format_record_value <- function(value) {
+  if (is.null(value) || length(value) == 0L) {
+    return("Not set")
+  }
+  if (inherits(value, "POSIXt")) {
+    return(format(value, tz = "UTC", usetz = TRUE))
+  }
+  if (is.atomic(value)) {
+    return(paste(as.character(value), collapse = ", "))
+  }
+  paste0("", length(value), " item(s)")
+}
 
-datasetDashboardServer <- function(id,
-                                datasets,
-                                selected_dataset,
-                                active_panel) {
-  stopifnot(is.reactive(selected_dataset),
-            is.reactivevalues(datasets),
-            is.reactive(active_panel))
+datasetDashboardServer <- function(id, dataset, active_panel) {
+  if (!shiny::is.reactive(dataset) || !shiny::is.reactive(active_panel)) {
+    abort_llw(
+      "`dataset` and `active_panel` must be reactive inputs.",
+      type = "validation"
+    )
+  }
+
   moduleServer(id, function(input, output, session) {
+    event_value <- reactiveVal(NULL)
+    empty_modal_visible <- FALSE
 
-    #check whether a dataset is selected
     observe({
-      req(active_panel() == "dashboard")
-      no_dataset_modal(selected_dataset, session)
-      })
+      is_dashboard <- identical(active_panel(), "dashboard")
+      missing_dataset <- is.null(dataset())
+      if (is_dashboard && missing_dataset && !empty_modal_visible) {
+        empty_modal_visible <<- TRUE
+        showModal(modalDialog(
+          title = "No dataset selected",
+          easyClose = TRUE,
+          footer = NULL,
+          p("Import a dataset or load the test data to continue."),
+          actionButton(
+            session$ns("to_import"),
+            "Go to import",
+            class = "btn-primary",
+            icon = icon("file-import"),
+            width = "100%"
+          )
+        ))
+      }
+      if ((!is_dashboard || !missing_dataset) && empty_modal_visible) {
+        removeModal()
+        empty_modal_visible <<- FALSE
+      }
+    })
 
     observe({
       removeModal()
-    }) |> bindEvent(input$to_import)
+      empty_modal_visible <<- FALSE
+      event_value(structure(
+        list(id = new_stable_id("dashboard_event"), type = "open_import"),
+        class = c("llw_dashboard_event", "list")
+      ))
+    }) |>
+      bindEvent(input$to_import, ignoreInit = TRUE)
 
-    #create the ui of the dataset heading
     output$dataset_name <- renderUI({
-      req(selected_dataset())
-     h5("Dataset: ", selected_dataset())
+      record <- dataset()
+      req(record)
+      h4("Dataset: ", record$display_name)
+    })
+    output$dataset_id <- renderText({
+      record <- dataset()
+      req(record)
+      record$id
+    })
+    output$revision <- renderText({
+      record <- dataset()
+      req(record)
+      record$revision
+    })
+    output$raw_rows <- renderText({
+      record <- dataset()
+      req(record)
+      nrow(dataset_raw_data(record))
+    })
+    output$prepared_rows <- renderText({
+      record <- dataset()
+      req(record)
+      nrow(dataset_prepared_data(record))
     })
 
-    output$plot <- renderPlot({
-      req(selected_dataset())
-      datasets[[selected_dataset()]]$data_processed |>
-        gg_days(
-          y.axis = !!rlang::sym(datasets[[selected_dataset()]]$metadata$variable),
-                  aes_col = Id) |>
-        gg_photoperiod(c(
-          datasets[[selected_dataset()]]$metadata$latitude,
-          datasets[[selected_dataset()]]$metadata$longitude
-        ))
-    })
-
-    output$table <- DT::renderDataTable({
-      req(selected_dataset())
-      datasets[[selected_dataset()]]$data_processed
-    })
-
-    output$summarytable <- gt::render_gt({
-      req(selected_dataset())
-      datasets[[selected_dataset()]]$data_processed |>
-        summary_table(
-          Variable.colname = !!rlang::sym(datasets[[selected_dataset()]]$metadata$variable),
-          coordinates = c(
-            datasets[[selected_dataset()]]$metadata$latitude,
-            datasets[[selected_dataset()]]$metadata$longitude
+    output$record_status <- renderTable(
+      {
+        record <- dataset()
+        req(record)
+        data.frame(
+          Field = c(
+            "Source type",
+            "Source timezone",
+            "Original filenames",
+            "Primary variable",
+            "Committed recipe steps",
+            "Draft present",
+            "Undo entries"
           ),
-          color = "red",
-          threshold.missing = datasets[[selected_dataset()]]$metadata$threshold.missing,
-          Variable.label =
-            paste0(datasets[[selected_dataset()]]$metadata$variable_name,
-                   " (",
-                   datasets[[selected_dataset()]]$metadata$variable_unit,
-                   ")"),
-          location = datasets[[selected_dataset()]]$metadata$country,
-          site = datasets[[selected_dataset()]]$metadata$site,
+          Value = c(
+            format_record_value(record$source_manifest$source_type),
+            format_record_value(record$source_manifest$source_timezone),
+            format_record_value(record$source_manifest$original_filenames),
+            format_record_value(record$analysis_settings$primary_variable),
+            length(record$recipe$steps),
+            !is.null(record$draft),
+            length(record$history)
+          ),
+          check.names = FALSE
         )
-    })
+      },
+      striped = TRUE,
+      bordered = TRUE,
+      spacing = "s"
+    )
 
-    #metadata module
-    metadataServer("metadata",
-                   datasets,
-                   selected_dataset,
-                   ignoreInit = FALSE
-                   )
+    output$prepared_table <- DT::renderDataTable(
+      {
+        record <- dataset()
+        req(record)
+        dataset_prepared_data(record)
+      },
+      options = list(pageLength = 25, scrollX = TRUE)
+    )
 
-    #preprocessing module
-    preprocessingServer("preprocessing",
-                   datasets,
-                   selected_dataset
-                   )
+    output$raw_table <- DT::renderDataTable(
+      {
+        record <- dataset()
+        req(record)
+        dataset_raw_data(record)
+      },
+      options = list(pageLength = 25, scrollX = TRUE)
+    )
 
-    #valueboxes module
-    summariesServer("summaries",
-                    datasets,
-                    selected_dataset)
-
+    list(event = reactive(event_value()))
   })
 }
 
-# Testapp ------------------------------------------------------------------
-
-datasetDashboard <- function(...) {
-  ui <-
-    page_navbar(
-      # theme = bs_theme(bootswatch = "cosmo"),
-      title = h1("datasetDashboard module"),
-      nav_panel_hidden("Dashboard",
-                       datasetDashboardUI("Dashboard")
-                       ),
-    )
+dataset_dashboard_app <- function(...) {
+  record <- m1_showcase_record()
+  ui <- page_fluid(datasetDashboardUI("dashboard"))
   server <- function(input, output, session) {
-
-    datasets <- reactiveValues()
-    selected_dataset <- reactiveVal("sample.data.environment")
-
-    timer <- reactiveTimer(1000)
-
-    observe({load_testdata(datasets, selected_dataset, notifications = FALSE)
-            nav_select("Dashboard-dashboard", "Preprocessing")
-    }
-            ) |>
-      bindEvent(TRUE, once = TRUE)
-
-    datasetDashboardServer("Dashboard",
-                        active_panel = reactive("dashboard"),
-                        selected_dataset = selected_dataset,
-                        datasets = datasets)
+    datasetDashboardServer(
+      "dashboard",
+      dataset = reactive(record),
+      active_panel = reactive("dashboard")
+    )
   }
   shinyApp(ui, server, ...)
-  }
+}

@@ -1,5 +1,5 @@
 Package: LightLogWeb
-Title: Brings LightLogR to a shiny web-based interface
+Title: A Web Interface for LightLogR
 Version: 0.0.0.9000
 Authors@R: c(
     person("Johannes", "Zauner", 
@@ -12,30 +12,47 @@ Authors@R: c(
     person("Wellcome Trust", role = "fnd", comment = "LightLogR's development is supported by the Wellcome Trust (www.wellcome.org), 226787/2/22/Z."),
     person("Reality Labs Research", role = "fnd", comment = "LightLogR's development is supported by the GLEE project (Global Light Exposure Engine, www.visualdiet.org) funded by Reality Labs Research."),    
     person("Translational Sensory and Circadian Neuroscience Unit (MPS/TUM/TUMCREATE)", comment = c(URL = "www.tscnlab.org"), role = "cph"))
-Description: What the package does (one paragraph).
+Description: Provides a modular 'Shiny' interface for importing, checking,
+    preparing, exploring, analysing, and reproducibly exporting personal light
+    exposure data with 'LightLogR'. The application keeps imported data
+    unchanged, makes consequential analysis settings explicit, and supports
+    recoverable workflows for diverse device exports.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Depends: R (>= 4.1.0)
+URL: https://github.com/tscnlab/LightLogWeb
+BugReports: https://github.com/tscnlab/LightLogWeb/issues
+Depends: R (>= 4.3.0)
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports: 
     bsicons,
-    bslib,
+    bslib (>= 0.11.0),
+    digest,
     dplyr,
     DT,
-    glue,
     gt,
-    leaflet,
-    LightLogR,
+    LightLogR (>= 0.10.3),
     lubridate,
-    purrr,
+    mirai (>= 2.5.1),
+    promises (>= 1.5.0),
     rlang,
-    shiny,
+    shiny (>= 1.14.0),
     shinycssloaders,
-    shinyWidgets,
-    stringr,
-    svglite,
-    tibble
+    stringr
 Suggests: 
+    glcdp (>= 0.90.0),
+    knitr,
+    later,
+    melidosData (>= 1.0.6),
+    pkgdown (>= 2.2.1),
     pkgload,
-    rsconnect
+    quarto,
+    rmarkdown,
+    roxygen2 (>= 8.0.0),
+    rsconnect,
+    shinytest2 (>= 0.5.1),
+    testthat (>= 3.3.2)
+Remotes:
+    tscnlab/glc-dp-r@21e806112a0032261d65180c3cc3ed72af38ea8d
+Config/testthat/edition: 3
+Config/Needs/website: pkgdown
+Config/roxygen2/version: 8.0.0

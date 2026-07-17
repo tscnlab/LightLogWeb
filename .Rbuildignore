@@ -6,3 +6,5 @@
 ^live$
 ^app.R
 ^manifest.json
+^project-plan\.md$
+^dev$

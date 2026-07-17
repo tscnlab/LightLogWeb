@@ -2,21 +2,32 @@
 % Please edit documentation in R/LightLogWeb-app.R
 \name{LightLogWeb}
 \alias{LightLogWeb}
-\title{Bring LightLogR to the web with shiny}
+\title{Launch LightLogWeb}
 \usage{
-LightLogWeb(...)
+LightLogWeb(
+  profile = c("auto", "hosted", "local"),
+  max_upload_mb = 200,
+  workers = NULL
+)
 }
 \arguments{
-\item{...}{Arguments passed to \code{\link[shiny:shinyApp]{shiny::shinyApp()}}}
+\item{profile}{Runtime profile. \code{"auto"} respects
+\code{LIGHTLOGWEB_PROFILE}; otherwise interactive launches use \code{"local"} and
+non-interactive launches use \code{"hosted"}.}
+
+\item{max_upload_mb}{Maximum total upload request size in megabytes.}
+
+\item{workers}{Number of background workers. \code{NULL} selects one hosted
+worker or at most two local workers. Use \code{0} for the synchronous fallback.}
 }
 \value{
-Open a viewer with the shiny app
+A \code{shiny.appobj} that can be run with \code{\link[shiny:runApp]{shiny::runApp()}}.
 }
 \description{
-Bring LightLogR to the web with shiny
+Launch LightLogWeb
 }
 \examples{
-if(interactive()) {
-LightLogWeb()
+if (interactive()) {
+  LightLogWeb()
 }
 }

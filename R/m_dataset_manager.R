@@ -1,44 +1,37 @@
-# UI ------------------------------------------------------------------
-
 datasetSidebarUI <- function(id) {
   ns <- NS(id)
 
   sidebar(
-    h5("Imported datasets"),
+    h5("Session datasets"),
     uiOutput(ns("dataset_list")),
     hr(),
     h5("Add datasets"),
     actionButton(
       ns("import_newdata"),
       "Start new import" |>
-        tooltip2("Takes you to the import module"),
-      icon = icon("file-import"),
+        tooltip2("Open the raw-file import workflow."),
+      icon = icon("file-import")
     ),
     actionButton(
       ns("import_testdata"),
       "Load test data" |>
-        tooltip2("Testdata are two one week long datasets, one containing participant data, one environmental data (collected on the rooftop in the same general area as the participant)"),
-      icon = icon("file-medical"),
+        tooltip2("Load LightLogR's small deterministic environmental sample."),
+      icon = icon("file-medical")
     ),
     hr(),
-    h5("Danger zone"),
+    h5("Dataset actions"),
     actionButton(
       ns("rename_dataset"),
-      "Rename dataset"|>
-        tooltip2("This button will allow you to rename the current dataset"),
-      icon = icon("file-signature"),
-    ),
-    actionButton(
-      ns("merge_dataset"),
-      "Merge dataset" |>
-        tooltip2("This button will allow you to merge the current dataset with another"),
-      icon = icon("code-pull-request"),
-      class = "btn-outline-warning"
+      "Rename dataset" |>
+        tooltip2(
+          "Change only the display name; the stable dataset ID is retained."
+        ),
+      icon = icon("file-signature")
     ),
     actionButton(
       ns("delete_dataset"),
       "Delete dataset" |>
-        tooltip2("Clicking this button will delete the selected dataset permanently!"),
+        tooltip2("Remove the selected dataset from this session."),
       icon = icon("trash"),
       class = "btn-outline-danger"
     ),
@@ -47,80 +40,252 @@ datasetSidebarUI <- function(id) {
   )
 }
 
-# Server ------------------------------------------------------------------
+new_dataset_manager_event <- function(type, dataset_id = NULL, value = NULL) {
+  type <- match.arg(
+    type,
+    c("open_import", "load_sample", "select", "rename", "remove")
+  )
+  if (type %in% c("select", "rename", "remove")) {
+    assert_scalar_string(dataset_id, "dataset_id")
+  } else if (!is.null(dataset_id)) {
+    abort_llw(
+      paste0("Manager event `", type, "` does not accept a dataset ID."),
+      type = "validation"
+    )
+  }
+  if (identical(type, "rename")) {
+    assert_scalar_string(value, "value")
+  } else if (!is.null(value)) {
+    abort_llw(
+      paste0("Manager event `", type, "` does not accept a value."),
+      type = "validation"
+    )
+  }
+  event <- structure(
+    list(
+      id = new_stable_id("manager_event"),
+      type = type,
+      dataset_id = dataset_id,
+      value = value
+    ),
+    class = c("llw_dataset_manager_event", "list")
+  )
+  assert_serializable_value(event, "dataset manager event")
+  event
+}
 
-datasetManagerServer <- function(id, datasets, newest_set) {
+datasetManagerServer <- function(id, datasets, selected_dataset_id) {
+  if (
+    !shiny::is.reactive(datasets) || !shiny::is.reactive(selected_dataset_id)
+  ) {
+    abort_llw(
+      "`datasets` and `selected_dataset_id` must be reactive inputs.",
+      type = "validation"
+    )
+  }
+
   moduleServer(id, function(input, output, session) {
+    event_value <- reactiveVal(NULL)
+    emit <- function(type, dataset_id = NULL, value = NULL) {
+      event_value(new_dataset_manager_event(type, dataset_id, value))
+    }
 
-    # Imported datasets -------------
-
-    #create a hull for selected dataset names
-    selected_dataset <- reactiveVal(NULL)
-
-    #collect all dataset names and make certain a valid dataset is chosen
-    dataset_names <- reactive({
-      collect_dataset_names(datasets, selected_dataset)
-    })
-
-    #create the dataset list
     output$dataset_list <- renderUI({
-      #initial state
-      if (length(dataset_names()) == 0) {
-        return(p("No datasets imported yet."))
+      records <- datasets()
+      if (length(records) == 0L) {
+        return(p("No datasets in this session."))
       }
-
-      #create the list
+      ids <- names(records)
+      labels <- vapply(records, `[[`, character(1), "display_name")
       radioButtons(
         session$ns("dataset_select"),
         label = NULL,
-        choices = dataset_names(),
-        selected = selected_dataset(),
+        choices = stats::setNames(ids, labels),
+        selected = selected_dataset_id(),
         width = "100%"
       )
     })
 
-    #update the selected dataset based on the radio buttons
-    observeEvent(input$dataset_select, {
-      selected_dataset(input$dataset_select)
-    }, ignoreInit = TRUE)
-
-    # Add datasets -------------
-
-    #load testdata
     observe({
-      load_testdata(datasets, selected_dataset)
-    }) |> bindEvent(input$import_testdata)
-
-    #update name with new addition
-    observe({
-     selected_dataset(newest_set())
-    }) |> bindEvent(newest_set())
-
-    # Danger zone -------------
-
-    #rename dataset
-    observe({
-      req(selected_dataset())
-      rename_dataset_modal(datasets, selected_dataset, session)
-    }) |> bindEvent(input$rename_dataset)
+      req(input$dataset_select)
+      if (!identical(input$dataset_select, selected_dataset_id())) {
+        emit("select", dataset_id = input$dataset_select)
+      }
+    }) |>
+      bindEvent(input$dataset_select, ignoreInit = TRUE)
 
     observe({
-      rename_dataset(datasets, selected_dataset, dataset_names, input)
-    }) |> bindEvent(input$rename_dataset_real, ignoreInit = TRUE)
+      emit("open_import")
+    }) |>
+      bindEvent(input$import_newdata, ignoreInit = TRUE)
 
-    #remove dataset
     observe({
-      req(selected_dataset())
-      delete_dataset_modal(selected_dataset, session)
-    }) |> bindEvent(input$delete_dataset, ignoreInit = TRUE)
+      emit("load_sample")
+    }) |>
+      bindEvent(input$import_testdata, ignoreInit = TRUE)
 
-    observe(
-      delete_dataset(datasets, dataset_names, selected_dataset)
-     ) |> bindEvent(input$delete_dataset_real, ignoreInit = TRUE)
+    observe({
+      dataset_id <- selected_dataset_id()
+      req(dataset_id)
+      record <- datasets()[[dataset_id]]
+      req(record)
+      showModal(modalDialog(
+        title = "Rename dataset",
+        easyClose = TRUE,
+        footer = modalButton("Cancel"),
+        textInput(
+          session$ns("rename_name"),
+          "Display name",
+          value = record$display_name,
+          width = "100%",
+          updateOn = "blur"
+        ),
+        actionButton(
+          session$ns("rename_dataset_real"),
+          "Rename",
+          class = "btn-primary",
+          icon = icon("file-signature"),
+          width = "100%"
+        )
+      ))
+    }) |>
+      bindEvent(input$rename_dataset, ignoreInit = TRUE)
 
-    # Return -------------
+    observe({
+      dataset_id <- selected_dataset_id()
+      req(dataset_id)
+      name <- trimws(input$rename_name %||% "")
+      if (!nzchar(name)) {
+        showNotification(
+          "Please enter a non-empty display name.",
+          type = "error"
+        )
+        return()
+      }
+      other_names <- vapply(
+        datasets()[names(datasets()) != dataset_id],
+        `[[`,
+        character(1),
+        "display_name"
+      )
+      if (name %in% other_names) {
+        showNotification(
+          "That display name is already used in this session.",
+          type = "error"
+        )
+        return()
+      }
+      removeModal()
+      emit("rename", dataset_id = dataset_id, value = name)
+    }) |>
+      bindEvent(input$rename_dataset_real, ignoreInit = TRUE)
 
-    selected_dataset
+    observe({
+      dataset_id <- selected_dataset_id()
+      req(dataset_id)
+      record <- datasets()[[dataset_id]]
+      req(record)
+      showModal(modalDialog(
+        title = "Delete dataset?",
+        easyClose = TRUE,
+        footer = modalButton("Keep dataset"),
+        p(
+          "This removes ",
+          strong(record$display_name),
+          " from the current session."
+        ),
+        actionButton(
+          session$ns("delete_dataset_real"),
+          "Delete dataset",
+          icon = icon("trash"),
+          class = "btn-danger",
+          width = "100%"
+        )
+      ))
+    }) |>
+      bindEvent(input$delete_dataset, ignoreInit = TRUE)
 
+    observe({
+      dataset_id <- selected_dataset_id()
+      req(dataset_id)
+      removeModal()
+      emit("remove", dataset_id = dataset_id)
+    }) |>
+      bindEvent(input$delete_dataset_real, ignoreInit = TRUE)
+
+    list(event = reactive(event_value()))
   })
+}
+
+dataset_manager_app <- function(...) {
+  ui <- page_sidebar(
+    title = "Dataset manager development app",
+    sidebar = datasetSidebarUI("datasets"),
+    card(
+      card_header("Development status"),
+      tableOutput("status")
+    )
+  )
+  server <- function(input, output, session) {
+    store <- new_session_store("local")
+    first <- m1_showcase_record()
+    first$display_name <- "First fixture"
+    first <- validate_dataset_record(first)
+    second <- m1_showcase_record()
+    second$display_name <- "Second fixture"
+    second <- validate_dataset_record(second)
+    store$dispatch(new_session_event("add", value = first))
+    store$dispatch(new_session_event("add", value = second))
+
+    manager <- datasetManagerServer(
+      "datasets",
+      datasets = store$datasets,
+      selected_dataset_id = store$selected_dataset_id
+    )
+    observe({
+      event <- manager$event()
+      req(event)
+      tryCatch(
+        switch(
+          event$type,
+          open_import = showNotification("Open-import event returned."),
+          load_sample = showNotification("Load-sample event returned."),
+          select = store$dispatch(new_session_event(
+            "select",
+            dataset_id = event$dataset_id
+          )),
+          rename = store$dispatch(new_session_event(
+            "rename",
+            dataset_id = event$dataset_id,
+            value = event$value
+          )),
+          remove = store$dispatch(new_session_event(
+            "remove",
+            dataset_id = event$dataset_id
+          ))
+        ),
+        llw_error = function(cnd) {
+          showNotification(llw_public_message(cnd), type = "error")
+        }
+      )
+    }) |>
+      bindEvent(manager$event(), ignoreInit = TRUE)
+
+    output$status <- renderTable({
+      model <- store$model()
+      data.frame(
+        Signal = c("Dataset count", "Selected stable ID", "Display names"),
+        Value = c(
+          length(model$datasets),
+          model$selected_dataset_id %||% "None",
+          paste(
+            vapply(model$datasets, `[[`, character(1), "display_name"),
+            collapse = ", "
+          )
+        ),
+        check.names = FALSE
+      )
+    })
+  }
+  shinyApp(ui, server, ...)
 }

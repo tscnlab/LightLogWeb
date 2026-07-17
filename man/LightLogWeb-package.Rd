@@ -3,15 +3,24 @@
 \docType{package}
 \name{LightLogWeb-package}
 \alias{LightLogWeb-package}
-\title{LightLogWeb: Brings LightLogR to a shiny web-based interface}
+\title{LightLogWeb: A Web Interface for LightLogR}
 \description{
-What the package does (one paragraph).
+Provides a modular 'Shiny' interface for importing, checking, preparing, exploring, analysing, and reproducibly exporting personal light exposure data with 'LightLogR'. The application keeps imported data unchanged, makes consequential analysis settings explicit, and supports recoverable workflows for diverse device exports.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/tscnlab/LightLogWeb}
+  \item Report bugs at \url{https://github.com/tscnlab/LightLogWeb/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: Johannes Zauner \email{johannes.zauner@tum.de} (\href{https://orcid.org/0000-0003-2171-4566}{ORCID})
 
 Authors:
 \itemize{
+  \item Johannes Zauner \email{johannes.zauner@tum.de} (\href{https://orcid.org/0000-0003-2171-4566}{ORCID})
   \item Manuel Spitschan \email{manuel.spitschan@tum.de} (\href{https://orcid.org/0000-0002-8572-9268}{ORCID})
 }
 
@@ -20,7 +29,7 @@ Other contributors:
   \item European Partnership on Metrology (The project (22NRM05 MeLiDos) has received funding from the European Partnership on Metrology, co-financed by the European Union's Horizon Europe Research and Innovation Programme, EURAMET, and the Participating States. Views and opinions expressed are those of the authors and do not necessarily reflect those of the European Union or EURAMET.) [funder]
   \item Wellcome Trust (LightLogR's development is supported by the Wellcome Trust (www.wellcome.org), 226787/2/22/Z.) [funder]
   \item Reality Labs Research (LightLogR's development is supported by the GLEE project (Global Light Exposure Engine, www.visualdiet.org) funded by Reality Labs Research.) [funder]
-  \item Translational Sensory and Circadian Neuroscience Unit (MPS/TUM/TUMCREATE) (www.tscnlab.org) [copyright holder]
+  \item Translational Sensory and Circadian Neuroscience Unit (MPS/TUM/TUMCREATE) (URL: www.tscnlab.org) [copyright holder]
 }
 
 }
