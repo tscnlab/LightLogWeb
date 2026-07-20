@@ -2,7 +2,18 @@ datasetDashboardUI <- function(id) {
   ns <- NS(id)
 
   tagList(
-    uiOutput(ns("dataset_name")),
+    tags$header(
+      class = "llw-view-header",
+      tags$p(class = "llw-eyebrow", "Selected session dataset"),
+      uiOutput(ns("dataset_name")),
+      tags$p(
+        class = "llw-view-lede",
+        paste(
+          "Inspect provenance, stable identity, revisions, and the unchanged",
+          "canonical source before building analysis steps."
+        )
+      )
+    ),
     layout_column_wrap(
       fill = FALSE,
       value_box(
@@ -10,43 +21,61 @@ datasetDashboardUI <- function(id) {
         value = textOutput(ns("dataset_id")),
         showcase = icon("fingerprint"),
         theme = "text-secondary",
-        class = "bg-light"
+        class = "llw-value-box"
       ),
       value_box(
         title = "Revision",
         value = textOutput(ns("revision")),
         showcase = icon("code-branch"),
         theme = "text-primary",
-        class = "bg-light"
+        class = "llw-value-box"
       ),
       value_box(
         title = "Canonical raw rows",
         value = textOutput(ns("raw_rows")),
         showcase = icon("database"),
         theme = "text-secondary",
-        class = "bg-light"
+        class = "llw-value-box"
       ),
       value_box(
         title = "Prepared rows",
         value = textOutput(ns("prepared_rows")),
         showcase = icon("table"),
         theme = "text-secondary",
-        class = "bg-light"
+        class = "llw-value-box"
       )
     ),
     navset_card_pill(
       id = ns("dashboard"),
       nav_panel(
         title = "Architecture status",
-        tableOutput(ns("record_status"))
+        tags$div(
+          class = "llw-data-region",
+          role = "region",
+          `aria-label` = "Dataset architecture status",
+          tabindex = "0",
+          tableOutput(ns("record_status"))
+        )
       ),
       nav_panel(
         title = "Prepared data",
-        DT::dataTableOutput(ns("prepared_table"), height = "600px")
+        tags$div(
+          class = "llw-data-region",
+          role = "region",
+          `aria-label` = "Prepared dataset table; scroll horizontally when needed",
+          tabindex = "0",
+          DT::dataTableOutput(ns("prepared_table"), height = "600px")
+        )
       ),
       nav_panel(
         title = "Canonical raw data",
-        DT::dataTableOutput(ns("raw_table"), height = "600px")
+        tags$div(
+          class = "llw-data-region",
+          role = "region",
+          `aria-label` = "Canonical raw dataset table; scroll horizontally when needed",
+          tabindex = "0",
+          DT::dataTableOutput(ns("raw_table"), height = "600px")
+        )
       )
     )
   )
@@ -115,7 +144,7 @@ datasetDashboardServer <- function(id, dataset, active_panel) {
     output$dataset_name <- renderUI({
       record <- dataset()
       req(record)
-      h4("Dataset: ", record$display_name)
+      h1(record$display_name)
     })
     output$dataset_id <- renderText({
       record <- dataset()
@@ -165,7 +194,7 @@ datasetDashboardServer <- function(id, dataset, active_panel) {
         )
       },
       striped = TRUE,
-      bordered = TRUE,
+      bordered = FALSE,
       spacing = "s"
     )
 
@@ -193,7 +222,17 @@ datasetDashboardServer <- function(id, dataset, active_panel) {
 
 dataset_dashboard_app <- function(...) {
   record <- m1_showcase_record()
-  ui <- page_fluid(datasetDashboardUI("dashboard"))
+  ui <- lightlogweb_page(page_fluid(
+    lightlogweb_head(),
+    lightlogweb_skip_link(),
+    tags$main(
+      id = "llw-main-content",
+      class = "llw-main-shell",
+      tabindex = "-1",
+      datasetDashboardUI("dashboard")
+    ),
+    theme = lightlogweb_theme()
+  ))
   server <- function(input, output, session) {
     datasetDashboardServer(
       "dashboard",

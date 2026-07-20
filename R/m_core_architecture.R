@@ -32,11 +32,36 @@ core_architecture_ui <- function(id) {
         step = 1
       ),
       layout_column_wrap(
-        actionButton(ns("draft"), "Create draft", icon = icon("pen")),
-        actionButton(ns("preview"), "Preview", icon = icon("eye")),
-        actionButton(ns("apply"), "Apply", icon = icon("check")),
-        actionButton(ns("reset"), "Reset to raw", icon = icon("rotate-left")),
-        actionButton(ns("undo"), "Undo", icon = icon("rotate-left"))
+        actionButton(
+          ns("draft"),
+          "Create draft",
+          icon = icon("pen"),
+          class = "btn-outline-secondary"
+        ),
+        actionButton(
+          ns("preview"),
+          "Preview",
+          icon = icon("eye"),
+          class = "btn-outline-secondary"
+        ),
+        actionButton(
+          ns("apply"),
+          "Apply draft",
+          icon = icon("check"),
+          class = "btn-primary"
+        ),
+        actionButton(
+          ns("reset"),
+          "Reset to raw",
+          icon = icon("rotate-left"),
+          class = "btn-outline-secondary"
+        ),
+        actionButton(
+          ns("undo"),
+          "Undo",
+          icon = icon("rotate-left"),
+          class = "btn-outline-secondary"
+        )
       )
     ),
     card(
@@ -157,24 +182,7 @@ core_architecture_server <- function(id, dataset, task) {
       bindEvent(input$task_cancel, ignoreInit = TRUE)
 
     output$task_status <- renderUI({
-      status <- task$status()
-      error_text <- if (inherits(status$error, "llw_error")) {
-        llw_public_message(status$error)
-      } else {
-        NULL
-      }
-      tags$div(
-        role = "status",
-        `aria-live` = "polite",
-        p(strong("State: "), status$state),
-        if (!is.null(status$message)) p(status$message),
-        if (
-          !is.null(error_text) &&
-            !identical(error_text, status$message)
-        ) {
-          p(error_text)
-        }
-      )
+      llw_task_status(task$status(), context = "Development task")
     })
 
     output$status <- renderTable(
@@ -215,15 +223,25 @@ core_architecture_server <- function(id, dataset, task) {
 }
 
 core_architecture_app <- function() {
-  ui <- page_fluid(
-    h2("LightLogWeb Milestone 1 showcase"),
-    p(
-      "This build-ignored development app exercises immutable raw data,",
-      "revisioned workflow changes, recoverable task failures, and stale-result",
-      "rejection."
+  ui <- lightlogweb_page(page_fluid(
+    lightlogweb_head(),
+    lightlogweb_skip_link(),
+    tags$main(
+      id = "llw-main-content",
+      class = "llw-main-shell",
+      tabindex = "-1",
+      llw_view_header(
+        "Module showcase",
+        "Core workflow architecture",
+        paste(
+          "Exercise immutable raw data, revisioned workflow changes,",
+          "recoverable task failures, and stale-result rejection."
+        )
+      ),
+      core_architecture_ui("core")
     ),
-    core_architecture_ui("core")
-  )
+    theme = lightlogweb_theme()
+  ))
 
   server <- function(input, output, session) {
     profile <- resolve_runtime_profile("local", workers = 1)

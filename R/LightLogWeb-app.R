@@ -25,18 +25,59 @@ LightLogWeb <- function(
     workers = workers
   )
 
-  ui <- page_navbar(
-    title = h1("LightLogWeb"),
+  ui <- lightlogweb_page(page_navbar(
+    title = lightlogweb_wordmark(),
+    window_title = "LightLogWeb - Make light exposure legible",
     id = "main_nav",
     selected = "Import",
+    theme = lightlogweb_theme(),
+    navbar_options = navbar_options(theme = "auto", underline = TRUE),
+    header = tagList(
+      lightlogweb_head(),
+      lightlogweb_skip_link(),
+      tags$span(
+        id = "llw-main-content",
+        class = "visually-hidden",
+        tabindex = "-1",
+        "Main content"
+      )
+    ),
     sidebar = datasetSidebarUI("datasets"),
-    nav_panel("Import", importUI("import")),
+    nav_panel(
+      "Import",
+      tags$main(
+        class = "llw-main-shell",
+        `aria-label` = "Import light exposure data",
+        llw_view_header(
+          "Start with source evidence",
+          "Import light exposure data",
+          paste(
+            "Choose source files and make device, time zone, participant ID,",
+            "and cleaning decisions explicit before anything is added to",
+            "this session."
+          )
+        ),
+        importUI("import")
+      )
+    ),
     nav_panel(
       "Dashboard",
       value = "dashboard",
-      datasetDashboardUI("dashboard")
+      tags$main(
+        class = "llw-main-shell",
+        `aria-label` = "Inspect the selected dataset",
+        datasetDashboardUI("dashboard")
+      )
+    ),
+    nav_spacer(),
+    nav_item(
+      tags$div(
+        class = "llw-mode-control",
+        tags$span(class = "visually-hidden", "Interface color mode"),
+        input_dark_mode(id = "color_mode")
+      )
     )
-  )
+  ))
 
   server <- function(input, output, session) {
     session$allowReconnect(TRUE)
@@ -50,7 +91,12 @@ LightLogWeb <- function(
       )
     }
 
-    imported <- importServer("import", runtime = runtime)
+    color_mode <- reactive(input$color_mode %||% "light")
+    imported <- importServer(
+      "import",
+      runtime = runtime,
+      color_mode = color_mode
+    )
     manager <- datasetManagerServer(
       "datasets",
       datasets = store$datasets,

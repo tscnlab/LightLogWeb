@@ -363,6 +363,16 @@ Milestone evidence:
 
 ### Milestone 2 — Design guide and LightLogWeb identity
 
+Status: complete; accepted by the owner on 2026-07-20
+
+Acceptance result: the owner approved the implemented design guide, component
+gallery, Measured Day Arc logo, responsive expandable-plot pattern, and the
+requested clipping, alignment, and control refinements. Automated
+design-system tests, live gallery and production-browser checks, responsive
+checks at 320, 768, 1321 × 1324, and 1440 px, a source build and package check
+with 0 errors, 0 warnings, and 0 notes, and the preliminary collision scan are
+recorded in the milestone evidence.
+
 1. Define color, typography, spacing, responsive breakpoints, cards,
    navigation, tables, plots, forms, focus styles, and all system states.
 2. Use a minimalist visual language with restrained flourishes derived from
@@ -377,6 +387,13 @@ Milestone evidence:
    final app information architecture.
 
 Acceptance gate: owner approval of design guide, gallery, and logo.
+
+Milestone evidence:
+
+- dev/milestone-2-design-guide.md
+- dev/component-gallery-app.R
+- dev/brand/lightlogweb-logo-master.svg
+- dev/brand/brand-provenance.md
 
 ### Milestone 3 — Robust raw import and test datasets
 

@@ -64,30 +64,34 @@ test_that("import validation failures are returned as recoverable task state", {
   )
   on.exit(runtime$cleanup(), add = TRUE)
 
-  shiny::testServer(importServer, args = list(runtime = runtime), {
-    returned <- session$getReturned()
-    session$setInputs(
-      device = "",
-      tz = "UTC",
-      dataset_name = "",
-      id = "automated",
-      not_before = as.Date("2001-01-01"),
-      options = character(),
-      version = "",
-      import = 0
-    )
-    session$setInputs(import = 1)
-    session$flushReact()
+  shiny::testServer(
+    importServer,
+    args = list(runtime = runtime, color_mode = shiny::reactive("light")),
+    {
+      returned <- session$getReturned()
+      session$setInputs(
+        device = "",
+        tz = "UTC",
+        dataset_name = "",
+        id = "automated",
+        not_before = as.Date("2001-01-01"),
+        options = character(),
+        version = "",
+        import = 0
+      )
+      session$setInputs(import = 1)
+      session$flushReact()
 
-    expect_identical(returned$status()$state, "error")
-    expect_s3_class(returned$error(), "llw_validation_error")
-    expect_match(
-      llw_public_message(returned$error()),
-      "Choose files"
-    )
+      expect_identical(returned$status()$state, "error")
+      expect_s3_class(returned$error(), "llw_validation_error")
+      expect_match(
+        llw_public_message(returned$error()),
+        "Choose files"
+      )
 
-    session$setInputs(import = 2)
-    session$flushReact()
-    expect_identical(returned$status()$state, "error")
-  })
+      session$setInputs(import = 2)
+      session$flushReact()
+      expect_identical(returned$status()$state, "error")
+    }
+  )
 })

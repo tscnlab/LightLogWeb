@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+  viewBox="0 0 640 220"
+  role="img"
+  aria-labelledby="master-title master-description"
+>
+  <title id="master-title">LightLogWeb Measured Day Arc master artwork</title>
+  <desc id="master-description">
+    Editable construction source for a point-up hexagonal window containing a
+    day and night boundary, measured sun path, six perpendicular interval
+    ticks, and one amber solar marker, paired with the LightLogWeb wordmark.
+  </desc>
+  <metadata>
+    LightLogWeb Measured Day Arc; master schema 1.0.0; created 2026-07-20;
+    MIT-licensed LightLogWeb artwork. LightLogR heritage is limited to the
+    hexagonal family form and light-exposure subject. Source Sans 3 is licensed
+    separately under SIL OFL 1.1. Do not infer trademark clearance from this
+    design source.
+  </metadata>
+  <style>
+    .llw-master-canvas { fill: #f6f8f4; }
+    .llw-mark__surface { fill: #ffffff; }
+    .llw-mark__field { fill: #e6efeb; }
+    .llw-mark__horizon { fill: none; stroke: #b8c7c9; stroke-width: 2; }
+    .llw-mark__outline,
+    .llw-mark__arc { fill: none; stroke: #0b6675; stroke-linecap: round; stroke-linejoin: round; stroke-width: 5; }
+    .llw-mark__tick { stroke: #0b6675; stroke-linecap: round; stroke-width: 2; }
+    .llw-mark__sun { fill: #c36a1d; }
+    .llw-wordmark-source { fill: #102a33; font-family: "Source Sans 3", sans-serif; font-size: 64px; font-weight: 600; letter-spacing: -1px; }
+    .llw-guide { fill: none; stroke: #60767b; stroke-dasharray: 4 4; stroke-width: 1; }
+    .llw-guide-point { fill: #60767b; }
+  </style>
+  <rect class="llw-master-canvas" width="640" height="220" />
+  <g
+    id="construction-guides"
+    inkscape:groupmode="layer"
+    inkscape:label="Construction guides (hidden)"
+    style="display:none"
+    transform="translate(24 22)"
+  >
+    <rect class="llw-guide" x="0" y="0" width="160" height="176" />
+    <path class="llw-guide" d="M0 88 H160 M80 0 V176" />
+    <path class="llw-guide" d="M24 106 Q78 23 136 106" />
+    <circle class="llw-guide-point" cx="24" cy="106" r="2" />
+    <circle class="llw-guide-point" cx="78" cy="23" r="2" />
+    <circle class="llw-guide-point" cx="136" cy="106" r="2" />
+  </g>
+  <g
+    id="measured-day-arc-lockup"
+    inkscape:groupmode="layer"
+    inkscape:label="Measured Day Arc lockup"
+    transform="translate(24 22)"
+  >
+    <!-- BEGIN MARK -->
+    <g id="llw-mark-source" inkscape:label="Measured Day Arc mark">
+      <defs>
+        <clipPath id="llw-mark-clip">
+          <polygon points="80,6 150,47 150,129 80,170 10,129 10,47" />
+        </clipPath>
+      </defs>
+      <g clip-path="url(#llw-mark-clip)">
+        <rect class="llw-mark__surface" x="0" y="0" width="160" height="176" />
+        <path class="llw-mark__field" d="M0 104 Q76 88 160 103 L160 176 L0 176 Z" />
+        <path class="llw-mark__horizon" d="M4 104 Q76 88 156 103" />
+        <path class="llw-mark__arc" d="M24 106 Q78 23 136 106" />
+        <g id="llw-mark-ticks" inkscape:label="Perpendicular measured intervals">
+          <line class="llw-mark__tick llw-mark__tick--minor" x1="44.27" y1="82.22" x2="41.48" y2="79.35" />
+          <line class="llw-mark__tick llw-mark__tick--major" x1="57.53" y1="72.43" x2="54.44" y2="67.28" />
+          <line class="llw-mark__tick llw-mark__tick--minor" x1="70.30" y1="66.54" x2="69.37" y2="62.64" />
+          <line class="llw-mark__tick llw-mark__tick--minor" x1="87.76" y1="66.54" x2="88.67" y2="62.64" />
+          <line class="llw-mark__tick llw-mark__tick--major" x1="100.80" y1="72.44" x2="103.83" y2="67.25" />
+          <line class="llw-mark__tick llw-mark__tick--minor" x1="114.57" y1="82.23" x2="117.29" y2="79.30" />
+        </g>
+        <circle class="llw-mark__sun" cx="80" cy="51" r="8" />
+      </g>
+      <polygon class="llw-mark__outline" points="80,6 150,47 150,129 80,170 10,129 10,47" />
+    </g>
+    <!-- END MARK -->
+    <!-- BEGIN WORDMARK -->
+    <text class="llw-wordmark-source" x="190" y="112">LightLogWeb</text>
+    <!-- END WORDMARK -->
+  </g>
+</svg>

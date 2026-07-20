@@ -26,18 +26,25 @@ show_import_success_modal <- function(data) {
 
   showModal(
     modalDialog(
-      title = icon("check", style = "font-size: 60px;"),
+      title = "Import complete",
       easyClose = TRUE,
-      strong("Import successful!"),
-      p(
-        summary$groups,
-        " group(s) were imported, totaling ",
-        rows,
-        " observations."
+      llw_status_callout(
+        "complete",
+        paste0(
+          summary$groups,
+          " group(s) and ",
+          rows,
+          " observations are ready for review."
+        ),
+        heading = "Import successful"
       ),
       p(
-        "Please check the import message and overview plot and continue to the analysis tab if satisfied."
+        class = "mt-3 mb-0",
+        paste(
+          "Review the import message, overview plot, and preview table before",
+          "adding this dataset to the session."
+        )
       )
-    ),
+    )
   )
 }

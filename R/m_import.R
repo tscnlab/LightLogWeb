@@ -42,9 +42,9 @@ UI_accordion_specification <- function(ns) {
             )
           ),
           choices = c("", supported_devices()),
+          selected = "",
           options = list(
-            placeholder = "Select a device...",
-            onInitialize = I("function() {this.removeOption('');}")
+            placeholder = "Select a device..."
           ),
           width = "100%"
         ),
@@ -202,7 +202,8 @@ UI_accordion_specification <- function(ns) {
         "Number of files",
         value = textOutput(ns("n_files")),
         showcase = bsicons::bs_icon("journals"),
-        theme = value_box_theme(bg = "#d3d3d350"),
+        theme = "text-secondary",
+        class = "llw-value-box",
         textOutput(ns("filenames"))
       ),
       #show extracted ids
@@ -213,12 +214,14 @@ UI_accordion_specification <- function(ns) {
           ),
         value = textOutput(ns("n_ids")),
         showcase = bsicons::bs_icon("search"),
-        theme = value_box_theme(bg = "#d3d3d350"),
+        theme = "text-secondary",
+        class = "llw-value-box",
         textOutput(ns("pattern"))
       )
     ),
     #import button
-    p(
+    tags$div(
+      class = "llw-action-row llw-import-actions",
       layout_column_wrap(
         width = 1 / 2,
         input_task_button(
@@ -233,10 +236,9 @@ UI_accordion_specification <- function(ns) {
           icon = icon("ban"),
           class = "btn-outline-secondary btn-lg"
         )
-      ),
-      style = "max-width: 720px; margin-inline: auto;"
+      )
     ),
-    uiOutput(ns("task_status")),
+    uiOutput(ns("task_status"))
   )
 }
 
@@ -251,20 +253,20 @@ UI_accordion_summary <- function(ns) {
         min_height = "400px"
       ),
       card(
-        card_header("Overview Plot", container = h4),
+        card_header("Overview plot", container = h4),
         plotOutput(ns("plot_overview")) |> shinycssloaders::withSpinner(),
         min_height = "400px"
       )
     ),
-    p(
+    tags$div(
+      class = "d-grid col-12 col-md-6 mx-auto",
       input_task_button(
         ns("add_dataset"),
         span(strong("Add dataset to session")),
         icon = icon("database"),
-        width = "50%",
+        width = "100%",
         class = "btn-primary btn-lg"
-      ),
-      style = "text-align:center;"
+      )
     ),
     card(
       card_header("Imported table", container = h4) |>
@@ -292,7 +294,7 @@ importUI <- function(id) {
 
 # Server ------------------------------------------------------------------
 
-importServer <- function(id, runtime) {
+importServer <- function(id, runtime, color_mode) {
   if (
     !is.list(runtime) ||
       !is.function(runtime$submit) ||
@@ -302,6 +304,9 @@ importServer <- function(id, runtime) {
       "`runtime` must be created by `new_session_runtime()`.",
       type = "validation"
     )
+  }
+  if (!shiny::is.reactive(color_mode)) {
+    abort_llw("`color_mode` must be reactive.", type = "validation")
   }
 
   moduleServer(id, function(input, output, session) {
@@ -450,13 +455,7 @@ importServer <- function(id, runtime) {
     })
 
     output$task_status <- renderUI({
-      status <- import_task$status()
-      tags$div(
-        role = "status",
-        `aria-live` = "polite",
-        strong(paste0("Import status: ", status$state)),
-        if (!is.null(status$message)) tags$p(status$message)
-      )
+      llw_task_status(import_task$status(), context = "Import")
     })
 
     observe({
@@ -499,7 +498,13 @@ importServer <- function(id, runtime) {
 
     #Import overview plot
     output$plot_overview <- renderPlot({
-      import_result()$data %>% gg_overview()
+      mode <- color_mode() %||% "light"
+      if (length(mode) != 1L || is.na(mode) || !mode %in% c("light", "dark")) {
+        mode <- "light"
+      }
+      import_result()$data %>%
+        gg_overview() +
+        lightlogweb_plot_theme(mode)
     })
 
     #Import print
@@ -568,22 +573,37 @@ importServer <- function(id, runtime) {
 }
 
 import_app <- function(...) {
-  ui <- page_fluid(
-    h2("Raw import development app"),
-    p(
-      "Choose local fixture files to exercise validation, staging, import,",
-      "cancellation, retry, and the explicit module return."
+  ui <- lightlogweb_page(page_fluid(
+    lightlogweb_head(),
+    lightlogweb_skip_link(),
+    tags$main(
+      id = "llw-main-content",
+      class = "llw-main-shell",
+      tabindex = "-1",
+      llw_view_header(
+        "Module showcase",
+        "Raw import",
+        paste(
+          "Choose local fixture files to exercise validation, staging,",
+          "import, cancellation, retry, and the explicit module return."
+        )
+      ),
+      importUI("import"),
+      card(
+        card_header("Development return"),
+        verbatimTextOutput("returned")
+      )
     ),
-    importUI("import"),
-    card(
-      card_header("Development return"),
-      verbatimTextOutput("returned")
-    )
-  )
+    theme = lightlogweb_theme()
+  ))
   server <- function(input, output, session) {
     profile <- resolve_runtime_profile("local", workers = 0)
     runtime <- new_session_runtime(profile, session = session)
-    imported <- importServer("import", runtime = runtime)
+    imported <- importServer(
+      "import",
+      runtime = runtime,
+      color_mode = reactive("light")
+    )
     output$returned <- renderPrint({
       value <- imported$add_dataset()
       if (is.null(value)) {

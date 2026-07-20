@@ -1,0 +1,70 @@
+meta:
+  name:
+    full: LightLogWeb
+    short: LightLogWeb
+  link:
+    home: https://github.com/tscnlab/LightLogWeb
+
+color:
+  palette:
+    daylight: "#F6F8F4"
+    surface: "#FFFFFF"
+    subtle: "#E6EFEB"
+    ink: "#102A33"
+    muted: "#52666D"
+    boundary: "#B8C7C9"
+    control-boundary: "#60767B"
+    cyan: "#0B6675"
+    amber: "#C36A1D"
+    green: "#1E6F4A"
+    ochre: "#8A4B09"
+    red: "#A33B3B"
+    night: "#081A20"
+  foreground: ink
+  background: daylight
+  primary: cyan
+  secondary: muted
+  success: green
+  info: cyan
+  warning: ochre
+  danger: red
+  light: daylight
+  dark: night
+
+typography:
+  fonts:
+    - family: Source Sans 3
+      source: file
+      files:
+        - path: inst/app/www/fonts/source-sans-3-latin-400-normal.woff2
+          weight: 400
+        - path: inst/app/www/fonts/source-sans-3-latin-500-normal.woff2
+          weight: 500
+        - path: inst/app/www/fonts/source-sans-3-latin-600-normal.woff2
+          weight: 600
+      display: swap
+  base:
+    family: Source Sans 3
+    size: 1rem
+    weight: 400
+    line-height: 1.55
+  headings:
+    family: Source Sans 3
+    weight: 600
+    line-height: 1.12
+  monospace:
+    family: Source Sans 3
+    size: 0.875rem
+    weight: 400
+  link:
+    color: cyan
+    decoration: underline
+
+defaults:
+  bootstrap:
+    defaults:
+      border-radius: 0.375rem
+      border-radius-lg: 0.75rem
+      card-bg: "$brand-surface"
+      card-border-color: "$brand-boundary"
+      input-border-color: "$brand-control-boundary"

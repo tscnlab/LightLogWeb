@@ -2,38 +2,56 @@ datasetSidebarUI <- function(id) {
   ns <- NS(id)
 
   sidebar(
-    h5("Session datasets"),
+    title = "Session datasets",
+    class = "llw-dataset-sidebar",
+    h2(class = "h5", "Session datasets"),
     uiOutput(ns("dataset_list")),
     hr(),
-    h5("Add datasets"),
-    actionButton(
-      ns("import_newdata"),
-      "Start new import" |>
-        tooltip2("Open the raw-file import workflow."),
-      icon = icon("file-import")
-    ),
-    actionButton(
-      ns("import_testdata"),
-      "Load test data" |>
-        tooltip2("Load LightLogR's small deterministic environmental sample."),
-      icon = icon("file-medical")
+    h3(class = "h6", "Add datasets"),
+    tags$div(
+      class = "d-grid gap-2",
+      actionButton(
+        ns("import_newdata"),
+        "Start new import" |>
+          tooltip2("Open the raw-file import workflow."),
+        icon = icon("file-import"),
+        class = "btn-primary"
+      ),
+      actionButton(
+        ns("import_testdata"),
+        "Load test data" |>
+          tooltip2(
+            "Load LightLogR's small deterministic environmental sample."
+          ),
+        icon = icon("file-medical"),
+        class = "btn-outline-secondary"
+      )
     ),
     hr(),
-    h5("Dataset actions"),
-    actionButton(
-      ns("rename_dataset"),
-      "Rename dataset" |>
-        tooltip2(
-          "Change only the display name; the stable dataset ID is retained."
-        ),
-      icon = icon("file-signature")
+    h3(class = "h6", "Dataset actions"),
+    tags$div(
+      class = "d-grid gap-2",
+      actionButton(
+        ns("rename_dataset"),
+        "Rename dataset" |>
+          tooltip2(
+            "Change only the display name; the stable dataset ID is retained."
+          ),
+        icon = icon("file-signature"),
+        class = "btn-outline-secondary"
+      ),
+      actionButton(
+        ns("delete_dataset"),
+        "Delete dataset" |>
+          tooltip2("Remove the selected dataset from this session."),
+        icon = icon("trash"),
+        class = "btn-outline-danger"
+      )
     ),
-    actionButton(
-      ns("delete_dataset"),
-      "Delete dataset" |>
-        tooltip2("Remove the selected dataset from this session."),
-      icon = icon("trash"),
-      class = "btn-outline-danger"
+    tags$p(
+      class = "llw-secondary mt-3 mb-0",
+      icon("shield-halved", `aria-hidden` = "true"),
+      " Session data are kept only for this browser session."
     ),
     open = "desktop",
     width = 300
@@ -73,7 +91,6 @@ new_dataset_manager_event <- function(type, dataset_id = NULL, value = NULL) {
   assert_serializable_value(event, "dataset manager event")
   event
 }
-
 datasetManagerServer <- function(id, datasets, selected_dataset_id) {
   if (
     !shiny::is.reactive(datasets) || !shiny::is.reactive(selected_dataset_id)
@@ -93,7 +110,12 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
     output$dataset_list <- renderUI({
       records <- datasets()
       if (length(records) == 0L) {
-        return(p("No datasets in this session."))
+        return(llw_status_callout(
+          "idle",
+          "Import files or load test data to begin.",
+          heading = "No datasets in this session",
+          compact = TRUE
+        ))
       }
       ids <- names(records)
       labels <- vapply(records, `[[`, character(1), "display_name")
@@ -218,14 +240,33 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
 }
 
 dataset_manager_app <- function(...) {
-  ui <- page_sidebar(
-    title = "Dataset manager development app",
+  ui <- lightlogweb_page(page_sidebar(
+    lightlogweb_head(),
+    lightlogweb_skip_link(),
+    tags$main(
+      id = "llw-main-content",
+      class = "llw-main-shell",
+      tabindex = "-1",
+      llw_view_header(
+        "Module showcase",
+        "Dataset manager",
+        "Exercise stable selection, rename, removal, import, and sample events."
+      ),
+      card(
+        card_header("Development status"),
+        tags$div(
+          class = "llw-data-region",
+          role = "region",
+          `aria-label` = "Dataset manager development status",
+          tabindex = "0",
+          tableOutput("status")
+        )
+      )
+    ),
+    title = lightlogweb_wordmark(),
     sidebar = datasetSidebarUI("datasets"),
-    card(
-      card_header("Development status"),
-      tableOutput("status")
-    )
-  )
+    theme = lightlogweb_theme()
+  ))
   server <- function(input, output, session) {
     store <- new_session_store("local")
     first <- m1_showcase_record()
