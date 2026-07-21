@@ -1,0 +1,2 @@
+This is deliberately not an ActLumus export.
+It exercises recoverable parser failure and retry behavior.

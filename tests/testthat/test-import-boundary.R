@@ -1,4 +1,4 @@
-test_that("uploads are copied byte-for-byte under generated session names", {
+test_that("uploads keep safe original basenames in isolated directories", {
   root <- tempfile("llw-upload-root-")
   dir.create(root, recursive = TRUE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
@@ -15,24 +15,31 @@ test_that("uploads are copied byte-for-byte under generated session names", {
   staged <- stage_import_files(files, root)
 
   expect_s3_class(staged, "llw_staged_uploads")
-  expect_identical(staged$original_name, "../unsafe name.csv")
-  expect_identical(basename(staged$staged_path), "0001.csv")
+  expect_identical(staged$original_name, "unsafe name.csv")
+  expect_identical(basename(staged$staged_path), "unsafe name.csv")
+  expect_identical(basename(dirname(staged$staged_path)), "0001")
   expect_true(startsWith(staged$staged_path, normalizePath(root)))
   expect_identical(readBin(staged$staged_path, "raw", n = length(bytes)), bytes)
   expect_identical(staged$sha256[[1L]], sha256_file(source))
   expect_match(staged$sha256, "^sha256:[0-9a-f]{64}$")
   expect_equal(staged$size_bytes, length(bytes))
+  if (.Platform$OS.type != "windows") {
+    expect_identical(
+      as.integer(file.info(dirname(staged$staged_path))$mode),
+      448L
+    )
+  }
 })
 
 test_that("raw import requests reject a modified staged source", {
   root <- tempfile("llw-tamper-root-")
   dir.create(root, recursive = TRUE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
-  source <- tempfile(fileext = ".csv")
+  source <- tempfile(fileext = ".txt")
   on.exit(unlink(source, force = TRUE), add = TRUE)
   writeBin(charToRaw("original bytes"), source)
   staged <- stage_import_files(
-    data.frame(name = "fixture.csv", datapath = source),
+    data.frame(name = "fixture.txt", datapath = source),
     root
   )
 
@@ -44,11 +51,28 @@ test_that("raw import requests reject a modified staged source", {
       staged_files = staged,
       timezone = "UTC",
       not_before = as.Date("2001-01-01"),
-      id_mode = "automated",
-      id_preview = "P01"
+      id_mode = "automated"
     ),
     class = "llw_resource_error",
     regexp = "changed"
+  )
+})
+
+test_that("the worker rechecks staged bytes after request construction", {
+  fixture <- m3_stage_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  on.exit(unlink(fixture$source, force = TRUE), add = TRUE)
+  request <- m3_raw_import_request(fixture$staged)
+  path <- fixture$staged$staged_path[[1L]]
+  bytes <- readBin(path, what = "raw", n = file.info(path)$size)
+  last <- length(bytes)
+  bytes[[last]] <- as.raw(bitwXor(as.integer(bytes[[last]]), 1L))
+  writeBin(bytes, path)
+
+  expect_error(
+    raw_import_worker(request, spec = NULL),
+    class = "llw_resource_error",
+    regexp = "changed after it was copied"
   )
 })
 
@@ -56,11 +80,11 @@ test_that("raw import requests snapshot serializable source provenance", {
   root <- tempfile("llw-request-root-")
   dir.create(root, recursive = TRUE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
-  source <- tempfile(fileext = ".csv")
+  source <- tempfile(fileext = ".txt")
   on.exit(unlink(source, force = TRUE), add = TRUE)
   writeLines("fixture", source, useBytes = TRUE)
   staged <- stage_import_files(
-    data.frame(name = "fixture.csv", datapath = source),
+    data.frame(name = "fixture.txt", datapath = source),
     root
   )
   request <- new_raw_import_request(
@@ -68,15 +92,14 @@ test_that("raw import requests snapshot serializable source provenance", {
     staged_files = staged,
     timezone = "UTC",
     not_before = as.Date("2001-01-01"),
-    id_mode = "automated",
-    id_preview = "P01"
+    id_mode = "automated"
   )
   manifest_arguments <- raw_import_manifest_arguments(request)
 
   expect_s3_class(request, "llw_raw_import_request")
   expect_null(nonserializable_path(request))
   expect_identical(request$import_arguments$filename, staged$staged_path)
-  expect_identical(manifest_arguments$filename, "fixture.csv")
+  expect_identical(manifest_arguments$filename, "fixture.txt")
   expect_false(any(grepl(root, unlist(manifest_arguments), fixed = TRUE)))
 
   record <- new_imported_dataset_record(list(
@@ -91,6 +114,7 @@ test_that("raw import requests snapshot serializable source provenance", {
   expect_identical(record$source_manifest$hashes[[1L]], staged$sha256[[1L]])
   expect_identical(dataset_raw_data(record), m1_fixture_data())
   expect_match(record$raw_checksum, "^sha256:[0-9a-f]{64}$")
+  expect_false(any(grepl(root, unlist(record$source_manifest), fixed = TRUE)))
 })
 
 test_that("the runtime rejects uploads above request or session limits", {

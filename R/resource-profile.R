@@ -19,6 +19,7 @@ resolve_runtime_profile <- function(
       type = "validation"
     )
   }
+  max_upload_bytes <- as.numeric(max_upload_mb) * 1024^2
   if (!is.logical(is_interactive) || length(is_interactive) != 1L) {
     abort_llw(
       "`is_interactive` must be one logical value.",
@@ -47,6 +48,19 @@ resolve_runtime_profile <- function(
     } else {
       profile <- if (isTRUE(is_interactive)) "local" else "hosted"
     }
+  }
+  if (
+    identical(profile, "hosted") &&
+      max_upload_bytes > raw_import_default_max_bytes()
+  ) {
+    abort_llw(
+      "Hosted `max_upload_mb` cannot exceed the 200 MiB safety ceiling.",
+      type = "validation",
+      public_message = paste(
+        "Hosted raw imports are limited to 200 MiB per action.",
+        "Configure 200 or a lower value, or use an explicitly resourced local profile."
+      )
+    )
   }
 
   worker_cap <- if (identical(profile, "hosted")) {
@@ -77,7 +91,7 @@ resolve_runtime_profile <- function(
   structure(
     list(
       name = profile,
-      max_upload_bytes = as.numeric(max_upload_mb) * 1024^2,
+      max_upload_bytes = max_upload_bytes,
       workers = resolved_workers,
       max_concurrent_tasks = if (hosted) {
         1L
@@ -106,7 +120,12 @@ create_session_paths <- function(root = tempfile("lightlogweb-session-")) {
       )
     )
   }
-  created_root <- dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  created_root <- dir.create(
+    root,
+    recursive = TRUE,
+    showWarnings = FALSE,
+    mode = "0700"
+  )
   if (!created_root || !dir.exists(root)) {
     abort_llw(
       paste0("Could not create session directory `", root, "`."),
@@ -133,7 +152,8 @@ create_session_paths <- function(root = tempfile("lightlogweb-session-")) {
     dir.create,
     logical(1),
     recursive = TRUE,
-    showWarnings = FALSE
+    showWarnings = FALSE,
+    mode = "0700"
   )
   exists <- vapply(paths, dir.exists, logical(1))
   if (!all(created | exists)) {
@@ -325,13 +345,77 @@ new_session_cache <- function(path, max_bytes) {
   )
 }
 
+initialize_lightlogweb_workers <- function(compute_profile) {
+  assert_scalar_string(compute_profile, "compute_profile")
+  package_path <- getNamespaceInfo(asNamespace("LightLogWeb"), "path")
+  library_paths <- normalizePath(
+    .libPaths(),
+    winslash = "/",
+    mustWork = FALSE
+  )
+  source_files <- list.files(
+    file.path(package_path, "R"),
+    pattern = "[.][Rr]$",
+    full.names = FALSE
+  )
+  development_mode <- length(source_files) > 0L
+  initialized <- mirai::everywhere(
+    {
+      available_library_paths <- library_paths[dir.exists(library_paths)]
+      .libPaths(unique(c(available_library_paths, .libPaths())))
+      if (development_mode) {
+        if (!requireNamespace("pkgload", quietly = TRUE)) {
+          stop(
+            "pkgload is required to initialize development workers.",
+            call. = FALSE
+          )
+        }
+        pkgload::load_all(
+          package_path,
+          reset = TRUE,
+          attach = FALSE,
+          export_all = FALSE,
+          export_imports = FALSE,
+          helpers = FALSE,
+          attach_testthat = FALSE,
+          quiet = TRUE,
+          warn_conflicts = FALSE,
+          debug = FALSE
+        )
+      } else {
+        loadNamespace("LightLogWeb")
+      }
+      TRUE
+    },
+    .args = list(
+      package_path = package_path,
+      development_mode = development_mode,
+      library_paths = library_paths
+    ),
+    .compute = compute_profile
+  )
+  results <- mirai::collect_mirai(initialized)
+  failed <- vapply(results, mirai::is_error_value, logical(1))
+  if (any(failed)) {
+    stop(
+      paste(
+        "Could not initialize a LightLogWeb worker:",
+        as.character(results[[which(failed)[[1L]]]])
+      ),
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 new_session_runtime <- function(
   profile,
   session = shiny::getDefaultReactiveDomain(),
   paths = create_session_paths(),
   start_workers = TRUE,
   daemon_start = mirai::daemons,
-  daemon_stop = mirai::daemons
+  daemon_stop = mirai::daemons,
+  worker_initialize = initialize_lightlogweb_workers
 ) {
   if (!inherits(profile, "llw_runtime_profile")) {
     abort_llw(
@@ -340,9 +424,13 @@ new_session_runtime <- function(
     )
   }
   assert_flag(start_workers, "start_workers")
-  if (!is.function(daemon_start) || !is.function(daemon_stop)) {
+  if (
+    !is.function(daemon_start) ||
+      !is.function(daemon_stop) ||
+      !is.function(worker_initialize)
+  ) {
     abort_llw(
-      "`daemon_start` and `daemon_stop` must be functions.",
+      "`daemon_start`, `daemon_stop`, and `worker_initialize` must be functions.",
       type = "validation"
     )
   }
@@ -356,6 +444,7 @@ new_session_runtime <- function(
   startup_error <- NULL
 
   if (profile$workers > 0L && start_workers) {
+    daemon_started <- FALSE
     worker_start <- tryCatch(
       {
         daemon_start(
@@ -363,11 +452,16 @@ new_session_runtime <- function(
           dispatcher = TRUE,
           .compute = compute_profile
         )
+        daemon_started <- TRUE
+        worker_initialize(compute_profile)
         TRUE
       },
       error = identity
     )
     if (inherits(worker_start, "error")) {
+      if (daemon_started) {
+        try(daemon_stop(0L, .compute = compute_profile), silent = TRUE)
+      }
       startup_error <- new_llw_error(
         message = conditionMessage(worker_start),
         type = "resource",

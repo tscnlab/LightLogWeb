@@ -21,7 +21,10 @@ datasetSidebarUI <- function(id) {
         ns("import_testdata"),
         "Load test data" |>
           tooltip2(
-            "Load LightLogR's small deterministic environmental sample."
+            paste(
+              "Immediately load LightLogR's deterministic",
+              "sample.data.environment with source and variable metadata."
+            )
           ),
         icon = icon("file-medical"),
         class = "btn-outline-secondary"

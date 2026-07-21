@@ -5,6 +5,8 @@
 \alias{LightLogWeb-package}
 \title{LightLogWeb: A Web Interface for LightLogR}
 \description{
+\if{html}{\figure{logo.svg}{options: style='float: right' alt='logo' width='120'}}
+
 Provides a modular 'Shiny' interface for importing, checking, preparing, exploring, analysing, and reproducibly exporting personal light exposure data with 'LightLogR'. The application keeps imported data unchanged, makes consequential analysis settings explicit, and supports recoverable workflows for diverse device exports.
 }
 \seealso{

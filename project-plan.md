@@ -131,7 +131,9 @@ old dependency choices are not inherited by default.
 - Offer downloadable and reloadable project bundles for continuity.
 - Never perform arbitrary R evaluation, silent interpolation, silent timezone
   reinterpretation, silent deduplication, or silent data sampling.
-- A 200 MB limit applies to the total upload request for one import action.
+- A 200 MiB limit applies to the total hosted upload request for one import
+  action. The local default is the same, but an explicitly resourced local
+  profile may raise it.
 - GLC network materialization is not an upload, but it is subject to the same
   hosted memory, disk, and task budgets. glcdp caches and downloads must use a
   session-scoped directory unless the user explicitly downloads an artifact.
@@ -404,23 +406,59 @@ Milestone evidence:
 
 ### Milestone 3 — Robust raw import and test datasets
 
+Status: complete; owner accepted on 2026-07-21
+
+Verification result: the raw-import contract, deterministic fixtures, pinned
+IZTECH development snapshot, package tests, clean-worker import, and generated
+near-200 MiB boundary case all pass. `R CMD check` completes with 0 errors,
+0 warnings, and 0 notes. Browser acceptance confirms the valid ActLumus flow,
+the explicit analysis-focus return, both immediate example datasets, no
+horizontal overflow at 320, 768, or 1440 px, the signal-profile and structural
+eligibility guidance, and no browser-console errors. The follow-up review also
+confirms that LightLogR receives original safe basenames and produces the final
+participant IDs, participant-specific missing-time-point counts remain correct
+for mixed sampling epochs, and the overview is based on `gg_overview()` with
+compact, derived long-interval overlays. Those overlays compare the lag between
+consecutive observations with each participant's dominant epoch without
+expanding or filling the time series. The detailed review is a four-panel
+accordion that keeps its parent review open and shows one detail panel at a
+time. A session-local progress snapshot lets the browser show the currently
+running import phase while the background worker is still processing data.
+Malformed, wrong-timezone, unsupported, missing-column, retry, and over-limit
+paths are covered by typed-condition tests and remain recoverable.
+Plain and ZIP-wrapped VEET fixtures from both the original and current export
+formats produce equivalent imported payloads, with safe worker-side extraction
+and the original archive retained for source provenance.
+
 1. Salvage useful current import behavior only where it passes the new
    contracts; replace temporary-file renaming and mutable metadata coupling.
-2. Enforce a 200 MB per-action request limit and document reverse-proxy/host
-   requirements.
+2. Enforce a 200 MiB per-action ceiling for the hosted profile and document
+   reverse-proxy/host requirements. Keep 200 MiB as the local default while
+   allowing an explicitly higher local limit when disk, parsing time, and
+   memory are provisioned accordingly.
 3. Stage unchanged bytes in a session directory, hash them, and keep original
    names separate from server paths.
 4. Populate devices and versions dynamically through LightLogR public APIs.
 5. Preflight size, extension, device/version, timezone, filename-to-ID mapping,
-   duplicate proposed IDs, readability, and supported combinations.
+   missing mappings, repeated filenames, readability, and supported
+   combinations. Allow several files to map to one participant while retaining
+   each source filename and reporting overlapping times after import.
 6. Preview filename-to-participant mapping.
-7. Run large imports with visible validation, import, normalization, quality,
-   and preview phases.
+   Accept validated single-payload VEET ZIP exports, extracting their CSV/TXT
+   member only inside the background worker while retaining the archive as the
+   source-provenance object.
+7. Run large imports in a background worker with visible validation, import,
+   normalization, quality, and preview phases. Retain a documented synchronous
+   fallback for constrained runtimes.
 8. Validate Id, POSIXct Datetime, names/types, ordering, duplicates, timezone,
    date range, participant count, epoch, explicit missingness, implicit gaps,
-   irregularity, and DST transitions.
-9. Show a post-import overview and restrict primary-variable selection to
-   eligible numeric columns, with reasons for ineligibility.
+   irregularity, DST transitions, and per-variable missing/zero/negative/range
+   profiles.
+9. Show a post-import overview and let the user choose an initial analysis-focus
+   variable from scalar numeric columns with finite observations. Explain that
+   the focus can be changed later, give reasons for non-selectability, and warn
+   that structural selectability does not establish units, calibration,
+   placement, or cross-device comparability.
 10. Offer:
     - Immediate LightLogR sample.data.environment with useful basic metadata.
     - For development purposes, keep an instance of the current CRAN melidosData IZTECH
@@ -428,8 +466,16 @@ Milestone evidence:
 11. Keep network access out of routine tests by using deterministic fixtures.
 
 Acceptance gate: valid, malformed, wrong-timezone, unsupported, missing-column,
-and generated near-200 MB cases produce a usable dataset or recoverable
+and generated near-200 MiB hosted cases produce a usable dataset or recoverable
 message, never an app crash.
+
+Milestone evidence:
+
+- dev/milestone-3-raw-import.md
+- dev/fixtures/README.md
+- dev/generate-milestone-3-fixtures.R
+- dev/run-milestone-3-large-file-acceptance.R
+- dev/run-testdevice-import-acceptance.R
 
 ### Milestone 4 — GLC discovery, selective import, and package download
 

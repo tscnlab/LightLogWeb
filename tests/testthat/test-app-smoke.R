@@ -19,4 +19,25 @@ test_that("every changed module retains a constructible development app", {
   )
 
   expect_true(all(vapply(apps, inherits, logical(1), "shiny.appobj")))
+  expect_identical(formals(import_app)$workers, 1)
+})
+
+test_that("upload apps apply their configured request limit when they start", {
+  main_app <- LightLogWeb(
+    profile = "hosted",
+    max_upload_mb = 16,
+    workers = 0
+  )
+  showcase <- import_app(max_upload_mb = 16)
+
+  expect_type(main_app$onStart, "closure")
+  expect_type(showcase$onStart, "closure")
+  expect_equal(
+    environment(main_app$onStart)$max_upload_bytes,
+    16 * 1024^2
+  )
+  expect_equal(
+    environment(showcase$onStart)$max_upload_bytes,
+    16 * 1024^2
+  )
 })

@@ -399,11 +399,14 @@ lightlogweb_plot_colors <- function(mode = c("light", "dark")) {
   c(
     primary = tokens[["action"]],
     comparison = tokens[["accent"]],
+    start = tokens[["accent"]],
+    end = tokens[["success"]],
     reference = if (identical(mode, "light")) {
       tokens[["border_control"]]
     } else {
       tokens[["text_muted"]]
     },
+    gap = tokens[["danger"]],
     text = tokens[["text"]],
     grid = tokens[["grid"]],
     interval = tokens[["bg_subtle"]],

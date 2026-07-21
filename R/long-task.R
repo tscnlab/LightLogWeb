@@ -244,6 +244,7 @@ new_long_task <- function(
   revision_lookup = function(dataset_id) NULL,
   on_result = function(value, spec) invisible(NULL)
 ) {
+  worker_expression <- substitute(worker)
   if (!is.function(worker)) {
     abort_llw("`worker` must be a function.", type = "validation")
   }
@@ -268,6 +269,23 @@ new_long_task <- function(
   active_job <- NULL
   handled_id <- NULL
   cancelled_ids <- character()
+  namespace <- asNamespace("LightLogWeb")
+  worker_name <- ""
+  candidate_name <- if (is.symbol(worker_expression)) {
+    as.character(worker_expression)
+  } else {
+    ""
+  }
+  if (
+    nzchar(candidate_name) &&
+      exists(candidate_name, envir = namespace, inherits = FALSE) &&
+      identical(
+        get(candidate_name, envir = namespace, inherits = FALSE),
+        worker
+      )
+  ) {
+    worker_name <- candidate_name
+  }
 
   extended_task <- shiny::ExtendedTask$new(function(spec) {
     if (runtime$profile$synchronous) {
@@ -282,9 +300,18 @@ new_long_task <- function(
     payload <- spec$payload
     job <- mirai::mirai(
       {
+        resolved_worker <- if (nzchar(worker_name)) {
+          get(
+            worker_name,
+            envir = asNamespace("LightLogWeb"),
+            inherits = FALSE
+          )
+        } else {
+          worker
+        }
         warnings <- character()
         value <- withCallingHandlers(
-          worker(payload, spec),
+          resolved_worker(payload, spec),
           warning = function(cnd) {
             warnings <<- c(warnings, conditionMessage(cnd))
             invokeRestart("muffleWarning")
@@ -294,6 +321,7 @@ new_long_task <- function(
       },
       .args = list(
         worker = worker,
+        worker_name = worker_name,
         payload = spec$payload,
         spec = spec
       ),

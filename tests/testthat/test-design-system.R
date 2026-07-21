@@ -235,6 +235,8 @@ test_that("plot styling uses the same semantic palette", {
   expect_identical(unname(light[["primary"]]), "#0B6675")
   expect_identical(unname(dark[["primary"]]), "#76D2DD")
   expect_identical(unname(light[["comparison"]]), "#C36A1D")
+  expect_identical(unname(light[["gap"]]), "#A33B3B")
+  expect_identical(unname(dark[["gap"]]), "#FFAAAA")
   expect_s3_class(lightlogweb_plot_theme("light"), "theme")
   expect_s3_class(lightlogweb_plot_theme("dark"), "theme")
 })

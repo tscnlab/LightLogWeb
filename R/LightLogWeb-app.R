@@ -1,9 +1,27 @@
+shiny_upload_limit_on_start <- function(runtime_profile) {
+  if (!inherits(runtime_profile, "llw_runtime_profile")) {
+    abort_llw(
+      "`runtime_profile` must be created by `resolve_runtime_profile()`.",
+      type = "validation"
+    )
+  }
+  max_upload_bytes <- runtime_profile$max_upload_bytes
+  force(max_upload_bytes)
+  function() {
+    old_options <- options(shiny.maxRequestSize = max_upload_bytes)
+    shiny::onStop(function() options(old_options))
+  }
+}
+
 #' Launch LightLogWeb
 #'
 #' @param profile Runtime profile. `"auto"` respects
 #'   `LIGHTLOGWEB_PROFILE`; otherwise interactive launches use `"local"` and
 #'   non-interactive launches use `"hosted"`.
-#' @param max_upload_mb Maximum total upload request size in megabytes.
+#' @param max_upload_mb Maximum total upload request size in mebibytes (MiB).
+#'   Hosted raw-import actions have a 200 MiB safety ceiling. Explicit local
+#'   profiles may use a higher limit when disk, parsing time, and memory have
+#'   been provisioned accordingly.
 #' @param workers Number of background workers. `NULL` selects one hosted
 #'   worker or at most two local workers. Use `0` for the synchronous fallback.
 #'
@@ -223,12 +241,7 @@ LightLogWeb <- function(
       bindEvent(dashboard$event(), ignoreInit = TRUE)
   }
 
-  on_start <- function() {
-    old_options <- options(
-      shiny.maxRequestSize = runtime_profile$max_upload_bytes
-    )
-    shiny::onStop(function() options(old_options))
-  }
+  on_start <- shiny_upload_limit_on_start(runtime_profile)
 
   shinyApp(ui = ui, server = server, onStart = on_start)
 }

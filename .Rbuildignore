@@ -8,4 +8,5 @@
 ^manifest.json
 ^project-plan\.md$
 ^dev$
+^testdevices$
 ^_brand\.yml$

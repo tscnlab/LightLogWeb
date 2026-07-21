@@ -21,6 +21,19 @@ test_that("runtime profiles bound workers and hosted concurrency", {
   expect_identical(local$max_concurrent_tasks, 2L)
   expect_true(sync$synchronous)
   expect_equal(hosted$max_upload_bytes, 200 * 1024^2)
+  expect_error(
+    resolve_runtime_profile("hosted", max_upload_mb = 200.01, workers = 0),
+    class = "llw_validation_error",
+    regexp = "Hosted.*cannot exceed"
+  )
+  expect_equal(
+    resolve_runtime_profile(
+      "local",
+      max_upload_mb = 512,
+      workers = 0
+    )$max_upload_bytes,
+    512 * 1024^2
+  )
 })
 
 test_that("session caches evict old values and reject oversized items", {
@@ -43,6 +56,14 @@ test_that("session caches evict old values and reject oversized items", {
 
 test_that("the runtime queues above its profile limit and cleans all temp data", {
   paths <- create_session_paths()
+  if (.Platform$OS.type != "windows") {
+    expect_identical(as.integer(file.info(paths$root)$mode), 448L)
+    expect_true(all(vapply(
+      paths[c("uploads", "cache", "tasks")],
+      function(path) as.integer(file.info(path)$mode) == 448L,
+      logical(1)
+    )))
+  }
   profile <- resolve_runtime_profile("hosted", workers = 0)
   runtime <- new_session_runtime(
     profile,

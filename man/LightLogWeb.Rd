@@ -15,7 +15,10 @@ LightLogWeb(
 \code{LIGHTLOGWEB_PROFILE}; otherwise interactive launches use \code{"local"} and
 non-interactive launches use \code{"hosted"}.}
 
-\item{max_upload_mb}{Maximum total upload request size in megabytes.}
+\item{max_upload_mb}{Maximum total upload request size in mebibytes (MiB).
+Hosted raw-import actions have a 200 MiB safety ceiling. Explicit local
+profiles may use a higher limit when disk, parsing time, and memory have
+been provisioned accordingly.}
 
 \item{workers}{Number of background workers. \code{NULL} selects one hosted
 worker or at most two local workers. Use \code{0} for the synchronous fallback.}

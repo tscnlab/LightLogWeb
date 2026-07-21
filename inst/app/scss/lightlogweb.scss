@@ -450,6 +450,35 @@
   font-size: 0.875rem;
 }
 
+.llw-tooltip--wide {
+  --bs-tooltip-max-width: 28rem;
+}
+
+.llw-tooltip--wide .tooltip-inner {
+  text-align: left;
+}
+
+.llw-tooltip--wide :where(p, ul) {
+  margin-bottom: 0.5rem;
+}
+
+.llw-tooltip--wide .llw-tooltip-code {
+  display: inline-block;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 32rem) {
+  .llw-tooltip--wide {
+    --bs-tooltip-max-width: calc(100vw - 2rem);
+  }
+}
+
 .llw-app .checkbox > label {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -661,6 +690,71 @@
 
 .llw-data-region:focus-visible {
   outline-offset: 0.125rem;
+}
+
+.llw-participant-quality-table table {
+  width: 100%;
+  min-width: 92rem;
+}
+
+.llw-participant-quality-table table :where(th, td) {
+  white-space: nowrap;
+}
+
+.llw-variable-review-table table {
+  width: 100%;
+  min-width: 104rem;
+}
+
+.llw-variable-review-table table :where(th, td) {
+  white-space: nowrap;
+}
+
+.llw-variable-review-table table :where(th, td):last-child {
+  min-width: 18rem;
+  white-space: normal;
+}
+
+.llw-focus-select {
+  min-width: 7.5rem;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.llw-diagnostic-table .llw-diagnostic-help {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  padding-inline: 0.375rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.llw-diagnostic-table .llw-diagnostic-help > * {
+  margin-inline: auto;
+}
+
+.llw-diagnostic-status {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.llw-diagnostic-status--success {
+  color: var(--llw-success);
+}
+
+.llw-diagnostic-status--warning {
+  color: var(--llw-warning);
+}
+
+.llw-diagnostic-status--information {
+  color: var(--llw-action);
+}
+
+.llw-diagnostic-status--danger {
+  color: var(--llw-danger);
 }
 
 .llw-app table {
