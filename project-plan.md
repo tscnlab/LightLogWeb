@@ -1,6 +1,6 @@
 # LightLogWeb full implementation plan
 
-Last updated: 2026-07-17
+Last updated: 2026-07-21
 
 This is the governing implementation plan for LightLogWeb. It is tracked in
 version control but excluded from package builds by the exact
@@ -22,6 +22,9 @@ LightLogR workflow:
 The app must make scientifically consequential decisions visible, preserve the
 unchanged source data, remain useful without optional metadata, and fail with
 helpful messages rather than ending a Shiny session.
+
+Whenever scientific precision is preserved, the app should communicate in
+simple, concise, and comprehensible language.
 
 ## 2. Governing decisions
 
@@ -138,6 +141,10 @@ old dependency choices are not inherited by default.
 ### 2.6 Interaction and delivery
 
 - Use guided defaults with progressively disclosed advanced arguments.
+- Use plain language in interface labels, guidance, warnings, errors, reports,
+  and documentation whenever this does not reduce scientific precision. Keep
+  necessary scientific terms, explain them at first use, and do not replace
+  them with simpler but ambiguous wording.
 - Draft edits feed previews; Apply or Calculate is required before expensive or
   consequential work is committed.
 - Every reduction, aggregation, exclusion, or sample shown as a preview is
@@ -787,6 +794,9 @@ requirement.
   essential states at mobile width.
 - Meet WCAG 2.2 AA for contrast, labels, focus, keyboard navigation, and
   non-color status cues.
+- Review user-facing language for clarity. A person new to LightLogR should be
+  able to understand the requested action and its consequence; terminology
+  that is necessary for scientific precision should be retained and explained.
 - Test malformed files, unsupported devices, invalid and mixed timezones, DST,
   duplicates, empty filters, absent metadata, small groups, unavailable
   optional tools, malformed/repeated repo queries, registry revisions with no
