@@ -291,3 +291,29 @@ The current owner-review build was verified on 2026-07-21:
   no errors.
 
 Milestone 3 was accepted by the owner on 2026-07-21.
+
+## Production presentation addendum — 2026-07-21
+
+After a separate owner-reviewed showcase, the guided four-step import was
+promoted to the production `LightLogWeb()` entry point. The production flow is
+now Source, Details & IDs, Check & import, and Review. Steps become complete
+only when their required inputs are ready, and Review remains unavailable until
+an import finishes. The readiness summary, import controls, live phase report,
+final status, quality review, and analysis-focus choice all use the same
+accepted `importServer()` contract as the earlier presentation.
+
+This is a presentation change, not a change to the scientific import contract:
+LightLogR still creates or preserves participant IDs, timestamps and sensor
+values are not imputed, and implicit gaps, off-grid observations, and explicit
+missing values remain separate diagnostics. The older accordion presentation
+is retained in the development showcase through
+`import_app(presentation = "accordion")` for regression comparison. The
+`GENEActiv_GGIR` choice remains visible for discoverability, but selecting it
+now shows that this route is currently available only through LightLogR and
+restores the complete device list without retaining an invalid selection.
+
+Post-promotion verification ran every available test successfully. The two
+clean-mirai-daemon checks were skipped because that daemon backend is not
+available in this test runtime. `R CMD check` completed with 0 errors and
+0 warnings; its only note was the environment-level message
+`unable to verify current time`.

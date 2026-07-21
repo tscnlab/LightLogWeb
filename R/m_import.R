@@ -8,6 +8,14 @@ raw_import_phase_labels <- function() {
   )
 }
 
+raw_import_device_choices <- function() {
+  devices <- raw_import_devices()
+  c(
+    "Choose a device" = "",
+    stats::setNames(devices, devices)
+  )
+}
+
 raw_import_phase_snapshot <- function(
   status,
   result = NULL,
@@ -648,10 +656,7 @@ UI_accordion_specification <- function(ns) {
               )
             )
           ),
-          choices = c(
-            "Choose a device" = "",
-            stats::setNames(raw_import_devices(), raw_import_devices())
-          ),
+          choices = raw_import_device_choices(),
           selected = "",
           options = list(placeholder = "Select a device..."),
           width = "100%"
@@ -863,10 +868,8 @@ UI_accordion_specification <- function(ns) {
   )
 }
 
-UI_accordion_summary <- function(ns) {
-  accordion_panel(
-    h2(class = "h3", "Review imported data"),
-    value = "import_summary",
+UI_import_summary_content <- function(ns) {
+  tagList(
     tags$div(class = "mb-3", uiOutput(ns("quality_callout"))),
     layout_column_wrap(
       value_box(
@@ -994,6 +997,14 @@ UI_accordion_summary <- function(ns) {
   )
 }
 
+UI_accordion_summary <- function(ns) {
+  accordion_panel(
+    h2(class = "h3", "Review imported data"),
+    value = "import_summary",
+    UI_import_summary_content(ns)
+  )
+}
+
 importUI <- function(id) {
   ns <- NS(id)
   accordion(
@@ -1004,7 +1015,13 @@ importUI <- function(id) {
   )
 }
 
-importServer <- function(id, runtime, color_mode) {
+importServer <- function(
+  id,
+  runtime,
+  color_mode,
+  presentation = c("accordion", "wizard")
+) {
+  presentation <- match.arg(presentation)
   if (
     !is.list(runtime) ||
       !is.function(runtime$submit) ||
@@ -1022,6 +1039,24 @@ importServer <- function(id, runtime, color_mode) {
   moduleServer(id, function(input, output, session) {
     observe({
       device <- input$device %||% ""
+      if (identical(device, "GENEActiv_GGIR")) {
+        showNotification(
+          paste(
+            "GENEActiv_GGIR import is currently available only through LightLogR.",
+            "Choose another device in this app."
+          ),
+          type = "warning",
+          duration = 8
+        )
+        updateSelectizeInput(
+          session,
+          inputId = "device",
+          choices = raw_import_device_choices(),
+          selected = "",
+          server = TRUE
+        )
+        device <- ""
+      }
       choices <- tryCatch(
         get_versions(device),
         error = function(cnd) get_versions("")
@@ -1042,6 +1077,7 @@ importServer <- function(id, runtime, color_mode) {
 
     observe({
       req(nzchar(input$device %||% ""))
+      req(!identical(input$device, "GENEActiv_GGIR"))
       updateTextInput(
         session,
         "dataset_name",
@@ -1105,15 +1141,15 @@ importServer <- function(id, runtime, color_mode) {
       }
       message <- if (any(mapping$duplicate_proposed)) {
         paste(
-          "Several files have the same filename fallback ID.",
+          "Several files have the same proposed participant ID.",
           "This is allowed when the files together form one participant record.",
-          "LightLogR creates the final IDs during import; embedded Id values are kept,",
+          "LightLogR keeps IDs from an existing Id column and creates IDs for the other files,",
           "and overlapping times are reported after import."
         )
       } else {
         paste(
-          "LightLogR creates the final participant IDs during import.",
-          "This preview shows the filename fallback used only when a file has no Id column."
+          "LightLogR keeps participant IDs from an existing Id column.",
+          "For files without one, this preview shows the ID created from the filename."
         )
       }
       llw_status_callout(
@@ -1129,7 +1165,7 @@ importServer <- function(id, runtime, color_mode) {
         req(mapping, !inherits(mapping, "error"))
         data.frame(
           File = basename(mapping$original_name),
-          `Filename fallback ID (when the file has no Id column)` = mapping$proposed_id,
+          `ID used when the file has no Id column` = mapping$proposed_id,
           Method = mapping$mapping_source,
           check.names = FALSE,
           stringsAsFactors = FALSE
@@ -1151,6 +1187,216 @@ importServer <- function(id, runtime, color_mode) {
     focus_selection <- reactiveVal(NULL)
     focus_click_state <- reactiveVal(integer())
 
+    if (identical(presentation, "wizard")) {
+      wizard_step <- reactiveVal("source")
+      review_available <- reactive(
+        import_task$state() %in% c("complete", "warning")
+      )
+
+      wizard_source_ready <- reactive({
+        !is.null(input$file) &&
+          nrow(input$file) > 0L &&
+          nzchar(input$device %||% "") &&
+          nzchar(input$version %||% "")
+      })
+
+      wizard_mapping_ready <- reactive({
+        mapping <- mapping_result()
+        !is.null(mapping) && !inherits(mapping, "error")
+      })
+
+      wizard_details_ready_state <- reactive({
+        wizard_source_ready() &&
+          nzchar(input$tz %||% "") &&
+          nzchar(trimws(input$dataset_name %||% "")) &&
+          nzchar(input$id %||% "") &&
+          wizard_mapping_ready()
+      })
+
+      wizard_completed_steps <- reactive({
+        completed <- character()
+        if (wizard_source_ready()) completed <- c(completed, "source")
+        if (wizard_details_ready_state()) completed <- c(completed, "details")
+        if (review_available()) completed <- c(completed, "check")
+        completed
+      })
+
+      wizard_details_ready <- function() {
+        if (!wizard_source_ready()) {
+          showNotification(
+            "Choose files, a device, and a device export version before continuing.",
+            type = "warning",
+            duration = 6
+          )
+          return(FALSE)
+        }
+        if (
+          !nzchar(input$tz %||% "") ||
+            !nzchar(trimws(input$dataset_name %||% "")) ||
+            !nzchar(input$id %||% "")
+        ) {
+          showNotification(
+            paste(
+              "Choose a source time zone, dataset name, and participant-ID",
+              "method before continuing."
+            ),
+            type = "warning",
+            duration = 6
+          )
+          return(FALSE)
+        }
+        mapping <- mapping_result()
+        if (is.null(mapping)) {
+          showNotification(
+            "Return to the source step and choose at least one file.",
+            type = "warning",
+            duration = 6
+          )
+          return(FALSE)
+        }
+        if (inherits(mapping, "error")) {
+          showNotification(
+            llw_public_message(normalize_task_error(mapping, "raw_import")),
+            type = "error",
+            duration = 8
+          )
+          return(FALSE)
+        }
+        TRUE
+      }
+
+      select_wizard_step <- function(value) {
+        wizard_step(value)
+        bslib::nav_select(
+          "wizard_steps",
+          selected = value,
+          session = session
+        )
+      }
+
+      output$wizard_stepper <- renderUI({
+        import_wizard_stepper(
+          session$ns,
+          active = wizard_step(),
+          completed = wizard_completed_steps(),
+          review_available = review_available()
+        )
+      })
+
+      output$wizard_check_summary <- renderUI({
+        mapping <- mapping_result()
+        file_count <- if (is.null(input$file)) 0L else nrow(input$file)
+        mapping_ready <- !is.null(mapping) && !inherits(mapping, "error")
+        id_count <- if (mapping_ready) {
+          length(unique(mapping$proposed_id))
+        } else {
+          0L
+        }
+        display_value <- function(value) {
+          value <- value %||% ""
+          if (length(value) == 0L || !nzchar(value[[1L]])) {
+            "Not selected"
+          } else {
+            value[[1L]]
+          }
+        }
+        import_wizard_check_summary_ui(
+          file_count = format(file_count, big.mark = ","),
+          device = display_value(input$device),
+          timezone = display_value(input$tz),
+          id_count = if (mapping_ready) {
+            format(id_count, big.mark = ",")
+          } else {
+            "Not ready"
+          },
+          ready = wizard_details_ready_state()
+        )
+      })
+
+      output$cancel_import_button <- renderUI({
+        import_wizard_cancel_button(
+          session$ns,
+          enabled = import_task$state() %in%
+            c(
+              "queued",
+              "running",
+              "finalizing"
+            )
+        )
+      })
+
+      observe(select_wizard_step("source")) |>
+        bindEvent(input$wizard_step_source, ignoreInit = TRUE)
+
+      observe(select_wizard_step("details")) |>
+        bindEvent(input$wizard_step_details, ignoreInit = TRUE)
+
+      observe(select_wizard_step("check")) |>
+        bindEvent(input$wizard_step_check, ignoreInit = TRUE)
+
+      open_wizard_review <- function() {
+        if (!review_available()) {
+          showNotification(
+            "Complete the import before opening the imported-data review.",
+            type = "warning",
+            duration = 6
+          )
+          return()
+        }
+        select_wizard_step("review")
+      }
+
+      observe(open_wizard_review()) |>
+        bindEvent(input$wizard_step_review, ignoreInit = TRUE)
+
+      observe({
+        if (is.null(input$file) || nrow(input$file) == 0L) {
+          showNotification(
+            "Choose at least one source file before continuing.",
+            type = "warning",
+            duration = 6
+          )
+          return()
+        }
+        if (!nzchar(input$device %||% "")) {
+          showNotification(
+            "Select the device format before continuing.",
+            type = "warning",
+            duration = 6
+          )
+          return()
+        }
+        if (!nzchar(input$version %||% "")) {
+          showNotification(
+            "Select the device export version before continuing.",
+            type = "warning",
+            duration = 6
+          )
+          return()
+        }
+        select_wizard_step("details")
+      }) |>
+        bindEvent(input$wizard_next_details, ignoreInit = TRUE)
+
+      observe(select_wizard_step("source")) |>
+        bindEvent(input$wizard_back_source, ignoreInit = TRUE)
+
+      observe({
+        req(wizard_details_ready())
+        select_wizard_step("check")
+      }) |>
+        bindEvent(input$wizard_next_check, ignoreInit = TRUE)
+
+      observe(select_wizard_step("details")) |>
+        bindEvent(input$wizard_back_details, ignoreInit = TRUE)
+
+      observe(open_wizard_review()) |>
+        bindEvent(input$wizard_next_review, ignoreInit = TRUE)
+
+      observe(select_wizard_step("check")) |>
+        bindEvent(input$wizard_back_check, ignoreInit = TRUE)
+    }
+
     observe({
       attempted <- tryCatch(
         {
@@ -1158,16 +1404,21 @@ importServer <- function(id, runtime, color_mode) {
           if (
             is.null(input$file) ||
               !nzchar(input$device %||% "") ||
+              identical(input$device, "GENEActiv_GGIR") ||
+              !nzchar(input$version %||% "") ||
               !nzchar(input$tz %||% "") ||
               !nzchar(trimws(input$dataset_name %||% "")) ||
               !nzchar(input$id %||% "")
           ) {
             abort_llw(
-              "Files, device, source time zone, dataset name, and participant-ID mode are required.",
+              paste(
+                "Files, a supported device, device export version, source time zone,",
+                "dataset name, and participant-ID mode are required."
+              ),
               type = "validation",
               public_message = paste(
-                "Choose files, a device, a source time zone, a dataset name,",
-                "and an ID mode before starting the import."
+                "Choose files, a supported device, its export version, a source time zone,",
+                "a dataset name, and an ID mode before starting the import."
               )
             )
           }
@@ -1266,7 +1517,11 @@ importServer <- function(id, runtime, color_mode) {
 
     observe({
       req(import_task$state() %in% c("complete", "warning"))
-      accordion_panel_set("import_accordion", "import_summary")
+      if (identical(presentation, "wizard")) {
+        select_wizard_step("review")
+      } else {
+        accordion_panel_set("import_accordion", "import_summary")
+      }
       show_import_success_modal(import_result()$data)
     }) |>
       bindEvent(import_task$state(), ignoreInit = TRUE)
@@ -1515,6 +1770,15 @@ importServer <- function(id, runtime, color_mode) {
     observe(removeModal()) |>
       bindEvent(input$add_variable, ignoreInit = TRUE)
 
+    open_import <- function() {
+      if (identical(presentation, "wizard")) {
+        select_wizard_step("source")
+      } else {
+        accordion_panel_set("import_accordion", "import_specs")
+      }
+      invisible(TRUE)
+    }
+
     list(
       add_dataset = add_dataset,
       focus_variable = reactive(focus_selection()),
@@ -1522,12 +1786,19 @@ importServer <- function(id, runtime, color_mode) {
       result = reactive(import_task$result()),
       status = import_task$status,
       error = import_task$error,
-      cancel = import_task$cancel
+      cancel = import_task$cancel,
+      open_import = open_import
     )
   })
 }
 
-import_app <- function(max_upload_mb = 200, workers = 1, ...) {
+import_app <- function(
+  max_upload_mb = 200,
+  workers = 1,
+  presentation = c("accordion", "wizard"),
+  ...
+) {
+  presentation <- match.arg(presentation)
   runtime_profile <- resolve_runtime_profile(
     "local",
     max_upload_mb = max_upload_mb,
@@ -1588,7 +1859,11 @@ import_app <- function(max_upload_mb = 200, workers = 1, ...) {
         uiOutput("fixture_status"),
         tableOutput("fixture_summary")
       ),
-      importUI("import"),
+      if (identical(presentation, "wizard")) {
+        importWizardUI("import")
+      } else {
+        importUI("import")
+      },
       card(
         card_header("Imported dataset result", container = h2),
         verbatimTextOutput("returned")
@@ -1608,7 +1883,8 @@ import_app <- function(max_upload_mb = 200, workers = 1, ...) {
     imported <- importServer(
       "import",
       runtime = runtime,
-      color_mode = reactive("light")
+      color_mode = reactive("light"),
+      presentation = presentation
     )
     fixture_record <- reactiveVal(NULL)
     fixture_error <- reactiveVal(NULL)

@@ -42,6 +42,12 @@ LightLogWeb <- function(
     max_upload_mb = max_upload_mb,
     workers = workers
   )
+  import_presentation <- "wizard"
+  production_import_ui <- switch(
+    import_presentation,
+    wizard = importWizardUI,
+    accordion = importUI
+  )
 
   ui <- lightlogweb_page(page_navbar(
     title = lightlogweb_wordmark(),
@@ -75,7 +81,7 @@ LightLogWeb <- function(
             "this session."
           )
         ),
-        importUI("import")
+        production_import_ui("import")
       )
     ),
     nav_panel(
@@ -113,7 +119,8 @@ LightLogWeb <- function(
     imported <- importServer(
       "import",
       runtime = runtime,
-      color_mode = color_mode
+      color_mode = color_mode,
+      presentation = import_presentation
     )
     manager <- datasetManagerServer(
       "datasets",
@@ -188,7 +195,7 @@ LightLogWeb <- function(
         event$type,
         open_import = {
           nav_select("main_nav", selected = "Import")
-          accordion_panel_open("import-import_accordion", "import_specs")
+          imported$open_import()
         },
         load_sample = {
           record <- tryCatch(sample_dataset_record(), error = identity)
@@ -235,7 +242,7 @@ LightLogWeb <- function(
       req(event)
       if (identical(event$type, "open_import")) {
         nav_select("main_nav", selected = "Import")
-        accordion_panel_open("import-import_accordion", "import_specs")
+        imported$open_import()
       }
     }) |>
       bindEvent(dashboard$event(), ignoreInit = TRUE)

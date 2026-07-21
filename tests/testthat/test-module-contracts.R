@@ -69,6 +69,7 @@ test_that("import validation failures are returned as recoverable task state", {
     args = list(runtime = runtime, color_mode = shiny::reactive("light")),
     {
       returned <- session$getReturned()
+      expect_type(returned$open_import, "closure")
       session$setInputs(
         device = "",
         tz = "UTC",

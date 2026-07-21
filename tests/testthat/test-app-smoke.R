@@ -8,6 +8,12 @@ test_that("the packaged application can be constructed", {
     names(formals(LightLogWeb)),
     c("profile", "max_upload_mb", "workers")
   )
+
+  app_environment <- environment(app$serverFuncSource())
+  production_html <- htmltools::renderTags(app_environment$ui)$html
+  expect_identical(app_environment$import_presentation, "wizard")
+  expect_match(production_html, "llw-import-wizard", fixed = TRUE)
+  expect_false(grepl("import_accordion", production_html, fixed = TRUE))
 })
 
 test_that("every changed module retains a constructible development app", {
@@ -15,7 +21,8 @@ test_that("every changed module retains a constructible development app", {
     core_architecture_app(),
     dataset_manager_app(),
     dataset_dashboard_app(),
-    import_app()
+    import_app(),
+    import_wizard_app()
   )
 
   expect_true(all(vapply(apps, inherits, logical(1), "shiny.appobj")))

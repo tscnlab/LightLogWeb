@@ -430,6 +430,21 @@ Plain and ZIP-wrapped VEET fixtures from both the original and current export
 formats produce equivalent imported payloads, with safe worker-side extraction
 and the original archive retained for source provenance.
 
+Production-presentation addendum (2026-07-21): after owner review in the
+isolated showcase, the four-step Source, Details & IDs, Check & import, and
+Review wizard became the production `LightLogWeb()` import view. It retains the
+accepted importer, validation, progress, quality, and returned-dataset
+contracts; step completion now reflects actual input readiness and Review is
+gated on a completed import. The legacy accordion remains available only as a
+development comparison. `GENEActiv_GGIR` remains listed for discoverability,
+but the app explains that this route is currently provided only by LightLogR,
+clears the unsupported selection, and restores the full device list. This UI
+promotion does not impute observations or change the separation of explicit
+missing values, implicit gaps, and off-grid observations. All available tests
+passed after promotion; the two clean-mirai-daemon checks were skipped in this
+runtime. `R CMD check` completed with 0 errors, 0 warnings, and one
+environment-only note because it could not verify the current time.
+
 1. Salvage useful current import behavior only where it passes the new
    contracts; replace temporary-file renaming and mutable metadata coupling.
 2. Enforce a 200 MiB per-action ceiling for the hosted profile and document

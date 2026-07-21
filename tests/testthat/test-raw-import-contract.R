@@ -9,6 +9,15 @@ test_that("the browser extension adapter covers every current LightLogR device",
   expect_true("xls" %in% contract$Clouclip)
 })
 
+test_that("the app device selector can restore every device after a reset", {
+  choices <- raw_import_device_choices()
+
+  expect_identical(unname(choices[[1L]]), "")
+  expect_identical(names(choices)[[1L]], "Choose a device")
+  expect_setequal(unname(choices[-1L]), raw_import_devices())
+  expect_true("GENEActiv_GGIR" %in% unname(choices))
+})
+
 test_that("device versions come from the current LightLogR public registry", {
   versions <- raw_import_supported_versions("ActLumus")
 
