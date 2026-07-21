@@ -57,7 +57,8 @@ old dependency choices are not inherited by default.
 - Keep project-plan.md under version control and out of package archives.
 - The owner opened the GLC/glcdp implementation gate on 2026-07-17. GLC source
   support is part of v1 and is implemented after the raw-import foundation,
-  before dataset management and metadata-dependent analysis interfaces.
+  source-agnostic dataset management, and scalable dashboard. It precedes
+  metadata integration and preprocessing.
 - Treat time-aligned multi-stream merging and multi-input metrics as a
   post-v1 expansion. Row-wise append and the curated single-measurement-variable
   metric set remain in v1.
@@ -492,11 +493,67 @@ Milestone evidence:
 - dev/run-milestone-3-large-file-acceptance.R
 - dev/run-testdevice-import-acceptance.R
 
-### Milestone 4 — GLC discovery, selective import, and package download
+### Milestone 4 — Dataset library and safe append merging
 
-1. Add the reviewed glcdp release to the production dependency graph only
-   after Milestone 1 acceptance. During GitHub-only development, install and
-   lock the exact reviewed commit; make the later CRAN transition a tested
+Sequencing boundary: implement this milestone with canonical raw imports and
+test datasets. GLC-specific source integration and metadata-derived labels,
+units, and crosslinks are deferred to Milestones 6 and 7. Missing metadata must
+remain visible as unknown and must never be treated as evidence of
+compatibility.
+
+1. Switch, rename, delete with confirmation, duplicate, and reset datasets.
+   Display names are labels, not storage keys.
+2. Show available source provenance, size, participants, span, recipe revision,
+   warning state, and explicit unknowns.
+3. Implement a row-wise append preview wizard with explicit mappings for
+   participant, datetime, primary measurement, and optional columns.
+4. Compare available types, units, devices, source timezones, sampling,
+   overlaps, duplicates, missing columns, and coercions.
+5. Preserve absolute instants; canonicalize merged instants in UTC while
+   retaining source timezone and derived local-time context.
+6. Use a union of columns. Combine measurement columns only after explicit
+   compatible-quantity and unit mapping. Unknown units require an explicit user
+   decision and warning; they are not assumed compatible.
+7. Require an explicit duplicate/overlap policy.
+8. Create a new immutable dataset with complete source/mapping provenance and
+   leave sources unchanged.
+
+Acceptance gate: append handles matching and differing schemas, participants,
+timezones, overlaps, devices, and absent optional metadata without losing
+source information or assuming comparability.
+
+### Milestone 5 — Scalable dashboard and raw/prepared-data table
+
+Sequencing boundary: implement this milestone for canonical imports with empty
+recipe and grouping states and without requiring GLC or optional metadata.
+GLC-specific provenance panels and metadata-driven labels, units, and
+crosslinks are added in Milestones 6 and 7 without changing the generic
+dashboard and table contracts.
+
+1. Show available provenance, participant/date span, sampling, variable
+   inventory, missingness, gaps, irregularity, duplicates, DST, daily coverage,
+   active recipe, and grouping. Empty or unavailable states must be explicit.
+2. Choose detailed timelines for small/short data and overview/availability
+   displays for many participants or long spans.
+3. Add participant, date/window, and facet-page controls with explicit
+   show-all warnings.
+4. Bound preview plot data and label reductions.
+5. Add a server-side DT table for the active data with search, sort,
+   visibility, pagination, and type-aware formatting. Before preprocessing is
+   available, the immutable canonical base is the active prepared result and
+   the empty recipe is shown explicitly.
+6. Keep raw and prepared views visually distinct and show the recipe revision,
+   including the unchanged empty-recipe state.
+
+Acceptance gate: the small sample and a synthetic 10-participant,
+one-month, one-minute dataset remain interpretable without repeatedly sending
+all data to the browser and without requiring GLC or optional metadata.
+
+### Milestone 6 — GLC discovery, selective import, and package download
+
+1. Add the reviewed glcdp release to the production dependency graph at the
+   start of this milestone. During GitHub-only development, install and lock
+   the exact reviewed commit; make the later CRAN transition a tested
    dependency update rather than an automatic source switch.
 2. Build registry discovery with glc_packages and glc_search_packages. Show
    repository, registry id, current validation status, latest passing revision,
@@ -535,54 +592,38 @@ Milestone evidence:
 10. Preview glc_collect compatibility before Apply. If selected file groups
     cannot be collected together, explain the dimensions that differ and offer
     compatible partitions as separate new LightLogWeb datasets. Do not coerce
-    across the glcdp compatibility boundary; later append workflows remain
-    explicit.
+    across the glcdp compatibility boundary; the established append workflow
+    remains explicit.
 11. Require Apply for the committed full read. Preview rows are never promoted
     silently to a complete dataset. Date-window filtering occurs from the
     immutable imported base: the current glcdp API cannot push a date filter
     into a monolithic remote file, so the UI must state when a requested date
     range will not reduce network transfer. Add pushdown only when glcdp exposes
     it publicly.
-12. Offer download of the selected source package subset through glc_download,
+12. Integrate committed GLC datasets with the existing dataset library and
+    dashboard. Add GLC-specific source, validation, revision, and provenance
+    views without changing their source-agnostic module contracts.
+13. Offer download of the selected source package subset through glc_download,
     including its metadata closure, hashes, immutable revision, and
     glcdp-manifest.json. Clarify that this preserves the validated source
     metadata and does not incorporate a LightLogWeb metadata overlay.
-13. Map no-passing-revision, non-passing revision, experimental or unsupported
+14. Map no-passing-revision, non-passing revision, experimental or unsupported
     schema, malformed registry, missing resource/path, unsupported format,
     parsing, timezone, incompatible collection, HTTP, Git-LFS, quota/auth,
     checksum, existing file, disk, cancellation, and stale-result conditions
     to recoverable app states.
-14. Use LightLogWeb-owned local GLC fixtures and local registry JSON in routine
+15. Use LightLogWeb-owned local GLC fixtures and local registry JSON in routine
     tests. Mock transport where required and keep a validated public-registry
     journey opt-in. Do not depend on glcdp's unexported test fixtures.
 
 Acceptance gate: normal discovery, registry refresh failure, the Guidolin deep
 link, malformed/repeated queries, no passing revision, offline access, metadata
 preview, bounded preview, partial and full import, incompatible selections,
-Git-LFS failure, and subset download are safe and reproducible; no data transfer
-or dataset creation occurs without the relevant confirmation.
+Git-LFS failure, subset download, and dataset-library/dashboard integration are
+safe and reproducible; no data transfer or dataset creation occurs without the
+relevant confirmation.
 
-### Milestone 5 — Dataset library and safe append merging
-
-1. Switch, rename, delete with confirmation, duplicate, and reset datasets.
-   Display names are labels, not storage keys.
-2. Show source, size, participants, span, recipe revision, and warning state.
-3. Implement a row-wise append preview wizard with explicit mappings for
-   participant, datetime, primary measurement, and optional columns.
-4. Compare types, units, devices, source timezones, sampling, overlaps,
-   duplicates, missing columns, and coercions.
-5. Preserve absolute instants; canonicalize merged instants in UTC while
-   retaining source timezone and derived local-time context.
-6. Use a union of columns. Combine measurement columns only after explicit
-   compatible-quantity and unit mapping.
-7. Require an explicit duplicate/overlap policy.
-8. Create a new immutable dataset with complete source/mapping provenance and
-   leave sources unchanged.
-
-Acceptance gate: append handles matching and differing schemas, participants,
-timezones, overlaps, and devices without losing source information.
-
-### Milestone 6 — Metadata essentials and settings separation
+### Milestone 7 — Metadata essentials and settings separation
 
 1. Separate factual metadata from analysis/view settings and transformations.
 2. Maintain two factual-metadata layers for GLC sources: the immutable metadata
@@ -605,35 +646,22 @@ timezones, overlaps, and devices without losing source information.
 7. Permit core analyses with no optional metadata, using raw names and “unit
    not specified.” Use factual labels/units in outputs when present, and make
    overlay precedence visible.
-8. Validate overlay coordinates, IANA timezones, units, references, and
+8. Add metadata-driven labels, units, participant/device links, and metadata
+   crosslinks to the existing dataset library, dashboard, and table. Preserve
+   the raw-name and “unit not specified” fallbacks, and invalidate only outputs
+   that actually depend on changed metadata.
+9. Validate overlay coordinates, IANA timezones, units, references, and
    participant IDs inline without changing the immutable source layer.
-9. Export the overlay as LightLogWeb JSON or flattened CSV. Keep generation of
-   an edited standards-compliant GLC package disabled with a capability message
-   until glcdp provides a public write-and-validate API; do not recreate schema
-   serialization in LightLogWeb.
+10. Export the overlay as LightLogWeb JSON or flattened CSV. Keep generation
+    of an edited standards-compliant GLC package disabled with a capability
+    message until glcdp provides a public write-and-validate API; do not
+    recreate schema serialization in LightLogWeb.
 
 Acceptance gate: complete, partial, and absent optional metadata all permit
 valid analysis; source metadata and overlays remain distinguishable; unknown
-fields survive project save/reload; and display-only edits do not mutate data
-or invalidate unrelated results.
-
-### Milestone 7 — Scalable dashboard and prepared-data table
-
-1. Show provenance, participant/date span, sampling, variable inventory,
-   missingness, gaps, irregularity, duplicates, DST, daily coverage, active
-   recipe, and grouping.
-2. Choose detailed timelines for small/short data and overview/availability
-   displays for many participants or long spans.
-3. Add participant, date/window, and facet-page controls with explicit
-   show-all warnings.
-4. Bound preview plot data and label reductions.
-5. Add a server-side DT prepared-data table with search, sort, visibility,
-   pagination, and type-aware formatting.
-6. Keep raw and prepared views visually distinct and show the recipe revision.
-
-Acceptance gate: the small sample and a synthetic 10-participant,
-one-month, one-minute dataset remain interpretable without repeatedly sending
-all data to the browser.
+fields survive project save/reload; display-only edits do not mutate data or
+invalidate unrelated results; and the earlier source-agnostic library and
+dashboard remain valid when metadata are absent.
 
 ### Milestone 8 — Recipe-based preprocessing
 
