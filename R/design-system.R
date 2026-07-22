@@ -266,7 +266,7 @@ llw_view_header <- function(eyebrow, title, description = NULL) {
 llw_status_spec <- function(state) {
   assert_scalar_string(state, "state")
   specs <- list(
-    idle = list(label = "Ready", icon = "circle", tone = "muted"),
+    idle = list(label = "Ready", icon = "info-circle", tone = "muted"),
     queued = list(
       label = "Queued",
       icon = "hourglass-split",

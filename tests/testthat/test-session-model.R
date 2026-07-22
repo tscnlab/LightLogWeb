@@ -84,6 +84,55 @@ test_that("stable IDs decouple selection from display names", {
   expect_identical(session_dataset(model, first$id)$display_name, "Renamed")
 })
 
+test_that("dataset names are uniquely enforced after trimming and case folding", {
+  first <- m1_record("Exposure study")
+  conflicting <- m1_record("  exposure STUDY  ")
+  other <- m1_record("Other dataset")
+  model <- session_add_dataset(new_session_model("hosted"), first)
+
+  expect_identical(conflicting$display_name, "exposure STUDY")
+  expect_error(
+    session_add_dataset(model, conflicting),
+    class = "llw_dataset_name_conflict_error",
+    regexp = "already exists"
+  )
+
+  model <- session_add_dataset(model, other)
+  renamed <- rename_dataset_record(other, "EXPOSURE STUDY")
+  expect_error(
+    session_replace_dataset(model, renamed),
+    class = "llw_dataset_name_conflict_error"
+  )
+  expect_identical(
+    dataset_display_name_conflict(" exposure study ", "Exposure study"),
+    "Exposure study"
+  )
+})
+
+test_that("name-conflict retries preserve event intent and source records", {
+  record <- m1_record("Existing name")
+  add_event <- new_session_event("add", value = record)
+  renamed_add <- session_event_with_display_name(
+    add_event,
+    "  New incoming name  "
+  )
+
+  expect_identical(renamed_add$type, "add")
+  expect_identical(renamed_add$value$display_name, "New incoming name")
+  expect_identical(record$display_name, "Existing name")
+  expect_identical(renamed_add$value$id, record$id)
+
+  rename_event <- new_session_event(
+    "rename",
+    dataset_id = record$id,
+    value = "Conflicting name"
+  )
+  renamed_retry <- session_event_with_display_name(rename_event, "Unique name")
+  expect_identical(renamed_retry$type, "rename")
+  expect_identical(renamed_retry$dataset_id, record$id)
+  expect_identical(renamed_retry$value, "Unique name")
+})
+
 test_that("separate Shiny sessions do not share dataset state", {
   first_session_model <- NULL
   server <- function(input, output, session) {

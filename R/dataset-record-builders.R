@@ -139,6 +139,225 @@ sample_dataset_record <- function() {
   )
 }
 
+development_devicefile_path <- function(
+  key = c("actlumus_synthetic", "actlumus_4789"),
+  project_root = NULL
+) {
+  key <- match.arg(key)
+  if (is.null(project_root)) {
+    project_root <- lightlogweb_development_root()
+  } else {
+    assert_scalar_string(project_root, "project_root")
+  }
+  switch(
+    key,
+    actlumus_synthetic = file.path(
+      project_root,
+      "dev",
+      "fixtures",
+      "raw",
+      "P01_actlumus.txt"
+    ),
+    actlumus_4789 = file.path(
+      project_root,
+      "testdevices",
+      "ActLumus",
+      "4789.txt"
+    )
+  )
+}
+
+dataset_example_catalog <- function(project_root = NULL) {
+  if (is.null(project_root)) {
+    project_root <- lightlogweb_development_root()
+  } else {
+    assert_scalar_string(project_root, "project_root")
+  }
+  paths <- c(
+    sample = NA_character_,
+    actlumus_synthetic = development_devicefile_path(
+      "actlumus_synthetic",
+      project_root
+    ),
+    actlumus_4789 = development_devicefile_path(
+      "actlumus_4789",
+      project_root
+    ),
+    iztech = development_large_dataset_path(project_root)
+  )
+  available <- is.na(paths) | file.exists(paths)
+  data.frame(
+    key = names(paths),
+    label = c(
+      "LightLogR test data (small)",
+      "ActLumus synthetic device file (small)",
+      "ActLumus 4789 provided device file",
+      "IZTECH light glasses (151,200 rows)"
+    ),
+    description = c(
+      paste(
+        "Deterministic LightLogR sample with two participants, MEDI metadata,",
+        "and Europe/Berlin source time."
+      ),
+      paste(
+        "Already configured import of the fictional ActLumus file under",
+        "dev/fixtures; useful for fast append tests."
+      ),
+      paste(
+        "Already configured development import of the repository-local",
+        "ActLumus 4789 export (4,686 rows in the reviewed checkout)."
+      ),
+      paste(
+        "Pinned MeLiDos IZTECH development snapshot with 17 participants",
+        "and Europe/Istanbul source time."
+      )
+    ),
+    available = available,
+    unavailable_reason = ifelse(
+      available,
+      NA_character_,
+      "This optional development file is not present in the checkout."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+dataset_example_choices <- function(project_root = NULL) {
+  catalog <- dataset_example_catalog(project_root)
+  catalog <- catalog[catalog$available, , drop = FALSE]
+  stats::setNames(catalog$key, catalog$label)
+}
+
+development_devicefile_dataset_record <- function(
+  path,
+  display_name,
+  source_timezone,
+  example_key,
+  version = "default"
+) {
+  arguments <- list(
+    path = path,
+    display_name = display_name,
+    source_timezone = source_timezone,
+    example_key = example_key,
+    version = version
+  )
+  for (argument in names(arguments)) {
+    assert_scalar_string(arguments[[argument]], argument)
+  }
+  if (!file.exists(path) || dir.exists(path)) {
+    abort_llw(
+      paste0("Development device file is missing at `", path, "`."),
+      type = "unavailable_feature",
+      public_message = paste(
+        "That optional ready-to-use device example is unavailable in this checkout.",
+        "Choose another example or use the import workflow."
+      )
+    )
+  }
+  stage_root <- tempfile("llw-ready-device-")
+  dir.create(stage_root, recursive = TRUE, mode = "0700")
+  on.exit(unlink(stage_root, recursive = TRUE, force = TRUE), add = TRUE)
+  staged <- stage_import_files(
+    data.frame(
+      name = basename(path),
+      datapath = path,
+      stringsAsFactors = FALSE
+    ),
+    stage_root
+  )
+  request <- new_raw_import_request(
+    device = "ActLumus",
+    staged_files = staged,
+    timezone = source_timezone,
+    not_before = as.Date("2001-01-01"),
+    version = version,
+    id_mode = "automated",
+    max_bytes = 200 * 1024^2
+  )
+  result <- suppressWarnings(raw_import_worker(request, spec = NULL))
+  eligible <- result$eligibility$variable[result$eligibility$eligible]
+  if (length(eligible) == 0L) {
+    abort_llw(
+      "The ready-to-use device file has no eligible primary measurement.",
+      type = "validation"
+    )
+  }
+  primary <- if ("MEDI" %in% eligible) "MEDI" else eligible[[1L]]
+  record <- new_imported_dataset_record(list(
+    name = display_name,
+    data = result$data,
+    device = "ActLumus",
+    version = request$preflight$version,
+    tz = source_timezone,
+    variable = primary,
+    import_arguments = raw_import_manifest_arguments(request),
+    source_files = request$source_files,
+    preflight = result$preflight,
+    quality = result$quality,
+    eligibility = result$eligibility
+  ))
+  if (identical(primary, "MEDI")) {
+    record$factual_metadata$variables$MEDI <- list(
+      label = "Melanopic equivalent daylight illuminance",
+      unit = "lux",
+      calibration = "Unknown; retain source- and device-specific interpretation"
+    )
+  }
+  record$source_manifest$details$development_example <- list(
+    key = example_key,
+    configured_source_timezone = source_timezone,
+    note = paste(
+      "Development-only one-click import configuration; the source time zone",
+      "is a recorded fixture assumption, not inferred from file bytes."
+    )
+  )
+  record$provenance$development_example <- list(
+    key = example_key,
+    loader = "LightLogWeb::development_devicefile_dataset_record",
+    source_timezone_decision = source_timezone
+  )
+  validate_dataset_record(record)
+}
+
+load_dataset_example <- function(key, project_root = NULL) {
+  assert_scalar_string(key, "key")
+  catalog <- dataset_example_catalog(project_root)
+  selected <- catalog[catalog$key == key, , drop = FALSE]
+  if (nrow(selected) != 1L) {
+    abort_llw(
+      paste0("Unknown ready-to-use dataset key `", key, "`."),
+      type = "validation"
+    )
+  }
+  if (!isTRUE(selected$available[[1L]])) {
+    abort_llw(
+      selected$unavailable_reason[[1L]],
+      type = "unavailable_feature",
+      public_message = selected$unavailable_reason[[1L]]
+    )
+  }
+  switch(
+    key,
+    sample = sample_dataset_record(),
+    actlumus_synthetic = development_devicefile_dataset_record(
+      path = development_devicefile_path("actlumus_synthetic", project_root),
+      display_name = "ActLumus synthetic device-file example",
+      source_timezone = "UTC",
+      example_key = key
+    ),
+    actlumus_4789 = development_devicefile_dataset_record(
+      path = development_devicefile_path("actlumus_4789", project_root),
+      display_name = "ActLumus 4789 device-file example",
+      source_timezone = "Europe/Berlin",
+      example_key = key
+    ),
+    iztech = melidos_iztech_dataset_record(
+      development_large_dataset_path(project_root)
+    )
+  )
+}
+
 lightlogweb_development_root <- function(start = getwd()) {
   assert_scalar_string(start, "start")
   current <- normalizePath(start, winslash = "/", mustWork = TRUE)

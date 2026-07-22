@@ -93,6 +93,15 @@ LightLogWeb <- function(
         datasetDashboardUI("dashboard")
       )
     ),
+    nav_panel(
+      "Append",
+      value = "append",
+      tags$main(
+        class = "llw-main-shell",
+        `aria-label` = "Append session datasets",
+        append_merge_ui("append")
+      )
+    ),
     nav_spacer(),
     nav_item(
       tags$div(
@@ -132,15 +141,37 @@ LightLogWeb <- function(
       dataset = store$selected_dataset,
       active_panel = reactive(input$main_nav)
     )
+    appended <- append_merge_server(
+      "append",
+      datasets = store$datasets,
+      selected_dataset_id = store$selected_dataset_id
+    )
+    pending_name_retry <- reactiveVal(NULL)
 
-    dispatch_safely <- function(event, success = NULL) {
+    dispatch_safely <- function(event, success = NULL, on_success = NULL) {
       tryCatch(
         {
           store$dispatch(event)
-          if (!is.null(success)) {
-            showNotification(success, type = "message")
+          success_message <- if (is.function(success)) {
+            success(event)
+          } else {
+            success
           }
+          if (!is.null(success_message)) {
+            showNotification(success_message, type = "message")
+          }
+          if (is.function(on_success)) on_success()
           TRUE
+        },
+        llw_dataset_name_conflict_error = function(cnd) {
+          pending_name_retry(list(
+            event = event,
+            success = success,
+            on_success = on_success,
+            condition = cnd
+          ))
+          showModal(dataset_name_conflict_dialog(cnd))
+          FALSE
         },
         llw_error = function(cnd) {
           showNotification(
@@ -163,6 +194,44 @@ LightLogWeb <- function(
     }
 
     observe({
+      context <- pending_name_retry()
+      req(context, input$dataset_name_conflict_apply > 0)
+      name <- trimws(input$dataset_name_conflict_value %||% "")
+      if (!nzchar(name)) {
+        showModal(dataset_name_conflict_dialog(
+          context$condition,
+          value = name,
+          error = "Enter a non-empty dataset name."
+        ))
+        return()
+      }
+      retry_event <- tryCatch(
+        session_event_with_display_name(context$event, name),
+        error = identity
+      )
+      if (inherits(retry_event, "error")) {
+        mapped <- normalize_task_error(retry_event, "preparation")
+        showNotification(
+          llw_public_message(mapped),
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+      if (
+        dispatch_safely(
+          retry_event,
+          success = context$success,
+          on_success = context$on_success
+        )
+      ) {
+        pending_name_retry(NULL)
+        removeModal()
+      }
+    }) |>
+      bindEvent(input$dataset_name_conflict_apply, ignoreInit = TRUE)
+
+    observe({
       value <- imported$add_dataset()
       record <- tryCatch(
         new_imported_dataset_record(value),
@@ -177,14 +246,19 @@ LightLogWeb <- function(
         )
         return()
       }
-      if (
-        dispatch_safely(
-          new_session_event("add", value = record),
-          paste0("Dataset `", record$display_name, "` added to this session.")
-        )
-      ) {
-        nav_select("main_nav", selected = "dashboard")
-      }
+      dispatch_safely(
+        new_session_event("add", value = record),
+        success = function(event) {
+          paste0(
+            "Dataset `",
+            event$value$display_name,
+            "` added to this session."
+          )
+        },
+        on_success = function() {
+          nav_select("main_nav", selected = "dashboard")
+        }
+      )
     }) |>
       bindEvent(imported$add_dataset(), ignoreInit = TRUE)
 
@@ -197,8 +271,11 @@ LightLogWeb <- function(
           nav_select("main_nav", selected = "Import")
           imported$open_import()
         },
-        load_sample = {
-          record <- tryCatch(sample_dataset_record(), error = identity)
+        load_example = {
+          record <- tryCatch(
+            load_dataset_example(event$value),
+            error = identity
+          )
           if (inherits(record, "error")) {
             mapped <- normalize_task_error(record, "raw_import")
             showNotification(
@@ -208,13 +285,27 @@ LightLogWeb <- function(
             )
             return()
           }
-          if (
-            dispatch_safely(
-              new_session_event("add", value = record),
-              "Test dataset added to this session."
+          dispatch_safely(
+            new_session_event("add", value = record),
+            success = function(event) {
+              paste0(
+                "Example `",
+                event$value$display_name,
+                "` added to this session."
+              )
+            },
+            on_success = function() {
+              nav_select("main_nav", selected = "dashboard")
+            }
+          )
+        },
+        open_append = {
+          nav_select("main_nav", selected = "append")
+          if (length(store$datasets()) < 2L) {
+            showNotification(
+              "Load or import at least two datasets before previewing an append.",
+              type = "warning"
             )
-          ) {
-            nav_select("main_nav", selected = "dashboard")
           }
         },
         select = dispatch_safely(new_session_event(
@@ -229,6 +320,26 @@ LightLogWeb <- function(
           ),
           "Dataset display name updated."
         ),
+        duplicate = {
+          source <- session_dataset(store$model(), event$dataset_id)
+          dispatch_safely(
+            new_session_event(
+              "add",
+              value = duplicate_dataset_record(source, event$value)
+            ),
+            success = function(session_event) {
+              paste0(
+                "Created `",
+                session_event$value$display_name,
+                "` with a new stable ID."
+              )
+            }
+          )
+        },
+        reset = dispatch_safely(
+          new_session_event("reset", dataset_id = event$dataset_id),
+          "Prepared data reset to the immutable canonical source."
+        ),
         remove = dispatch_safely(
           new_session_event("remove", dataset_id = event$dataset_id),
           "Dataset removed from this session."
@@ -236,6 +347,25 @@ LightLogWeb <- function(
       )
     }) |>
       bindEvent(manager$event(), ignoreInit = TRUE)
+
+    observe({
+      record <- appended$add_dataset()
+      req(record)
+      dispatch_safely(
+        new_session_event("add", value = record),
+        success = function(event) {
+          paste0(
+            "Appended dataset `",
+            event$value$display_name,
+            "` created; source datasets were left unchanged."
+          )
+        },
+        on_success = function() {
+          nav_select("main_nav", selected = "dashboard")
+        }
+      )
+    }) |>
+      bindEvent(appended$add_dataset(), ignoreInit = TRUE)
 
     observe({
       event <- dashboard$event()

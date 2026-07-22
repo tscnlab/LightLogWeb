@@ -4,6 +4,28 @@ These fixtures exercise the raw-import boundary without introducing network
 access into routine tests. The complete `dev/` directory is excluded from R
 package builds.
 
+## Ready-to-use Milestone 4 examples
+
+The session dataset sidebar exposes a one-click development catalog so the
+dataset-library and append workflow can be exercised without repeating the
+interactive import form:
+
+- the installed `LightLogR::sample.data.environment` object;
+- the fictional `raw/P01_actlumus.txt` export, imported with the reviewed
+  development setting `UTC`;
+- the optional repository-local `testdevices/ActLumus/4789.txt` export,
+  imported with the reviewed development setting `Europe/Berlin`; and
+- the pinned IZTECH snapshot documented below.
+
+The two device-file entries still pass through the same validated LightLogR
+import boundary, but device/version/timezone choices are already configured and
+no import form is shown. Their configured source time zones are fixture
+decisions, not values inferred from file bytes. Every resulting record keeps
+the filename, checksum, import arguments, device, source timezone, quality
+review, and variable eligibility. The optional `testdevices/` and complete
+`dev/` trees remain excluded from package builds, so an installed production
+package may expose only the package sample unless separately provisioned.
+
 ## IZTECH light-glasses snapshot
 
 `melidos-iztech-light-glasses-1minute.rds` is a development snapshot of the

@@ -213,6 +213,65 @@ serialize_dataset_data <- function(data, arg = "data") {
   serialize(data, connection = NULL, version = 3)
 }
 
+clean_dataset_display_name <- function(display_name) {
+  assert_scalar_string(display_name, "display_name")
+  display_name <- trimws(display_name)
+  if (!nzchar(display_name)) {
+    abort_llw(
+      "Dataset display names cannot be empty or whitespace only.",
+      type = "validation",
+      public_message = "Enter a non-empty dataset name."
+    )
+  }
+  display_name
+}
+
+dataset_display_name_key <- function(display_name) {
+  tolower(clean_dataset_display_name(display_name))
+}
+
+dataset_display_name_conflict <- function(display_name, existing_names) {
+  display_name <- clean_dataset_display_name(display_name)
+  assert_character_vector(existing_names, "existing_names")
+  if (length(existing_names) == 0L) return(NULL)
+  keys <- vapply(existing_names, dataset_display_name_key, character(1))
+  index <- match(dataset_display_name_key(display_name), keys)
+  if (is.na(index)) NULL else existing_names[[index]]
+}
+
+dataset_name_conflict_message <- function(display_name, existing_name) {
+  display_name <- clean_dataset_display_name(display_name)
+  existing_name <- clean_dataset_display_name(existing_name)
+  paste0(
+    "Dataset name `",
+    display_name,
+    "` is already in use as `",
+    existing_name,
+    "`. Choose a different name; surrounding spaces and capitalization do not make names unique."
+  )
+}
+
+assert_dataset_display_name_available <- function(
+  display_name,
+  existing_names
+) {
+  display_name <- clean_dataset_display_name(display_name)
+  conflict <- dataset_display_name_conflict(display_name, existing_names)
+  if (!is.null(conflict)) {
+    abort_llw(
+      paste0("Dataset display name `", display_name, "` already exists."),
+      type = "validation",
+      public_message = dataset_name_conflict_message(display_name, conflict),
+      diagnostics = list(
+        attempted_name = display_name,
+        existing_name = conflict
+      ),
+      subclass = "llw_dataset_name_conflict_error"
+    )
+  }
+  invisible(display_name)
+}
+
 new_dataset_record <- function(
   raw_data,
   display_name,
@@ -230,7 +289,7 @@ new_dataset_record <- function(
       type = "validation"
     )
   }
-  assert_scalar_string(display_name, "display_name")
+  display_name <- clean_dataset_display_name(display_name)
   if (!inherits(source_manifest, "llw_source_manifest")) {
     abort_llw(
       "`source_manifest` must be created by `new_source_manifest()`.",
@@ -316,6 +375,17 @@ validate_dataset_record <- function(record) {
     abort_llw("Dataset record ID is invalid.", type = "validation")
   }
   assert_scalar_string(record$display_name, "record$display_name")
+  if (
+    !identical(
+      record$display_name,
+      clean_dataset_display_name(record$display_name)
+    )
+  ) {
+    abort_llw(
+      "Dataset display names cannot contain surrounding whitespace.",
+      type = "validation"
+    )
+  }
   if (!is.raw(record$raw_payload) || !is.raw(record$prepared_payload)) {
     abort_llw(
       "Dataset payloads must be serialized raw vectors.",
@@ -682,7 +752,7 @@ undo_dataset_record <- function(record) {
 
 rename_dataset_record <- function(record, display_name) {
   record <- validate_dataset_record(record)
-  assert_scalar_string(display_name, "display_name")
+  display_name <- clean_dataset_display_name(display_name)
   if (identical(record$display_name, display_name)) {
     return(record)
   }
@@ -734,9 +804,17 @@ validate_session_model <- function(model) {
       )
     }
     display_names <- vapply(records, `[[`, character(1), "display_name")
-    if (anyDuplicated(display_names)) {
+    display_name_keys <- vapply(
+      display_names,
+      dataset_display_name_key,
+      character(1)
+    )
+    if (anyDuplicated(display_name_keys)) {
       abort_llw(
-        "Dataset display names must be unique within a session.",
+        paste(
+          "Dataset display names must be unique within a session after",
+          "trimming whitespace and ignoring capitalization."
+        ),
         type = "validation"
       )
     }
@@ -785,16 +863,7 @@ session_add_dataset <- function(model, record, select = TRUE) {
     character(1),
     "display_name"
   )
-  if (record$display_name %in% existing_names) {
-    abort_llw(
-      paste0(
-        "Dataset display name `",
-        record$display_name,
-        "` already exists."
-      ),
-      type = "validation"
-    )
-  }
+  assert_dataset_display_name_available(record$display_name, existing_names)
   model$datasets[[record$id]] <- record
   if (select || is.null(model$selected_dataset_id)) {
     model$selected_dataset_id <- record$id
@@ -817,16 +886,7 @@ session_replace_dataset <- function(model, record) {
     character(1),
     "display_name"
   )
-  if (record$display_name %in% other_names) {
-    abort_llw(
-      paste0(
-        "Dataset display name `",
-        record$display_name,
-        "` already exists."
-      ),
-      type = "validation"
-    )
-  }
+  assert_dataset_display_name_available(record$display_name, other_names)
   model$datasets[[record$id]] <- record
   validate_session_model(model)
 }
@@ -896,6 +956,41 @@ new_session_event <- function(type, dataset_id = NULL, value = NULL) {
   )
   assert_serializable_value(event, "session event")
   event
+}
+
+session_event_with_display_name <- function(event, display_name) {
+  if (!inherits(event, "llw_session_event")) {
+    abort_llw(
+      "`event` must be created by `new_session_event()`.",
+      type = "validation"
+    )
+  }
+  display_name <- clean_dataset_display_name(display_name)
+  switch(
+    event$type,
+    add = {
+      record <- event$value
+      record$display_name <- display_name
+      new_session_event("add", value = validate_dataset_record(record))
+    },
+    replace = new_session_event(
+      "replace",
+      value = rename_dataset_record(event$value, display_name)
+    ),
+    rename = new_session_event(
+      "rename",
+      dataset_id = event$dataset_id,
+      value = display_name
+    ),
+    abort_llw(
+      paste0(
+        "Session event `",
+        event$type,
+        "` cannot be retried with another dataset name."
+      ),
+      type = "validation"
+    )
+  )
 }
 
 reduce_session_model <- function(model, event) {

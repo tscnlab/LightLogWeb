@@ -208,6 +208,11 @@ reactiveValues.
 
 Raw data are never mutated. Prepared data are materialized from raw data plus
 the committed recipe and cached by dataset ID, revision, and recipe hash.
+Dataset display names are unique within a session after trimming surrounding
+whitespace and case folding. Every add or replace operation enforces this at
+the session-model boundary, so imports, examples, appends, duplicates, renames,
+and future loaders share one rule even when a workflow omits an early UI check.
+Stable dataset IDs remain the storage and selection keys.
 
 ### 3.3 Portable project contract
 
@@ -495,32 +500,84 @@ Milestone evidence:
 
 ### Milestone 4 — Dataset library and safe append merging
 
+Status: complete; accepted by the owner on 2026-07-22
+
+Acceptance result: the owner approved the dataset library, four-step safe
+append workflow, immutable result/provenance contract, explicit time-zone and
+measurement semantics, session-wide unique naming, and the final layout and
+mapping refinements. The complete package tests and source-package check were
+rerun at closeout; `R CMD check` completed with 0 errors, 0 warnings, and
+0 notes, and the accepted local showcase was stopped.
+
 Sequencing boundary: implement this milestone with canonical raw imports and
 test datasets. GLC-specific source integration and metadata-derived labels,
 units, and crosslinks are deferred to Milestones 6 and 7. Missing metadata must
 remain visible as unknown and must never be treated as evidence of
 compatibility.
 
+Implementation status (completed and reviewed 2026-07-22): the integrated app
+now provides stable-ID dataset actions, complete available/unknown inventory
+fields, four ready-to-use development choices, and a fingerprinted four-step
+append wizard. Append keeps source measurements separate by default, defaults
+to preserving local clock labels in an explicit UTC output zone, offers
+preservation of absolute instants or an already-shared source zone, retains
+source/local context, makes relevant compatibility decisions explicit, creates
+one new immutable record, and leaves every source unchanged. Dataset names are
+also unique within a session across import, example loading, append, duplicate,
+and rename paths; conflicts keep the existing state unchanged and require a
+different name.
+
 1. Switch, rename, delete with confirmation, duplicate, and reset datasets.
-   Display names are labels, not storage keys.
+   Display names are labels, not storage keys, but must be unique within the
+   session after trimming and case folding. Use one reusable naming dialog for
+   rename/duplicate entry and one reusable conflict dialog at the central
+   session boundary that accepts a replacement name and retries the original
+   operation; never silently suffix or overwrite a conflicting name.
 2. Show available source provenance, size, participants, span, recipe revision,
    warning state, and explicit unknowns.
-3. Implement a row-wise append preview wizard with explicit mappings for
-   participant, datetime, primary measurement, and optional columns.
+3. Implement a row-wise append preview wizard with explicit mappings for ID,
+   datetime, primary measurement, and optional columns. Guide the user through
+   Sources & IDs, Time & measurements, Output time, and Review & create.
 4. Compare available types, units, devices, source timezones, sampling,
    overlaps, duplicates, missing columns, and coercions.
-5. Preserve absolute instants; canonicalize merged instants in UTC while
-   retaining source timezone and derived local-time context.
-6. Use a union of columns. Combine measurement columns only after explicit
-   compatible-quantity and unit mapping. Unknown units require an explicit user
-   decision and warning; they are not assumed compatible.
-7. Require an explicit duplicate/overlap policy.
+5. Make time-zone semantics explicit. Default to a UTC output zone with local
+   clock labels preserved (`force_tz`), offer preservation of absolute instants
+   (`with_tz`), and offer no adjustment when every source already shares one
+   zone. Apply the selected rule to every retained POSIXct column while keeping
+   source-zone and original local-time context. Block ambiguous or nonexistent
+   daylight-saving clock labels instead of guessing. In the adjustment plan,
+   report both clock time and instant as preserved whenever a source already
+   uses the selected output zone. Format browser-table datetimes with their
+   clock label, UTC offset, and IANA zone so widget serialization cannot make
+   `force_tz` and `with_tz` appear reversed.
+6. Use a union of columns. Keep source measurements separate by default.
+   Combine measurements only after explicit compatible-quantity and unit
+   mapping, or use the constrained identical-column path when every source has
+   the same numeric column name and recorded unit. Treat `lx` and `lux` as
+   recorded label aliases without numeric conversion, and mention only labels
+   that differ from the selected output label in the warning. Unknown or
+   genuinely differing units require an explicit user decision and visible
+   warning; they are not assumed compatible.
+7. Retain and flag duplicates that already exist within a source. Ask for a
+   cross-source overlap policy only when IDs are preserved; unique prefixes
+   joined to IDs with `_` make that policy inapplicable. When IDs are
+   preserved, add a regular source-name column for later grouping.
 8. Create a new immutable dataset with complete source/mapping provenance and
-   leave sources unchanged.
+   leave sources unchanged. Keep internal append-provenance fields stored for
+   reproducibility, but exclude them from later ID, datetime, measurement, and
+   optional-column mapping choices and reject hand-built mappings that name
+   them.
 
 Acceptance gate: append handles matching and differing schemas, participants,
 timezones, overlaps, devices, and absent optional metadata without losing
-source information or assuming comparability.
+source information or assuming comparability. No workflow can add or replace a
+dataset under a display name already used in the session. Appending an appended
+dataset cannot expose or remap internal provenance fields.
+
+Milestone evidence:
+
+- dev/milestone-4-dataset-library-and-append.md
+- dev/fixtures/README.md
 
 ### Milestone 5 — Scalable dashboard and raw/prepared-data table
 

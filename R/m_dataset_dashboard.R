@@ -83,7 +83,10 @@ datasetDashboardUI <- function(id) {
 
 format_record_value <- function(value) {
   if (is.null(value) || length(value) == 0L) {
-    return("Not set")
+    return("Unknown")
+  }
+  if (length(value) == 1L && is.atomic(value) && is.na(value)) {
+    return("Unknown")
   }
   if (inherits(value, "POSIXt")) {
     return(format(value, tz = "UTC", usetz = TRUE))
@@ -92,6 +95,26 @@ format_record_value <- function(value) {
     return(paste(as.character(value), collapse = ", "))
   }
   paste0("", length(value), " item(s)")
+}
+
+format_dataset_bytes <- function(bytes) {
+  if (!is.numeric(bytes) || length(bytes) != 1L || !is.finite(bytes)) {
+    return("Unknown")
+  }
+  if (bytes < 1024) return(paste0(format(bytes, big.mark = ","), " B"))
+  if (bytes < 1024^2) return(sprintf("%.1f KiB", bytes / 1024))
+  sprintf("%.1f MiB", bytes / 1024^2)
+}
+
+format_dataset_span <- function(start, end) {
+  if (length(start) != 1L || length(end) != 1L || is.na(start) || is.na(end)) {
+    return("Unknown")
+  }
+  paste(
+    format(start, tz = "UTC", format = "%Y-%m-%d %H:%M:%S UTC"),
+    "to",
+    format(end, tz = "UTC", format = "%Y-%m-%d %H:%M:%S UTC")
+  )
 }
 
 datasetDashboardServer <- function(id, dataset, active_panel) {
@@ -171,24 +194,60 @@ datasetDashboardServer <- function(id, dataset, active_panel) {
       {
         record <- dataset()
         req(record)
+        inventory <- dataset_record_inventory(record)
+        warning_state <- if (inventory$warning_count == 0L) {
+          "No recorded warnings"
+        } else {
+          paste0(
+            inventory$warning_count,
+            " warning(s): ",
+            paste(inventory$warnings, collapse = " | ")
+          )
+        }
         data.frame(
           Field = c(
             "Source type",
-            "Source timezone",
             "Original filenames",
+            "Available source-file size",
+            "Canonical payload size",
+            "Device",
+            "Participants",
+            "Recorded span (absolute instants)",
+            "Source timezone",
+            "Datetime display timezone",
+            "Dominant sampling interval",
             "Primary variable",
+            "Primary unit",
+            "Calibration evidence",
+            "Recipe revision",
             "Committed recipe steps",
             "Draft present",
-            "Undo entries"
+            "Undo entries",
+            "Warning state"
           ),
           Value = c(
-            format_record_value(record$source_manifest$source_type),
-            format_record_value(record$source_manifest$source_timezone),
-            format_record_value(record$source_manifest$original_filenames),
-            format_record_value(record$analysis_settings$primary_variable),
-            length(record$recipe$steps),
+            format_record_value(inventory$source_type),
+            format_record_value(inventory$source_files),
+            format_dataset_bytes(inventory$source_size_bytes),
+            format_dataset_bytes(inventory$canonical_size_bytes),
+            format_record_value(inventory$device),
+            format_record_value(inventory$participants),
+            format_dataset_span(
+              inventory$span_start_utc,
+              inventory$span_end_utc
+            ),
+            format_record_value(inventory$source_timezone),
+            format_record_value(inventory$datetime_timezone),
+            if (is.na(inventory$sampling_seconds)) "Unknown" else
+              paste(inventory$sampling_seconds, "seconds"),
+            format_record_value(inventory$primary_variable),
+            format_record_value(inventory$primary_unit),
+            format_record_value(inventory$calibration),
+            inventory$recipe_revision,
+            inventory$recipe_steps,
             !is.null(record$draft),
-            length(record$history)
+            length(record$history),
+            warning_state
           ),
           check.names = FALSE
         )

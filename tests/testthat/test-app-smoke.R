@@ -13,6 +13,8 @@ test_that("the packaged application can be constructed", {
   production_html <- htmltools::renderTags(app_environment$ui)$html
   expect_identical(app_environment$import_presentation, "wizard")
   expect_match(production_html, "llw-import-wizard", fixed = TRUE)
+  expect_match(production_html, "Append datasets safely", fixed = TRUE)
+  expect_match(production_html, "Ready-to-use example", fixed = TRUE)
   expect_false(grepl("import_accordion", production_html, fixed = TRUE))
 })
 
@@ -21,6 +23,7 @@ test_that("every changed module retains a constructible development app", {
     core_architecture_app(),
     dataset_manager_app(),
     dataset_dashboard_app(),
+    append_merge_app(),
     import_app(),
     import_wizard_app()
   )
