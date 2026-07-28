@@ -1,6 +1,6 @@
 # LightLogWeb full implementation plan
 
-Last updated: 2026-07-21
+Last updated: 2026-07-28
 
 This is the governing implementation plan for LightLogWeb. It is tracked in
 version control but excluded from package builds by the exact
@@ -70,9 +70,12 @@ old dependency choices are not inherited by default.
 
 ### 2.3 GLC/glcdp integration basis
 
-- The reviewed integration baseline is glcdp 0.90.0 at public Git commit
-  21e806112a0032261d65180c3cc3ed72af38ea8d. This records the API state used
-  to revise the plan; it is not a permanent version freeze.
+- The reviewed integration target is glcdp 1.0.0 at public Git commit
+  `76b532a7167edb212059734234ff6ed6fe10f9e2`, verified against the GitHub
+  origin on 2026-07-28. The existing dependency files remain at the historical
+  0.90.0 Milestone 0 baseline until the production upgrade at Milestone 6.
+  glcdp 1.0.0 was not available from CRAN at review time, so the exact-commit
+  policy remains in force.
 - glcdp is the sole boundary for GLC registry discovery, immutable validated
   revision selection, Git/Git-LFS transport, schema-normalized inventories,
   metadata reads/search, data import, compatible collection, subset download,
@@ -81,19 +84,34 @@ old dependency choices are not inherited by default.
 - The LightLogWeb adapter uses exported, documented glcdp functions and return
   contracts only. It must not call glcdp internals or couple feature modules to
   the mutable internals of a glc_package handle.
+- glcdp 1.0.0 preserves the names and formals of all 14 lower-level public
+  functions in the reviewed 0.90.0 adapter contract. It additionally exports
+  extract_metadata and add_metadata for relationship-aware metadata joins and
+  glc_explore as a package-owned interactive explorer. LightLogWeb wraps the
+  metadata helpers when Milestone 7 begins; it does not embed glc_explore or
+  depend on its internal Shiny modules.
 - Registry-backed sources default to latest_pass. The resolved repository,
   exact commit, validation/attestation state, schema version, registry
   generation time, and every selection are captured in LightLogWeb provenance.
-- Schema support is derived from glc_schema_versions(). Stable schemas are
-  enabled after adapter tests; experimental schemas require a visible warning,
-  explicit acknowledgement, and their own compatibility fixtures. In the
-  reviewed 0.90.0 contract, schemas 1.0.0 and 2.0.0 are stable and 3.0.0 is
-  experimental.
-- glcdp currently provides read, search, import, and subset-download APIs, but
-  no public schema-aware metadata writer. GLC metadata are therefore explored
-  unchanged and any LightLogWeb edits are stored as a separate overlay.
-  Standards-compliant edited-package generation remains capability-gated until
-  glcdp exposes a public write-and-validate contract.
+- Schema 3.0.2 is the final current schema and primary metadata-driven import
+  contract. Schemas 3.0.0 and 3.0.1 remain stable compatible predecessors for
+  reproducibility and are enabled after parity tests. Schemas 1.0.0 and 2.0.0
+  are limited legacy paths: expose only capabilities covered by fixtures,
+  identify the limitations visibly, and do not imply the full typed Schema 3
+  contract. Unsupported future schemas are rejected; any future schema that
+  glc_schema_versions reports as experimental requires a visible warning,
+  explicit acknowledgement, and its own compatibility fixture.
+- The canonical Schema 3.0.2 bundle is released with GLC metadata validator
+  0.5.2 at commit `19360dce2b2d5967809cbc68e45774c1725d39b7`.
+  Its metadata-builder copy is identical. Relative to 3.0.1, 3.0.2 changes
+  only device-datasheet validation: datasheet_channel must contain at least
+  one entry when present. New packages should use 3.0.2.
+- glcdp 1.0.0 provides read, search, import, metadata extraction/join, and
+  subset-download APIs, but no public schema-aware metadata writer or validator
+  API. GLC metadata are therefore explored unchanged and any LightLogWeb edits
+  are stored as a separate overlay. Standards-compliant edited-package
+  generation remains capability-gated until glcdp exposes a public
+  write-and-validate contract.
 - Hosted v1 supports public registered packages. Browser entry of private
   repository tokens is out of scope unless separately designed and approved.
 
@@ -260,10 +278,12 @@ glc_package objects. The adapter owns three serializable value objects:
 The adapter is implemented only with glc_packages, glc_search_packages,
 glc_open, glc_schema_versions, glc_summary, glc_datasets, glc_files,
 glc_variables, glc_resources, glc_metadata, glc_search_metadata, glc_read,
-glc_collect, and glc_download. If exact provenance or future write support
-cannot be obtained through documented outputs, adding the required public
-accessor to glcdp is a prerequisite; LightLogWeb must not reach into package
-internals.
+glc_collect, glc_download, extract_metadata, and add_metadata. The metadata
+helpers enter the production adapter with Milestone 7. If exact provenance or
+future write support cannot be obtained through documented outputs, adding the
+required public accessor to glcdp is a prerequisite; LightLogWeb must not reach
+into package internals. glc_explore is a package-owned reference application,
+not an embedded LightLogWeb dependency.
 
 Background tasks receive a source specification and reopen the immutable
 package revision inside the worker. They do not serialize a live glc_package
@@ -608,10 +628,12 @@ all data to the browser and without requiring GLC or optional metadata.
 
 ### Milestone 6 — GLC discovery, selective import, and package download
 
-1. Add the reviewed glcdp release to the production dependency graph at the
-   start of this milestone. During GitHub-only development, install and lock
-   the exact reviewed commit; make the later CRAN transition a tested
-   dependency update rather than an automatic source switch.
+1. Upgrade the historical optional glcdp 0.90.0 dependency to glcdp 1.0.0 at
+   exact commit `76b532a7167edb212059734234ff6ed6fe10f9e2` and promote it to
+   Imports at the start of this milestone. Refresh the lock and deployment
+   manifest only after adapter parity tests pass. Make any later CRAN
+   transition a tested dependency update rather than an automatic source
+   switch.
 2. Build registry discovery with glc_packages and glc_search_packages. Show
    repository, registry id, current validation status, latest passing revision,
    attestation state, validation time, and whether a passing revision exists.
@@ -626,31 +648,39 @@ all data to the browser and without requiring GLC or optional metadata.
 5. Preview glc_summary, glc_datasets, glc_files, glc_variables,
    glc_resources, and requested glc_metadata resources before materialization.
    Include study/dataset/participant/device context, schema status, modalities,
-   timezones, data states, primary variables, file availability, storage type,
-   and declared bytes.
+   timezones, data states, roles, temporal resolution, primary variables,
+   stable file-group ids, file-specific encodings, declared types, labels,
+   descriptions, units, ordered factor values/labels/descriptions, file
+   availability, storage type, and declared bytes.
 6. Select datasets, file groups, files, source variables, semantic terms, and
-   primary-only mode using stable identifiers. Participant choices are
-   translated through glc_datasets to dataset ids. Resource selection applies
-   to metadata/subset download, not silently to measurement interpretation.
+   primary-only mode using stable identifiers. Support documented role,
+   modality, availability, term, and primary filters through glc_files and
+   glc_variables. Participant choices are translated through glc_datasets to
+   dataset ids. Resource selection applies to metadata/subset download, not
+   silently to measurement interpretation.
 7. Show declared transfer bytes and file counts before Apply, with hosted disk
    and memory warnings. Row and memory estimates are explicitly approximate;
    missing expected sizes are reported as unknown, never treated as zero.
 8. Create bounded previews with glc_read(n_max = ..., progress = FALSE).
    Because n_max applies per file, derive and display a per-file allocation
-   from a total preview budget. Default metadata/import discrepancies to
+   from a total preview budget. Let glcdp apply Schema 3's declared column
+   types, boolean representations, ordered factor levels, datetime metadata,
+   and per-file encodings. Default metadata/import discrepancies to
    problems = "error"; offer the warning policy only as an explained advanced
    inspection mode.
 9. Preserve collection-level file-group, participant, device, timezone,
    modality, role, data-state, datetime, and file provenance before using
    glc_collect(standardize = "lightlogr") for canonical analysis data. Never
    reconstruct glcdp's LightLogR mapping in LightLogWeb. Respect its identity
-   contract: Id is the GLC dataset id and participant_Id is the linked
-   participant id; expose both and never silently substitute one for the other.
+   contract: Id is the GLC dataset id, file_group_id is the stable source group,
+   and participant_Id is the linked participant id; expose all applicable
+   identities and never silently substitute one for another.
 10. Preview glc_collect compatibility before Apply. If selected file groups
-    cannot be collected together, explain the dimensions that differ and offer
-    compatible partitions as separate new LightLogWeb datasets. Do not coerce
-    across the glcdp compatibility boundary; the established append workflow
-    remains explicit.
+    cannot be collected together, explain whether columns, declared types,
+    factor values/labels/order, timezones, modalities, roles, data states, or
+    relationship consistency differ and offer compatible partitions as
+    separate new LightLogWeb datasets. Do not coerce across the glcdp
+    compatibility boundary; the established append workflow remains explicit.
 11. Require Apply for the committed full read. Preview rows are never promoted
     silently to a complete dataset. Date-window filtering occurs from the
     immutable imported base: the current glcdp API cannot push a date filter
@@ -664,21 +694,25 @@ all data to the browser and without requiring GLC or optional metadata.
     including its metadata closure, hashes, immutable revision, and
     glcdp-manifest.json. Clarify that this preserves the validated source
     metadata and does not incorporate a LightLogWeb metadata overlay.
-14. Map no-passing-revision, non-passing revision, experimental or unsupported
-    schema, malformed registry, missing resource/path, unsupported format,
-    parsing, timezone, incompatible collection, HTTP, Git-LFS, quota/auth,
-    checksum, existing file, disk, cancellation, and stale-result conditions
-    to recoverable app states.
-15. Use LightLogWeb-owned local GLC fixtures and local registry JSON in routine
-    tests. Mock transport where required and keep a validated public-registry
-    journey opt-in. Do not depend on glcdp's unexported test fixtures.
+14. Map no-passing-revision, non-passing revision, limited legacy schema,
+    root/profile or package/dataset schema declaration mismatch, unsupported
+    future schema, malformed registry, missing resource/path, unsupported
+    format, parsing, timezone, incompatible collection, HTTP, Git-LFS,
+    quota/auth, checksum, existing file, disk, cancellation, and stale-result
+    conditions to recoverable app states. Schema 3.0.2 itself is not presented
+    as experimental.
+15. Use LightLogWeb-owned local Schema 3.0.2 fixtures and local registry JSON
+    in routine tests, plus compatibility fixtures for 3.0.0 and 3.0.1 and
+    limited legacy-message fixtures for 1.0.0 and 2.0.0. Mock transport where
+    required. Keep a validated Schema 3.0.2 IZTECH public-registry journey
+    opt-in and do not depend on glcdp's unexported test fixtures.
 
-Acceptance gate: normal discovery, registry refresh failure, the Guidolin deep
-link, malformed/repeated queries, no passing revision, offline access, metadata
-preview, bounded preview, partial and full import, incompatible selections,
-Git-LFS failure, subset download, and dataset-library/dashboard integration are
-safe and reproducible; no data transfer or dataset creation occurs without the
-relevant confirmation.
+Acceptance gate: normal discovery, registry refresh failure, the validated
+Schema 3.0.2 IZTECH deep link, malformed/repeated queries, no passing revision,
+offline access, metadata preview, bounded typed preview, partial and full
+import, incompatible selections, Git-LFS failure, subset download, and
+dataset-library/dashboard integration are safe and reproducible; no data
+transfer or dataset creation occurs without the relevant confirmation.
 
 ### Milestone 7 — Metadata essentials and settings separation
 
@@ -688,37 +722,49 @@ relevant confirmation.
    Never imply that overlay edits have changed or revalidated the source data
    package.
 3. Build the hierarchical explorer from glc_resources and glc_metadata,
-   covering the declared study, participants, datasets, devices, device
-   datasheets, and additional supported resources. Preserve resource names,
+   covering Schema 3.0.2's required study, participants, datasets, devices, and
+   device-datasheet resources; its optional participant-characteristics
+   resource; and additional declared resources. Preserve resource names,
    nested paths, record identity, profile/schema version, and unknown fields.
 4. Add field/value search through glc_search_metadata and crosslinks from
    dataset, participant, device, and variable views to their metadata context.
-5. Provide typed overlay forms for the analysis-essential normalized fields:
+5. Delegate immutable source-metadata relationship traversal to
+   extract_metadata. Use file_group_id as the default anchor across linked
+   dataset, participant, study, and device records; use by = "Id" only for
+   explicitly dataset-level extraction. Use add_metadata only on a derived
+   analysis table, with overwrite disabled by default; never add metadata
+   columns to the immutable canonical base or implement competing join rules.
+6. Provide typed overlay forms for the analysis-essential normalized fields:
    dataset title, participant labels, device make/model, site/country, source
-   timezone, coordinates, and variable labels/units. Show unmodeled fields
-   read-only rather than silently rewriting them.
-6. Store import timezone in provenance even without optional metadata. Move
+   timezone, coordinates, and variable labels/units. Align overlapping input
+   types and controlled values with Schema 3.0.2, but store the result in the
+   versioned LightLogWeb overlay. Show unmodeled fields read-only rather than
+   silently rewriting them.
+7. Store import timezone in provenance even without optional metadata. Move
    primary-variable choice, calibration, analysis timezone, missingness,
    scales, view windows, and grouping into settings or recipes.
-7. Permit core analyses with no optional metadata, using raw names and “unit
+8. Permit core analyses with no optional metadata, using raw names and “unit
    not specified.” Use factual labels/units in outputs when present, and make
    overlay precedence visible.
-8. Add metadata-driven labels, units, participant/device links, and metadata
+9. Add metadata-driven labels, units, participant/device links, and metadata
    crosslinks to the existing dataset library, dashboard, and table. Preserve
    the raw-name and “unit not specified” fallbacks, and invalidate only outputs
    that actually depend on changed metadata.
-9. Validate overlay coordinates, IANA timezones, units, references, and
+10. Validate overlay coordinates, IANA timezones, units, references, and
    participant IDs inline without changing the immutable source layer.
-10. Export the overlay as LightLogWeb JSON or flattened CSV. Keep generation
+11. Export the overlay as LightLogWeb JSON or flattened CSV. Keep generation
     of an edited standards-compliant GLC package disabled with a capability
-    message until glcdp provides a public write-and-validate API; do not
-    recreate schema serialization in LightLogWeb.
+    message until glcdp provides a public write-and-validate API. Schema 3.0.2
+    being final does not authorize LightLogWeb to recreate schema serialization
+    or treat the metadata builder's soft validation as authoritative.
 
 Acceptance gate: complete, partial, and absent optional metadata all permit
 valid analysis; source metadata and overlays remain distinguishable; unknown
-fields survive project save/reload; display-only edits do not mutate data or
-invalidate unrelated results; and the earlier source-agnostic library and
-dashboard remain valid when metadata are absent.
+fields survive project save/reload; file-group and explicit dataset-level
+metadata extraction preserve row count, order, grouping, and identifiers;
+ambiguous relationships and column conflicts are recoverable; display-only
+edits do not mutate data or invalidate unrelated results; and the earlier
+source-agnostic library and dashboard remain valid when metadata are absent.
 
 ### Milestone 8 — Recipe-based preprocessing
 
@@ -946,9 +992,11 @@ requirement.
 - Test malformed files, unsupported devices, invalid and mixed timezones, DST,
   duplicates, empty filters, absent metadata, small groups, unavailable
   optional tools, malformed/repeated repo queries, registry revisions with no
-  passing validation, experimental/unsupported schemas, offline and Git-LFS
-  failures, worker failure, disconnect, corrupt archives, disk limits, and
-  hostile filenames/metadata text.
+  passing validation, current Schema 3.0.2 packages, stable 3.0.0/3.0.1
+  predecessors, limited legacy 1.0.0/2.0.0 paths, root/profile and
+  package/dataset schema declaration mismatches, unsupported future schemas,
+  offline and Git-LFS failures, worker failure, disconnect, corrupt archives,
+  disk limits, and hostile filenames/metadata text.
 - Verify cleanup, cross-session isolation, and exclusion of project-plan.md
   from every package archive.
 
@@ -967,6 +1015,9 @@ requirement.
 - Time-aligned streams and multi-input metrics are post-v1.
 - GLC registry discovery, validated-revision preview, selective import, source
   subset download, and metadata exploration are v1.
+- Schema 3.0.2 is the primary GLC contract for v1. Stable 3.0.0 and 3.0.1
+  packages remain reproducible compatibility paths; 1.0.0 and 2.0.0 receive
+  only explicitly tested legacy support.
 - Public registered GLC packages are supported in hosted v1; private-token
   entry is not.
 - Metadata overlays enhance analysis without altering validated GLC source

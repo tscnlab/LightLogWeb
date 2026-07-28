@@ -283,3 +283,57 @@ SHA-256 comparison confirmed that all 19 protected Milestone 1 implementation,
 showcase, helper, and test files were byte-identical before and after the
 Milestone 0 postprocess. DESCRIPTION was excluded from that comparison because
 it is shared package metadata and was intentionally reconciled.
+
+## 12. 2026-07-28 glcdp and Schema 3.0.2 compatibility addendum
+
+This addendum records a later current-target review. It does not rewrite the
+accepted Milestone 0 environment, commands, package counts, or the verified
+glcdp 0.90.0 pin above.
+
+The review used R 4.5.0 and the public source repositories:
+
+- glcdp 1.0.0 at commit
+  `76b532a7167edb212059734234ff6ed6fe10f9e2`. The commit matched the GitHub
+  origin's `HEAD` and `main` on 2026-07-28. A live CRAN index query on the same
+  date confirmed that glcdp was not on CRAN.
+- GLC metadata validator 0.5.2 at tag and commit
+  `19360dce2b2d5967809cbc68e45774c1725d39b7`, with released multi-platform
+  container digest
+  `sha256:d66c9d705e2a59967c5699af55d872b2012d18fb3c9dc611a9837d1c05af6160`.
+- The metadata builder at commit
+  `a8a312c58b91ae2b725168a3b5debe63030a82ad`. Recursive comparison found no
+  differences between its Schema 3.0.2 bundle and the validator's canonical
+  bundle.
+
+Loading the glcdp 1.0.0 source with pkgload 1.5.2 confirmed that all 14 public
+functions used by the Milestone 1 adapter contract retain the same names and
+formals as 0.90.0. Version 1.0.0 adds three exports:
+
+- extract_metadata for relationship-aware metadata extraction;
+- add_metadata for row-preserving metadata joins; and
+- glc_explore for the package-owned interactive explorer.
+
+glc_schema_versions now reports Schema 3.0.2 as the current default and primary
+stable metadata-driven import contract. Schemas 3.0.0 and 3.0.1 are stable
+compatible predecessors. Schemas 1.0.0 and 2.0.0 are barebones legacy paths,
+not equivalents of the typed Schema 3 contract. The canonical 3.0.2 bundle is
+a corrective patch over 3.0.1: when datasheet_channel is present, it must
+contain at least one entry. The broader metadata and import contract is
+unchanged.
+
+A read-only live R check used the official registry generated at
+`2026-07-28T13:13:47.465808+00:00`. The latest passing
+`tscnlab/melidos-iztech-glc-dataset` revision was
+`9353a0c4287d44cb400d30f45d7dbcf9910f9bde`: it was attestation-verified,
+validated by validator 0.5.2 with zero errors and zero warnings, opened through
+glcdp 1.0.0 as Schema 3.0.2, and exposed the documented dataset, file,
+variable, resource, typed-import, and stable file-group inventories.
+
+glcdp 1.0.0 still exposes no public schema-aware metadata writer or validator
+API. LightLogWeb therefore retains immutable source metadata plus a separate
+overlay and does not implement GLC package serialization.
+
+This task updates design documentation only. DESCRIPTION, renv.lock,
+manifest.json, the adapter, and its tests remain at the accepted 0.90.0
+implementation baseline until Milestone 6 performs the exact-commit dependency
+upgrade and parity checks.

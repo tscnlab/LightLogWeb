@@ -220,3 +220,39 @@ The showcase is launched by `dev/milestone-1-core-app.R`, or after
 This milestone intentionally provides the core contracts and adapter seam, not
 the later GLC feature UI, full preparation recipe editor, merge wizard, metric
 workbench, or report interface.
+
+## 9. 2026-07-28 glcdp 1.0.0 compatibility addendum
+
+This is a later compatibility review, not a rewrite of the accepted Milestone 1
+evidence. The core seam above was implemented and verified against glcdp
+0.90.0 at `21e806112a0032261d65180c3cc3ed72af38ea8d`; those historical claims
+and results remain unchanged.
+
+The review loaded glcdp 1.0.0 from commit
+`76b532a7167edb212059734234ff6ed6fe10f9e2` under R 4.5.0 and compared the
+exported functions and formals with the installed 0.90.0 package. Every one of
+the 14 lower-level functions named by `glcdp_export_contract()` remains
+available with the same formal arguments. The existing source, selection,
+preview, exact-SHA reopen, worker-serialization, and recoverable-condition
+architecture therefore remains a valid seam for the Milestone 6 upgrade.
+
+Version 1.0.0 adds extract_metadata, add_metadata, and glc_explore. The first
+two enter the LightLogWeb adapter with Milestone 7 so relationship traversal
+and row-preserving metadata joins remain owned by glcdp. glc_explore remains a
+package-owned reference application and is not embedded or coupled to
+LightLogWeb. The existing source specification already records the exact
+package revision, schema version, glcdp version, registry state, and session
+cache, so no value-object redesign is required.
+
+The same review confirmed Schema 3.0.2 as the final current contract, with
+3.0.0 and 3.0.1 retained as stable predecessors and 1.0.0/2.0.0 reclassified
+as limited legacy paths. Schema 3.0.2 is no longer an experimental condition.
+Milestone 6 must replace that obsolete path with current, stable-predecessor,
+legacy, declaration-mismatch, and unsupported-future-schema coverage.
+
+The opt-in live R check opened the attestation-verified latest passing IZTECH
+revision `9353a0c4287d44cb400d30f45d7dbcf9910f9bde` through glcdp 1.0.0 as
+Schema 3.0.2 after validator 0.5.2 reported zero errors and zero warnings. This
+establishes the current integration target but does not upgrade the installed
+LightLogWeb dependency or its Milestone 1 fixtures. DESCRIPTION, renv.lock,
+manifest.json, adapter code, and tests remain unchanged until Milestone 6.
