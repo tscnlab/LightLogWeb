@@ -599,32 +599,130 @@ Milestone evidence:
 - dev/milestone-4-dataset-library-and-append.md
 - dev/fixtures/README.md
 
-### Milestone 5 — Scalable dashboard and raw/prepared-data table
+### Milestone 5 — Scalable dashboard and source/pre-processed-data table
 
-Sequencing boundary: implement this milestone for canonical imports with empty
+Status: complete; accepted by the owner on 2026-07-31
+
+Acceptance result: the owner approved the scalable real-data dashboard,
+source/pre-processed tables, focus-metric quality and missingness semantics,
+scientific axis controls, and the final responsive two-axis Explorer
+navigation. The focused dashboard data, navigation, and refinement suites
+passed at closeout, the accepted local showcase was stopped, and the complete
+Milestone 5 implementation was committed and pushed from the development
+branch.
+
+Sequencing boundary: implement this milestone for source imports with empty
 recipe and grouping states and without requiring GLC or optional metadata.
 GLC-specific provenance panels and metadata-driven labels, units, and
 crosslinks are added in Milestones 6 and 7 without changing the generic
 dashboard and table contracts.
 
 1. Show available provenance, participant/date span, sampling, variable
-   inventory, missingness, gaps, irregularity, duplicates, DST, daily coverage,
-   active recipe, and grouping. Empty or unavailable states must be explicit.
-2. Choose detailed timelines for small/short data and overview/availability
-   displays for many participants or long spans.
-3. Add participant, date/window, and facet-page controls with explicit
-   show-all warnings.
-4. Bound preview plot data and label reductions.
-5. Add a server-side DT table for the active data with search, sort,
-   visibility, pagination, and type-aware formatting. Before preprocessing is
-   available, the immutable canonical base is the active prepared result and
-   the empty recipe is shown explicitly.
-6. Keep raw and prepared views visually distinct and show the recipe revision,
-   including the unchanged empty-recipe state.
+   inventory, focus-metric missingness and percentage under three explicit
+   denominators (recorded timestamps, the regular first-to-last recording
+   span, or full participant-local days), explicit missing focus epochs,
+   implicit gaps, timing jitter, DST, focus-metric daily coverage, active
+   recipe, and grouping. Empty or unavailable states must be explicit. Keep
+   the focus-metric selector in the compact summary-box row and explain its
+   analytical scope through the box icon's tooltip.
+2. Let the user choose the numeric focus metric and whether Explore uses source
+   or pre-processed data. Offer symlog, linear, and logarithmic display scales;
+   log views must disclose omitted exact zeros separately from negative values.
+   Let users set optional y-axis minimum and maximum values without deleting
+   out-of-range observations. Keep the symlog linear-range control with the
+   optional minimum and maximum controls in the Y-range popover. Symlog views
+   label zero, the signed threshold, and outer powers of ten and keep the
+   central half-range and each outer ×10 step equally spaced on the axis. Add
+   unlabeled raw-value tenth axis ticks between adjacent major breaks so
+   spacing is regular in the linear center and visibly compressed across the
+   logarithmic outer regions.
+3. Keep absolute calendar scope distinct from participant measurement duration.
+   Let users view each participant on their own recorded dates, align everyone
+   by days from first measurement, use one shared date window, or navigate
+   calendar weeks by weekday. Participant changes refit the relevant scope to
+   those recordings. Label every absolute-time axis `Local Date/Time` with its
+   display timezone; reserve `Days from first measurement` for the elapsed
+   view.
+4. Choose detailed timelines through seven available focus-metric days per
+   participant and focus-coverage overviews for longer actual participant
+   spans. A long global calendar interval containing only short, staggered
+   recordings must remain eligible for the detailed view. Users can always
+   override Automatic with Detailed timeline or Coverage overview.
+5. Provide one lean, inspectable recommendation contract for the initial view:
+   own recorded dates, the full selected measurement duration, seven-day time
+   pages, four participants per page, Automatic detail/coverage from actual
+   focus-metric span, and the dataset's recorded scale preference. Keep one
+   slim Recommended view action visible, disable it while the recommendation
+   is active, preserve user adjustments, and show the recommendation and
+   rationale in a corner notification when it is applied. Do not infer
+   elapsed or weekday intent from the data.
+6. Use independent, accessible two-axis navigation: participant pages move
+   through two full-height, half-plot up/down controls beside the plot; time
+   pages move left/right through compact arrow-and-calendar controls below it.
+   Let users set the maximum participants per page and select either axis
+   directly. Keep the participant-page selector inside the resizable sidebar
+   and the time selector in the visualization footer. Add one clickable
+   participant-by-time navigator grid: filled
+   rectangles contain focus measurements, hollow rectangles are valid empty
+   pages, and the active rectangle uses a signal color. Disable boundary
+   buttons, split oversized scopes into bounded pages, replace the participant
+   selector with a compact all-participants scope while Show all is active,
+   and render an explicit empty state when a page has no focus measurements.
+7. Bound preview plot data and label reductions. Build detailed participant
+   facets with LightLogR `gg_days()` so recordings from different dates can be
+   viewed simultaneously with participant-specific, complete day-aligned date
+   windows or aligned elapsed-time axes. Keep participant labels bold, retain
+   empty facet slots when the final participant page is short, and let the
+   plot grow with the number of visible participant slots while preserving a
+   useful minimum height. Put concise scope, reduction, scale, and
+   manual-range context in the plot title/subtitle and targeted tooltips or
+   popovers; do not add a persistent scope disclosure below the plot. Bounded
+   display sampling is not itself a quality warning.
+8. Use compact, icon-bearing summary and quality boxes with definitions in
+   tooltips. A positive quality outcome is green; an issue or unavailable
+   result is orange.
+9. Use all available dashboard width; keep controls and tables responsive.
+   Explore is one flat workbench inside the tab boundary: a grouped
+   what/who/when/how sidebar, a descriptive visualization canvas, full-height
+   participant turns beside the plot, a sidebar-owned participant-page
+   selector, and one compact time/page-map footer below the canvas.
+   Do not add a second plot card or persistent explanatory prose around the
+   visualization.
+10. Add a server-side DT table for the active data with search, sort,
+   pagination fixed at 10 rows, externally controlled column visibility, and
+   type-aware formatting. Keep the column selector with the main-columns
+   switch rather than inside the horizontally scrolling table. The variable
+   inventory and participant-day coverage use fixed 10-row pages in cards tall
+   enough to show a complete page without vertical scrolling. Both retain
+   global search and sorting but omit per-column filters and page-size
+   selectors.
+11. Keep source and pre-processed tables visually distinct. Let users toggle
+   between main columns (grouping/Id, Datetime, focus metric) and the full
+   horizontally scrollable schema. Show the recipe revision and unchanged
+   empty-recipe state explicitly.
+12. Keep source provenance and folded source import checks with the Source data
+    tab, rendering pass/warning/information/error states with colored icons and
+    text. Keep recipe/grouping state and a distinct post-recipe integrity
+    summary with the Pre-processed data tab; it checks active rows, identity,
+    timestamps, focus values, and recipe traceability without pretending to be
+    a second source-import validation. For appended datasets, recompute source
+    checks on the combined source table while retaining source-specific
+    manifests and diagnostics in append provenance.
 
-Acceptance gate: the small sample and a synthetic 10-participant,
-one-month, one-minute dataset remain interpretable without repeatedly sending
-all data to the browser and without requiring GLC or optional metadata.
+Acceptance gate: the deterministic scale fixture and every reviewed real
+showcase source remain interpretable without sending full tables to the
+browser. The visible showcase contains installed LightLogR testdata, pinned
+IZTECH data, all 20 provided ActLumus files, all eight Speccy files grouped into
+ID01/ID02/ID04 with `^(ID[0-9]{2})`, and `02_VEET_L` imported separately as
+ambient-light (ALS) and spectral (PHO) sensor data. Large records load lazily
+and are cached only for the current session. VEET phase shifts remain explicit
+timing diagnostics but do not inflate missing epochs through one globally
+anchored timestamp grid.
+
+Milestone evidence:
+
+- dev/milestone-5-scalable-dashboard.md
+- dev/run-milestone-5-scale-acceptance.R
 
 ### Milestone 6 — GLC discovery, selective import, and package download
 

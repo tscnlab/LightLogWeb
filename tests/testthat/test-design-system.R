@@ -95,6 +95,44 @@ test_that("the bslib theme compiles from the packaged Sass source", {
   expect_true(length(dependencies) > 0L)
 })
 
+test_that("wide dashboard table headers stay horizontally readable", {
+  source <- paste(readLines(lightlogweb_sass_file()), collapse = "\n")
+  expected_rule <- paste(
+    ".llw-dashboard-data-view table.dataTable thead th {",
+    "  overflow-wrap: normal;",
+    "  white-space: nowrap;",
+    "}",
+    sep = "\n"
+  )
+
+  expect_match(source, expected_rule, fixed = TRUE)
+})
+
+test_that("dashboard layout and quality tones retain owner-review fixes", {
+  source <- paste(readLines(lightlogweb_sass_file()), collapse = "\n")
+
+  expect_match(
+    source,
+    ".llw-main-shell.llw-dashboard-shell {\n  width: calc(100% - 2rem);\n  max-width: none;",
+    fixed = TRUE
+  )
+  expect_match(
+    source,
+    ".llw-app .llw-dashboard-value-box--success",
+    fixed = TRUE
+  )
+  expect_match(
+    source,
+    ".llw-app .llw-dashboard-value-box--warning",
+    fixed = TRUE
+  )
+  expect_match(
+    source,
+    ".llw-dashboard-data-view .dataTables_length {\n  display: none;",
+    fixed = TRUE
+  )
+})
+
 test_that("brand helpers retain accessible semantics", {
   page <- htmltools::renderTags(
     lightlogweb_page(tags$main(id = "test-main", "Content"))

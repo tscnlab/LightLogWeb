@@ -194,7 +194,7 @@ core_architecture_server <- function(id, dataset, task) {
             "Dataset ID",
             "Revision",
             "Raw rows",
-            "Prepared rows",
+            "Pre-processed rows",
             "Draft",
             "Preview",
             "Undo entries",

@@ -88,7 +88,7 @@ LightLogWeb <- function(
       "Dashboard",
       value = "dashboard",
       tags$main(
-        class = "llw-main-shell",
+        class = "llw-main-shell llw-dashboard-shell",
         `aria-label` = "Inspect the selected dataset",
         datasetDashboardUI("dashboard")
       )
@@ -139,7 +139,8 @@ LightLogWeb <- function(
     dashboard <- datasetDashboardServer(
       "dashboard",
       dataset = store$selected_dataset,
-      active_panel = reactive(input$main_nav)
+      active_panel = reactive(input$main_nav),
+      color_mode = color_mode
     )
     appended <- append_merge_server(
       "append",
@@ -338,7 +339,7 @@ LightLogWeb <- function(
         },
         reset = dispatch_safely(
           new_session_event("reset", dataset_id = event$dataset_id),
-          "Prepared data reset to the immutable canonical source."
+          "Pre-processed data reset to the immutable source data."
         ),
         remove = dispatch_safely(
           new_session_event("remove", dataset_id = event$dataset_id),

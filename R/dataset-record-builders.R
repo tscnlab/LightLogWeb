@@ -167,13 +167,54 @@ development_devicefile_path <- function(
   )
 }
 
+development_testdevice_paths <- function(
+  key = c("actlumus_all", "speccy_all", "veet_02"),
+  project_root = NULL
+) {
+  key <- match.arg(key)
+  if (is.null(project_root)) {
+    project_root <- lightlogweb_development_root()
+  } else {
+    assert_scalar_string(project_root, "project_root")
+  }
+  paths <- switch(
+    key,
+    actlumus_all = list.files(
+      file.path(project_root, "testdevices", "ActLumus"),
+      pattern = "[.]txt$",
+      full.names = TRUE
+    ),
+    speccy_all = list.files(
+      file.path(project_root, "testdevices", "Speccy"),
+      pattern = "[.]csv$",
+      full.names = TRUE
+    ),
+    veet_02 = {
+      zip_path <- file.path(
+        project_root,
+        "testdevices",
+        "VEET",
+        "02_VEET_L.csv.zip"
+      )
+      plain_path <- file.path(
+        project_root,
+        "testdevices",
+        "VEET",
+        "02_VEET_L.csv"
+      )
+      if (file.exists(zip_path)) zip_path else plain_path
+    }
+  )
+  sort(as.character(paths))
+}
+
 dataset_example_catalog <- function(project_root = NULL) {
   if (is.null(project_root)) {
     project_root <- lightlogweb_development_root()
   } else {
     assert_scalar_string(project_root, "project_root")
   }
-  paths <- c(
+  paths <- list(
     sample = NA_character_,
     actlumus_synthetic = development_devicefile_path(
       "actlumus_synthetic",
@@ -183,16 +224,30 @@ dataset_example_catalog <- function(project_root = NULL) {
       "actlumus_4789",
       project_root
     ),
-    iztech = development_large_dataset_path(project_root)
+    iztech = development_large_dataset_path(project_root),
+    actlumus_all = development_testdevice_paths("actlumus_all", project_root),
+    speccy_all = development_testdevice_paths("speccy_all", project_root),
+    veet_02_als = development_testdevice_paths("veet_02", project_root),
+    veet_02_pho = development_testdevice_paths("veet_02", project_root)
   )
-  available <- is.na(paths) | file.exists(paths)
+  available <- vapply(
+    paths,
+    function(path) {
+      length(path) > 0L && (all(is.na(path)) || all(file.exists(path)))
+    },
+    logical(1)
+  )
   data.frame(
     key = names(paths),
     label = c(
       "LightLogR test data (small)",
       "ActLumus synthetic device file (small)",
       "ActLumus 4789 provided device file",
-      "IZTECH light glasses (151,200 rows)"
+      "IZTECH light glasses (151,200 rows)",
+      "All provided ActLumus files (20 participants)",
+      "All provided Speccy files (ID01, ID02, ID04)",
+      "VEET 02 ambient-light sensor (ALS)",
+      "VEET 02 spectral sensor (PHO)"
     ),
     description = c(
       paste(
@@ -210,6 +265,24 @@ dataset_example_catalog <- function(project_root = NULL) {
       paste(
         "Pinned MeLiDos IZTECH development snapshot with 17 participants",
         "and Europe/Istanbul source time."
+      ),
+      paste(
+        "All 20 repository-provided ActLumus exports imported together with",
+        "filename stems as participant IDs and Europe/Berlin source time."
+      ),
+      paste(
+        "All eight repository-provided Speccy exports imported together.",
+        "The expression ^(ID[0-9]{2}) groups file parts into ID01, ID02,",
+        "and ID04. UTC is an explicit development placeholder because the",
+        "files do not record an IANA source timezone."
+      ),
+      paste(
+        "Repository-provided 02_VEET_L imported as the ambient-light-sensor",
+        "modality with Europe/Berlin source time."
+      ),
+      paste(
+        "The same repository-provided 02_VEET_L source imported as the",
+        "spectral-sensor modality with Europe/Berlin source time."
       )
     ),
     available = available,
@@ -235,22 +308,56 @@ development_devicefile_dataset_record <- function(
   example_key,
   version = "default"
 ) {
-  arguments <- list(
-    path = path,
+  development_devicefiles_dataset_record(
+    paths = path,
     display_name = display_name,
     source_timezone = source_timezone,
     example_key = example_key,
-    version = version
+    device = "ActLumus",
+    version = version,
+    id_mode = "automated",
+    preferred_primary = c("MEDI")
+  )
+}
+
+development_devicefiles_dataset_record <- function(
+  paths,
+  display_name,
+  source_timezone,
+  example_key,
+  device,
+  version = "default",
+  id_mode = c("automated", "manual", "extract"),
+  extract_pattern = NULL,
+  veet_modality = NULL,
+  preferred_primary = character(),
+  max_bytes = 1024^3
+) {
+  id_mode <- match.arg(id_mode)
+  arguments <- list(
+    display_name = display_name,
+    source_timezone = source_timezone,
+    example_key = example_key,
+    version = version,
+    device = device
   )
   for (argument in names(arguments)) {
     assert_scalar_string(arguments[[argument]], argument)
   }
-  if (!file.exists(path) || dir.exists(path)) {
+  assert_character_vector(paths, "paths", allow_empty = FALSE)
+  assert_character_vector(preferred_primary, "preferred_primary")
+  unavailable <- !file.exists(paths) | dir.exists(paths)
+  if (any(unavailable)) {
     abort_llw(
-      paste0("Development device file is missing at `", path, "`."),
+      paste0(
+        "Development device file(s) are missing: ",
+        paste(paths[unavailable], collapse = ", "),
+        "."
+      ),
       type = "unavailable_feature",
       public_message = paste(
-        "That optional ready-to-use device example is unavailable in this checkout.",
+        "That optional ready-to-use device example is unavailable in this",
+        "checkout.",
         "Choose another example or use the import workflow."
       )
     )
@@ -260,20 +367,22 @@ development_devicefile_dataset_record <- function(
   on.exit(unlink(stage_root, recursive = TRUE, force = TRUE), add = TRUE)
   staged <- stage_import_files(
     data.frame(
-      name = basename(path),
-      datapath = path,
+      name = basename(paths),
+      datapath = paths,
       stringsAsFactors = FALSE
     ),
     stage_root
   )
   request <- new_raw_import_request(
-    device = "ActLumus",
+    device = device,
     staged_files = staged,
     timezone = source_timezone,
     not_before = as.Date("2001-01-01"),
     version = version,
-    id_mode = "automated",
-    max_bytes = 200 * 1024^2
+    id_mode = id_mode,
+    extract_pattern = extract_pattern,
+    veet_modality = veet_modality,
+    max_bytes = max_bytes
   )
   result <- suppressWarnings(raw_import_worker(request, spec = NULL))
   eligible <- result$eligibility$variable[result$eligibility$eligible]
@@ -283,11 +392,12 @@ development_devicefile_dataset_record <- function(
       type = "validation"
     )
   }
-  primary <- if ("MEDI" %in% eligible) "MEDI" else eligible[[1L]]
+  preferred <- intersect(preferred_primary, eligible)
+  primary <- if (length(preferred) > 0L) preferred[[1L]] else eligible[[1L]]
   record <- new_imported_dataset_record(list(
     name = display_name,
     data = result$data,
-    device = "ActLumus",
+    device = device,
     version = request$preflight$version,
     tz = source_timezone,
     variable = primary,
@@ -304,17 +414,26 @@ development_devicefile_dataset_record <- function(
       calibration = "Unknown; retain source- and device-specific interpretation"
     )
   }
+  if (identical(primary, "Photopic.lux") || identical(primary, "Lux")) {
+    record$factual_metadata$variables[[primary]] <- list(
+      label = "Photopic illuminance",
+      unit = "lux",
+      calibration = "Unknown; retain source- and device-specific interpretation"
+    )
+  }
   record$source_manifest$details$development_example <- list(
     key = example_key,
     configured_source_timezone = source_timezone,
     note = paste(
-      "Development-only one-click import configuration; the source time zone",
-      "is a recorded fixture assumption, not inferred from file bytes."
-    )
+      "Development-only one-click import configuration. The configured source",
+      "timezone is an explicit fixture assumption, not inferred from file bytes."
+    ),
+    participant_id_mapping = unclass(request$id_mapping),
+    modality = veet_modality
   )
   record$provenance$development_example <- list(
     key = example_key,
-    loader = "LightLogWeb::development_devicefile_dataset_record",
+    loader = "LightLogWeb::development_devicefiles_dataset_record",
     source_timezone_decision = source_timezone
   )
   validate_dataset_record(record)
@@ -354,6 +473,42 @@ load_dataset_example <- function(key, project_root = NULL) {
     ),
     iztech = melidos_iztech_dataset_record(
       development_large_dataset_path(project_root)
+    ),
+    actlumus_all = development_devicefiles_dataset_record(
+      paths = development_testdevice_paths("actlumus_all", project_root),
+      display_name = "All provided ActLumus files",
+      source_timezone = "Europe/Berlin",
+      example_key = key,
+      device = "ActLumus",
+      preferred_primary = c("MEDI", "LIGHT")
+    ),
+    speccy_all = development_devicefiles_dataset_record(
+      paths = development_testdevice_paths("speccy_all", project_root),
+      display_name = "All provided Speccy files",
+      source_timezone = "UTC",
+      example_key = key,
+      device = "Speccy",
+      id_mode = "extract",
+      extract_pattern = "^(ID[0-9]{2})",
+      preferred_primary = c("MEDI", "Photopic.lux")
+    ),
+    veet_02_als = development_devicefiles_dataset_record(
+      paths = development_testdevice_paths("veet_02", project_root),
+      display_name = "VEET 02 - ambient-light sensor (ALS)",
+      source_timezone = "Europe/Berlin",
+      example_key = key,
+      device = "VEET",
+      veet_modality = "ALS",
+      preferred_primary = c("Lux", "visValue")
+    ),
+    veet_02_pho = development_devicefiles_dataset_record(
+      paths = development_testdevice_paths("veet_02", project_root),
+      display_name = "VEET 02 - spectral sensor (PHO)",
+      source_timezone = "Europe/Berlin",
+      example_key = key,
+      device = "VEET",
+      veet_modality = "PHO",
+      preferred_primary = c("Clear", "s480")
     )
   )
 }

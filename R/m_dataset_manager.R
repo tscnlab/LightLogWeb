@@ -82,9 +82,9 @@ datasetSidebarUI <- function(id, example_choices = dataset_example_choices()) {
       ),
       actionButton(
         ns("reset_dataset"),
-        "Reset prepared data" |>
+        "Reset pre-processed data" |>
           tooltip2(
-            "Restore prepared data to the immutable canonical raw data; the reset remains undoable."
+            "Restore pre-processed data to the immutable source data; the reset remains undoable."
           ),
         icon = icon("rotate-left"),
         class = "btn-outline-secondary"
@@ -430,17 +430,17 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
       record <- datasets()[[dataset_id]]
       req(record)
       showModal(modalDialog(
-        title = "Reset prepared data?",
+        title = "Reset pre-processed data?",
         easyClose = TRUE,
         footer = modalButton("Keep current preparation"),
         p(
-          "Prepared data for ",
+          "Pre-processed data for ",
           strong(record$display_name),
-          " will return to the unchanged canonical raw data. This action can be undone."
+          " will return to the unchanged source data. This action can be undone."
         ),
         actionButton(
           session$ns("reset_dataset_real"),
-          "Reset prepared data",
+          "Reset pre-processed data",
           icon = icon("rotate-left"),
           class = "btn-warning",
           width = "100%"
