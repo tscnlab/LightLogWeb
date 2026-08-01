@@ -17,6 +17,28 @@ glcdp_export_contract <- function() {
   )
 }
 
+is_glc_repository <- function(repository) {
+  is.character(repository) &&
+    length(repository) == 1L &&
+    !is.na(repository) &&
+    grepl("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repository) &&
+    !any(strsplit(repository, "/", fixed = TRUE)[[1L]] %in% c(".", ".."))
+}
+
+assert_glc_repository <- function(repository, arg = "repository") {
+  if (!is_glc_repository(repository)) {
+    abort_llw(
+      paste0(
+        "`",
+        arg,
+        "` must use the conservative `owner/repository` form."
+      ),
+      type = "validation"
+    )
+  }
+  invisible(repository)
+}
+
 new_glc_source_spec <- function(
   registry_url,
   repository,
@@ -32,17 +54,7 @@ new_glc_source_spec <- function(
   requested_revision <- match.arg(requested_revision)
   validation_state <- match.arg(validation_state)
   assert_scalar_string(registry_url, "registry_url")
-  assert_scalar_string(repository, "repository")
-  repository_parts <- strsplit(repository, "/", fixed = TRUE)[[1L]]
-  if (
-    !grepl("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repository) ||
-      any(repository_parts %in% c(".", ".."))
-  ) {
-    abort_llw(
-      "`repository` must use the conservative `owner/repository` form.",
-      type = "validation"
-    )
-  }
+  assert_glc_repository(repository)
   assert_scalar_string(resolved_revision, "resolved_revision")
   if (!grepl("^[0-9a-fA-F]{40}$", resolved_revision)) {
     abort_llw(
@@ -370,8 +382,8 @@ glcdp_inventory_preview <- function(handle, selection, api) {
   } else {
     api$glc_metadata(handle, resources = selection$resources)
   }
-  expected_size <- if ("expected_size" %in% names(files)) {
-    as.numeric(files$expected_size)
+  expected_bytes <- if ("expected_bytes" %in% names(files)) {
+    as.numeric(files$expected_bytes)
   } else {
     numeric()
   }
@@ -387,19 +399,115 @@ glcdp_inventory_preview <- function(handle, selection, api) {
     variables = variables,
     resources = resources,
     metadata = metadata,
-    transfer_bytes = if (length(expected_size) == 0L) {
+    transfer_bytes = if (
+      length(expected_bytes) == 0L || all(is.na(expected_bytes))
+    ) {
       NA_real_
     } else {
-      sum(expected_size, na.rm = TRUE)
+      sum(expected_bytes, na.rm = TRUE)
     },
     availability = availability,
     compatibility_partitions = list(),
     warnings = character(),
-    estimate_uncertain = length(expected_size) == 0L || anyNA(expected_size)
+    estimate_uncertain = length(expected_bytes) == 0L || anyNA(expected_bytes)
+  )
+}
+
+new_glc_preview_allocation <- function(total_budget, file_ids) {
+  if (
+    !is.numeric(total_budget) ||
+      length(total_budget) != 1L ||
+      is.na(total_budget) ||
+      total_budget < 0 ||
+      is.finite(total_budget) && total_budget != floor(total_budget)
+  ) {
+    abort_llw(
+      "`total_budget` must be one non-negative whole number or `Inf`.",
+      type = "validation"
+    )
+  }
+  assert_character_vector(file_ids, "file_ids", allow_empty = FALSE)
+  file_ids <- unique(file_ids)
+  available_file_count <- length(file_ids)
+
+  if (is.infinite(total_budget)) {
+    preview_file_count <- available_file_count
+    per_file_n_max <- Inf
+    maximum_rows <- Inf
+    unused_budget <- 0
+  } else if (identical(total_budget, 0) || total_budget == 0) {
+    preview_file_count <- available_file_count
+    per_file_n_max <- 0
+    maximum_rows <- 0
+    unused_budget <- 0
+  } else {
+    preview_file_count <- min(available_file_count, total_budget)
+    per_file_n_max <- floor(total_budget / preview_file_count)
+    maximum_rows <- preview_file_count * per_file_n_max
+    unused_budget <- total_budget - maximum_rows
+  }
+
+  preview_file_count <- as.integer(preview_file_count)
+  allocation <- structure(
+    list(
+      total_budget = total_budget,
+      available_file_count = available_file_count,
+      preview_file_count = preview_file_count,
+      preview_files = file_ids[seq_len(preview_file_count)],
+      omitted_files = if (preview_file_count < available_file_count) {
+        file_ids[seq.int(preview_file_count + 1L, available_file_count)]
+      } else {
+        character()
+      },
+      per_file_n_max = per_file_n_max,
+      maximum_rows = maximum_rows,
+      unused_budget = unused_budget
+    ),
+    class = c("llw_glc_preview_allocation", "list")
+  )
+  assert_serializable_value(allocation, "GLC preview allocation")
+  allocation
+}
+
+glcdp_preview_file_ids <- function(handle, selection, api) {
+  if (length(selection$files) > 0L) {
+    return(unique(selection$files))
+  }
+
+  files <- api$glc_files(
+    handle,
+    dataset_id = if (length(selection$dataset_ids) == 0L) {
+      NULL
+    } else {
+      selection$dataset_ids
+    },
+    file_group = if (length(selection$file_group_ids) == 0L) {
+      NULL
+    } else {
+      selection$file_group_ids
+    }
+  )
+  if (!is.data.frame(files) || !"path" %in% names(files)) {
+    abort_llw(
+      "The glcdp file inventory does not provide stable file paths.",
+      type = "validation"
+    )
+  }
+  file_ids <- as.character(files$path)
+  assert_character_vector(file_ids, "glcdp file paths", allow_empty = FALSE)
+  unique(file_ids)
+}
+
+glcdp_preview_read_plan <- function(handle, selection, api) {
+  selection <- validate_glc_selection(selection)
+  new_glc_preview_allocation(
+    total_budget = selection$preview_n_max,
+    file_ids = glcdp_preview_file_ids(handle, selection, api)
   )
 }
 
 glcdp_read_selection <- function(handle, selection, api) {
+  allocation <- glcdp_preview_read_plan(handle, selection, api)
   collection <- api$glc_read(
     x = handle,
     dataset_id = if (length(selection$dataset_ids) == 0L) {
@@ -412,7 +520,7 @@ glcdp_read_selection <- function(handle, selection, api) {
     } else {
       selection$file_group_ids
     },
-    files = if (length(selection$files) == 0L) NULL else selection$files,
+    files = allocation$preview_files,
     variables = if (length(selection$source_variables) == 0L) {
       NULL
     } else {
@@ -424,7 +532,7 @@ glcdp_read_selection <- function(handle, selection, api) {
       selection$semantic_terms
     },
     primary_only = selection$primary_only,
-    n_max = selection$preview_n_max,
+    n_max = allocation$per_file_n_max,
     problems = selection$problem_policy,
     progress = FALSE
   )

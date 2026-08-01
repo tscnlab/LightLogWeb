@@ -21,7 +21,7 @@ fake_glcdp_api <- function(call_log = new.env(parent = emptyenv())) {
     glc_files = function(x, dataset_id = NULL, file_group = NULL) {
       data.frame(
         path = "data.csv",
-        expected_size = 100,
+        expected_bytes = 100,
         available = TRUE
       )
     },
@@ -36,7 +36,10 @@ fake_glcdp_api <- function(call_log = new.env(parent = emptyenv())) {
     glc_resources = function(x) data.frame(resource = "datasets"),
     glc_metadata = function(x, resources = NULL) list(study = "Fixture"),
     glc_search_metadata = function(...) data.frame(),
-    glc_read = function(...) structure(list(), class = "glc_data_collection"),
+    glc_read = function(...) {
+      call_log$read <- list(...)
+      structure(list(), class = "glc_data_collection")
+    },
     glc_collect = function(x, standardize) m1_fixture_data(),
     glc_download = function(...) data.frame(path = "data.csv")
   )
@@ -52,8 +55,8 @@ test_that("GLC source and selection objects are serializable data only", {
     resolved_revision = paste(rep("a", 40L), collapse = ""),
     validation_state = "passed",
     attestation_verified = TRUE,
-    schema_version = "2.0.0",
-    glcdp_version = "0.90.0",
+    schema_version = "3.0.2",
+    glcdp_version = "1.0.0",
     cache_dir = cache_dir
   )
   selection <- new_glc_selection(
@@ -86,8 +89,8 @@ test_that("the GLC worker reopens the exact revision and returns no live handle"
     requested_revision = "exact",
     resolved_revision = paste(rep("b", 40L), collapse = ""),
     validation_state = "passed",
-    schema_version = "2.0.0",
-    glcdp_version = "0.90.0",
+    schema_version = "3.0.2",
+    glcdp_version = "1.0.0",
     cache_dir = tempfile("glc-cache-")
   )
   selection <- new_glc_selection(dataset_ids = "dataset-a")
@@ -114,8 +117,8 @@ test_that("the worker boundary revalidates modified GLC value objects", {
     requested_revision = "exact",
     resolved_revision = strrep("d", 40L),
     validation_state = "passed",
-    schema_version = "2.0.0",
-    glcdp_version = "0.90.0",
+    schema_version = "3.0.2",
+    glcdp_version = "1.0.0",
     cache_dir = tempfile("glc-cache-")
   )
   selection <- new_glc_selection(dataset_ids = "dataset-a")
@@ -146,6 +149,90 @@ test_that("the worker boundary revalidates modified GLC value objects", {
   )
 })
 
+test_that("declared transfer bytes use the glcdp 1.0 expected_bytes field", {
+  fake <- fake_glcdp_api()
+  fake$api$glc_files <- function(x, dataset_id = NULL, file_group = NULL) {
+    data.frame(
+      path = c("known.csv", "unknown.csv"),
+      expected_bytes = c(125, NA_real_),
+      available = c(TRUE, TRUE)
+    )
+  }
+  preview <- glcdp_inventory_preview(
+    structure(list(), class = "glc_package"),
+    new_glc_selection(dataset_ids = "dataset-a"),
+    fake$api
+  )
+
+  expect_equal(preview$transfer_bytes, 125)
+  expect_true(preview$estimate_uncertain)
+
+  fake$api$glc_files <- function(x, dataset_id = NULL, file_group = NULL) {
+    data.frame(
+      path = "unknown.csv",
+      expected_bytes = NA_real_,
+      available = TRUE
+    )
+  }
+  unknown <- glcdp_inventory_preview(
+    structure(list(), class = "glc_package"),
+    new_glc_selection(dataset_ids = "dataset-a"),
+    fake$api
+  )
+  expect_true(is.na(unknown$transfer_bytes))
+  expect_true(unknown$estimate_uncertain)
+})
+
+test_that("a total preview budget becomes a safe deterministic per-file plan", {
+  allocation <- new_glc_preview_allocation(
+    total_budget = 10,
+    file_ids = paste0("file-", 1:7, ".csv")
+  )
+  expect_s3_class(allocation, "llw_glc_preview_allocation")
+  expect_equal(allocation$preview_file_count, 7L)
+  expect_equal(allocation$per_file_n_max, 1)
+  expect_equal(allocation$maximum_rows, 7)
+  expect_equal(allocation$unused_budget, 3)
+  expect_lte(allocation$maximum_rows, allocation$total_budget)
+  expect_length(allocation$omitted_files, 0L)
+
+  bounded <- new_glc_preview_allocation(
+    total_budget = 3,
+    file_ids = paste0("file-", 1:7, ".csv")
+  )
+  expect_equal(bounded$preview_files, paste0("file-", 1:3, ".csv"))
+  expect_equal(bounded$omitted_files, paste0("file-", 4:7, ".csv"))
+  expect_equal(bounded$per_file_n_max, 1)
+  expect_equal(bounded$maximum_rows, 3)
+  expect_null(nonserializable_path(bounded))
+})
+
+test_that("preview reads apply the derived file subset and per-file n_max", {
+  fake <- fake_glcdp_api()
+  fake$api$glc_files <- function(x, dataset_id = NULL, file_group = NULL) {
+    data.frame(
+      path = paste0("file-", 1:5, ".csv"),
+      expected_bytes = rep(100, 5L),
+      available = TRUE
+    )
+  }
+  selection <- new_glc_selection(
+    dataset_ids = "dataset-a",
+    preview_n_max = 3L
+  )
+  result <- glcdp_read_selection(
+    structure(list(), class = "glc_package"),
+    selection,
+    fake$api
+  )
+
+  expect_s3_class(result, "data.frame")
+  expect_equal(fake$calls$read$files, paste0("file-", 1:3, ".csv"))
+  expect_equal(fake$calls$read$n_max, 1)
+  expect_identical(fake$calls$read$progress, FALSE)
+  expect_identical(fake$calls$read$problems, "error")
+})
+
 test_that("documented glcdp conditions map to recoverable public errors", {
   cases <- list(
     discovery = "glcdp_registry_error",
@@ -171,7 +258,7 @@ test_that("documented glcdp conditions map to recoverable public errors", {
 })
 
 test_that("the installed glcdp seam matches the reviewed public export contract", {
-  skip_if_not_installed("glcdp", minimum_version = "0.90.0")
+  skip_if_not_installed("glcdp", minimum_version = "1.0.0")
   exports <- getNamespaceExports("glcdp")
 
   expect_true(all(glcdp_export_contract() %in% exports))
@@ -194,6 +281,25 @@ test_that("the installed glcdp seam matches the reviewed public export contract"
       "progress"
     )
   )
+  expect_identical(
+    names(formals(glcdp::glc_download)),
+    c(
+      "x",
+      "dest_dir",
+      "include",
+      "dataset_id",
+      "file_group",
+      "resources",
+      "files",
+      "overwrite"
+    )
+  )
+  provenance <- glcdp_runtime_provenance()
+  expect_identical(provenance$version, "1.0.0")
+  expect_identical(
+    provenance$revision,
+    "bf97cb30555569886f08db0bdb25421c546ccf0a"
+  )
 })
 
 test_that("task payload construction rejects a live glcdp package handle", {
@@ -203,8 +309,8 @@ test_that("task payload construction rejects a live glcdp package handle", {
     requested_revision = "exact",
     resolved_revision = strrep("c", 40L),
     validation_state = "passed",
-    schema_version = "2.0.0",
-    glcdp_version = "0.90.0",
+    schema_version = "3.0.2",
+    glcdp_version = "1.0.0",
     cache_dir = tempfile("glc-cache-")
   )
   selection <- new_glc_selection(dataset_ids = "dataset-a")

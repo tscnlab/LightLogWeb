@@ -31,6 +31,7 @@ Imports:
     DT,
     ggplot2,
     ggtext,
+    glcdp (>= 1.0.0),
     gt,
     htmltools,
     LightLogR (>= 0.10.3),
@@ -43,7 +44,6 @@ Imports:
     shinycssloaders,
     stringr
 Suggests: 
-    glcdp (>= 1.0.0),
     knitr,
     later,
     melidosData (>= 1.0.6),
