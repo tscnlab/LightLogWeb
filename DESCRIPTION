@@ -43,7 +43,7 @@ Imports:
     shinycssloaders,
     stringr
 Suggests: 
-    glcdp (>= 0.90.0),
+    glcdp (>= 1.0.0),
     knitr,
     later,
     melidosData (>= 1.0.6),
@@ -56,7 +56,7 @@ Suggests:
     shinytest2 (>= 0.5.1),
     testthat (>= 3.3.2)
 Remotes:
-    tscnlab/glc-dp-r@21e806112a0032261d65180c3cc3ed72af38ea8d
+    tscnlab/glc-dp-r@bf97cb30555569886f08db0bdb25421c546ccf0a
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown
 Config/roxygen2/version: 8.0.0

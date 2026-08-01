@@ -70,12 +70,10 @@ old dependency choices are not inherited by default.
 
 ### 2.3 GLC/glcdp integration basis
 
-- The reviewed integration target is glcdp 1.0.0 at public Git commit
-  `76b532a7167edb212059734234ff6ed6fe10f9e2`, verified against the GitHub
-  origin on 2026-07-28. The existing dependency files remain at the historical
-  0.90.0 Milestone 0 baseline until the production upgrade at Milestone 6.
-  glcdp 1.0.0 was not available from CRAN at review time, so the exact-commit
-  policy remains in force.
+- The integration target is glcdp 1.0.0 at the submitted-source Git commit
+  `bf97cb30555569886f08db0bdb25421c546ccf0a`, confirmed from the package's
+  CRAN submission record on 2026-08-01. glcdp 1.0.0 has been submitted but is
+  not yet available from CRAN, so the exact-commit policy remains in force.
 - glcdp is the sole boundary for GLC registry discovery, immutable validated
   revision selection, Git/Git-LFS transport, schema-normalized inventories,
   metadata reads/search, data import, compatible collection, subset download,
@@ -129,8 +127,11 @@ old dependency choices are not inherited by default.
   CRAN.
 - The refreshed lockfile is an output of that resolution and records the
   reproducible environment; it must not be used to force obsolete versions.
-- The initial runtime target remains R 4.5.0. DESCRIPTION must declare at least
-  the minimum R version required by the resolved LightLogR release.
+- The current reproducible development runtime is R 4.6.1. DESCRIPTION must
+  declare at least the minimum R version required by the resolved LightLogR
+  release; it need not require R 4.6.1 unless package code depends on it.
+- The 2026-08-01 R 4.6.1 dependency refresh is recorded in
+  dev/dependency-refresh-r-4.6.1.md.
 - Record exact resolved versions and the resolution date in the lockfile and
   Milestone 0 evidence.
 - Later upgrades are intentional maintenance events: update from current CRAN,
@@ -727,9 +728,10 @@ Milestone evidence:
 ### Milestone 6 — GLC discovery, selective import, and package download
 
 1. Upgrade the historical optional glcdp 0.90.0 dependency to glcdp 1.0.0 at
-   exact commit `76b532a7167edb212059734234ff6ed6fe10f9e2` and promote it to
-   Imports at the start of this milestone. Refresh the lock and deployment
-   manifest only after adapter parity tests pass. Make any later CRAN
+   exact submitted-source commit
+   `bf97cb30555569886f08db0bdb25421c546ccf0a` and promote it to Imports at the
+   start of this milestone. Refresh the R 4.6.1 lock and deployment manifest;
+   adapter parity tests still gate feature integration. Make any later CRAN
    transition a tested dependency update rather than an automatic source
    switch.
 2. Build registry discovery with glc_packages and glc_search_packages. Show
