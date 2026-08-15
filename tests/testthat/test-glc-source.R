@@ -214,6 +214,18 @@ test_that("GLC source module preselects one exact deep link without data access"
     ),
     {
       returned <- session$getReturned()
+      expect_identical(returned$status()$state, "queued")
+      expect_identical(returned$status()$heading, "Loading registry")
+      initialization <- new.env(parent = emptyenv())
+      later::later(function() {
+        initialization$result <- tryCatch(
+          returned$initialize(),
+          error = identity
+        )
+      }, delay = 0)
+      later::run_now(timeoutSecs = 0.1)
+      expect_true(exists("result", initialization, inherits = FALSE))
+      expect_false(inherits(initialization$result, "error"))
       session$flushReact()
 
       expect_equal(calls$loads, 1L)
@@ -227,6 +239,17 @@ test_that("GLC source module preselects one exact deep link without data access"
       expect_match(table_html, "data-selected=\"true\"", fixed = TRUE)
       expect_match(table_html, "fa-check", fixed = TRUE)
       expect_match(table_html, "Selected", fixed = TRUE)
+      status_html <- htmltools::renderTags(output$registry_status)$html
+      expect_match(status_html, "Registry ready", fixed = TRUE)
+      expect_match(
+        status_html,
+        "The exact registry repository was preselected",
+        fixed = TRUE
+      )
+      expect_equal(
+        stringr::str_count(status_html, 'class="llw-status '),
+        1L
+      )
 
       session$setInputs(search = "warning")
       session$flushReact()
@@ -255,6 +278,7 @@ test_that("GLC source module parses the launch query only once", {
     ),
     {
       returned <- session$getReturned()
+      returned$initialize()
       session$flushReact()
       expect_identical(returned$deep_link()$state, "matched")
 
@@ -262,6 +286,52 @@ test_that("GLC source module parses the launch query only once", {
       session$flushReact()
       expect_identical(returned$deep_link()$state, "matched")
       expect_identical(returned$selection()$repository, "fixture/validated")
+    }
+  )
+})
+
+test_that("GLC source controller switches fresh and deep-link review paths", {
+  calls <- new.env(parent = emptyenv())
+  calls$loads <- 0L
+
+  shiny::testServer(
+    glcSourceServer,
+    args = list(
+      registry_url = "fixture://registry",
+      raw_query = "",
+      registry_loader = function(registry_url, refresh = FALSE) {
+        calls$loads <- calls$loads + 1L
+        glc_source_test_registry()
+      },
+      registry_search = glc_source_test_search
+    ),
+    {
+      returned <- session$getReturned()
+      returned$initialize()
+      session$flushReact()
+      expect_null(returned$selection())
+      expect_identical(returned$deep_link()$state, "absent")
+
+      expect_true(returned$apply_deep_link(
+        "?repo=fixture%2Fvalidated"
+      ))
+      session$flushReact()
+      expect_identical(returned$selection()$repository, "fixture/validated")
+      expect_identical(returned$deep_link()$state, "matched")
+      expect_equal(calls$loads, 1L)
+
+      returned$clear_selection()
+      session$flushReact()
+      expect_null(returned$selection())
+      expect_identical(returned$deep_link()$state, "absent")
+
+      expect_false(returned$apply_deep_link(
+        "?repo=fixture%252Fvalidated"
+      ))
+      session$flushReact()
+      expect_null(returned$selection())
+      expect_identical(returned$deep_link()$state, "invalid")
+      expect_equal(calls$loads, 1L)
     }
   )
 })
@@ -284,6 +354,7 @@ test_that("invalid and unmatched deep links remain recoverable preselection stat
       ),
       {
         returned <- session$getReturned()
+        returned$initialize()
         session$flushReact()
         expect_identical(returned$deep_link()$state, expected_state)
         expect_null(returned$selection())
@@ -306,6 +377,7 @@ test_that("a selected package without a passing revision cannot proceed", {
     ),
     {
       returned <- session$getReturned()
+      returned$initialize()
       session$flushReact()
       action_id <- glc_registry_select_action_id("fixture/no-pass")
       do.call(session$setInputs, stats::setNames(list(1L), action_id))
@@ -356,6 +428,7 @@ test_that("stable row actions survive search, reorder, and removal once", {
     ),
     {
       returned <- session$getReturned()
+      returned$initialize()
       session$flushReact()
       warning_action <- glc_registry_select_action_id("fixture/warning")
       validated_action <- glc_registry_select_action_id("fixture/validated")
@@ -437,6 +510,7 @@ test_that("failed registry refresh preserves the last successful view", {
     ),
     {
       returned <- session$getReturned()
+      returned$initialize()
       session$flushReact()
       before <- returned$registry()
       selected <- returned$selection()
@@ -465,7 +539,8 @@ test_that("GLC source UI states that selection performs no data transfer", {
   expect_match(html, "never reads, downloads, or creates a dataset", fixed = TRUE)
   expect_match(html, "Refresh registry", fixed = TRUE)
   expect_match(html, "Search registry", fixed = TRUE)
-  expect_match(html, "Selected source", fixed = TRUE)
+  expect_false(grepl("Selected source", html, fixed = TRUE))
+  expect_false(grepl("deep_link_status", html, fixed = TRUE))
   expect_match(html, "llw-glc-registry-controls", fixed = TRUE)
   expect_match(html, "btn-primary llw-glc-refresh-button", fixed = TRUE)
   expect_match(html, "height: 2.75rem", fixed = TRUE)

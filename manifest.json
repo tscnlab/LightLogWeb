@@ -16,8 +16,8 @@
   },
   "packages": {
     "AsioHeaders": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "AsioHeaders",
         "Type": "Package",
@@ -48,8 +48,8 @@
       }
     },
     "DBI": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "DBI",
         "Title": "R Database Interface",
@@ -88,7 +88,7 @@
     },
     "DT": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "DT",
@@ -122,7 +122,7 @@
     },
     "KernSmooth": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "KernSmooth",
         "Priority": "recommended",
@@ -147,7 +147,7 @@
     },
     "LightLogR": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "LightLogR",
         "Title": "Process Data from Wearable Light Loggers and Optical Radiation\nDosimeters",
@@ -183,7 +183,7 @@
     },
     "MASS": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "MASS",
         "Priority": "recommended",
@@ -219,8 +219,8 @@
       }
     },
     "Matrix": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "Matrix",
         "Version": "1.7-6",
@@ -259,8 +259,8 @@
       }
     },
     "R6": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "R6",
         "Title": "Encapsulated Classes with Reference Semantics",
@@ -293,8 +293,8 @@
       }
     },
     "RColorBrewer": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "RColorBrewer",
         "Version": "1.1-3",
@@ -322,8 +322,8 @@
       }
     },
     "Rcpp": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "Rcpp",
         "Title": "Seamless R and C++ Integration",
@@ -358,7 +358,7 @@
     },
     "RcppTOML": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "RcppTOML",
         "Type": "Package",
@@ -393,8 +393,8 @@
       }
     },
     "S7": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "S7",
         "Title": "An Object Oriented System Meant to Become a Successor to S3 and\nS4",
@@ -432,8 +432,8 @@
       }
     },
     "V8": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "V8",
         "Type": "Package",
@@ -470,8 +470,8 @@
       }
     },
     "askpass": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "askpass",
         "Type": "Package",
@@ -504,8 +504,8 @@
       }
     },
     "backports": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "backports",
         "Type": "Package",
@@ -537,8 +537,8 @@
       }
     },
     "base64enc": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "base64enc",
         "Version": "0.1-6",
@@ -568,8 +568,8 @@
       }
     },
     "bigD": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "bigD",
@@ -603,8 +603,8 @@
       }
     },
     "bit": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "bit",
         "Title": "Classes and Methods for Fast Memory-Efficient Boolean Selections",
@@ -638,8 +638,8 @@
       }
     },
     "bit64": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "bit64",
         "Title": "A S3 Class for Vectors of 64bit Integers",
@@ -676,7 +676,7 @@
     },
     "bitops": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "bitops",
         "Version": "1.1-0",
@@ -707,7 +707,7 @@
     },
     "boot": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "boot",
         "Priority": "recommended",
@@ -733,7 +733,7 @@
     },
     "brew": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "brew",
@@ -764,8 +764,8 @@
       }
     },
     "brio": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "brio",
         "Title": "Basic R Input Output",
@@ -799,7 +799,7 @@
     },
     "bsicons": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "bsicons",
         "Title": "Easily Work with 'Bootstrap' Icons",
@@ -832,8 +832,8 @@
       }
     },
     "bslib": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "bslib",
         "Title": "Custom 'Bootstrap' 'Sass' Themes for 'shiny' and 'rmarkdown'",
@@ -872,8 +872,8 @@
       }
     },
     "cachem": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "cachem",
         "Version": "1.1.0",
@@ -906,8 +906,8 @@
       }
     },
     "callr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "callr",
         "Title": "Call R from R",
@@ -943,8 +943,8 @@
       }
     },
     "checkmate": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "checkmate",
         "Type": "Package",
@@ -982,7 +982,7 @@
     },
     "chromote": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "chromote",
         "Title": "Headless Chrome Web Browser Interface",
@@ -1020,8 +1020,8 @@
       }
     },
     "circular": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Title": "Circular Statistics",
         "LazyLoad": "yes",
@@ -1052,7 +1052,7 @@
     },
     "class": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "class",
         "Priority": "recommended",
@@ -1076,8 +1076,8 @@
       }
     },
     "classInt": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "classInt",
         "Version": "0.4-11",
@@ -1111,8 +1111,8 @@
       }
     },
     "cli": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "cli",
         "Title": "Helpers for Developing Command Line Interfaces",
@@ -1147,8 +1147,8 @@
       }
     },
     "clipr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "clipr",
@@ -1184,7 +1184,7 @@
     },
     "cluster": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "cluster",
         "Version": "2.1.8.3",
@@ -1225,7 +1225,7 @@
     },
     "codetools": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "codetools",
         "Version": "0.2-20",
@@ -1245,8 +1245,8 @@
       }
     },
     "commonmark": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "commonmark",
         "Type": "Package",
@@ -1278,8 +1278,8 @@
       }
     },
     "cowplot": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "cowplot",
         "Title": "Streamlined Plot Theme and Plot Annotations for 'ggplot2'",
@@ -1313,8 +1313,8 @@
       }
     },
     "cpp11": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "cpp11",
         "Title": "A C++11 Interface for R's C Interface",
@@ -1349,8 +1349,8 @@
       }
     },
     "crayon": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "crayon",
         "Title": "Colored Terminal Output",
@@ -1384,7 +1384,7 @@
     },
     "crosstalk": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "crosstalk",
@@ -1417,8 +1417,8 @@
       }
     },
     "curl": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "curl",
         "Type": "Package",
@@ -1453,8 +1453,8 @@
       }
     },
     "desc": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "desc",
         "Title": "Manipulate DESCRIPTION Files",
@@ -1490,8 +1490,8 @@
       }
     },
     "diffobj": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "diffobj",
         "Type": "Package",
@@ -1526,8 +1526,8 @@
       }
     },
     "digest": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "digest",
         "Authors@R": "c(person(\"Dirk\", \"Eddelbuettel\", role = c(\"aut\", \"cre\"), email = \"edd@debian.org\",\n                    comment = c(ORCID = \"0000-0001-6419-907X\")),\n             person(\"Antoine\", \"Lucas\", role=\"ctb\", comment = c(ORCID = \"0000-0002-8059-9767\")),\n             person(\"Jarek\", \"Tuszynski\", role=\"ctb\"),\n             person(\"Henrik\", \"Bengtsson\", role=\"ctb\", comment = c(ORCID = \"0000-0002-7579-5165\")),\n             person(\"Simon\", \"Urbanek\", role=\"ctb\", comment = c(ORCID = \"0000-0003-2297-1732\")),\n             person(\"Mario\", \"Frasca\", role=\"ctb\"),\n             person(\"Bryan\", \"Lewis\", role=\"ctb\"),\n             person(\"Murray\", \"Stokely\", role=\"ctb\"),\n             person(\"Hannes\", \"Muehleisen\", role=\"ctb\", comment = c(ORCID = \"0000-0001-8552-0029\")),\n             person(\"Duncan\", \"Murdoch\", role=\"ctb\"),\n             person(\"Jim\", \"Hester\", role=\"ctb\", comment = c(ORCID = \"0000-0002-2739-7082\")),\n             person(\"Wush\", \"Wu\", role=\"ctb\", comment = c(ORCID = \"0000-0001-5180-0567\")),\n             person(\"Qiang\", \"Kou\", role=\"ctb\", comment = c(ORCID = \"0000-0001-6786-5453\")),\n             person(\"Thierry\", \"Onkelinx\", role=\"ctb\", comment = c(ORCID = \"0000-0001-8804-4216\")),\n             person(\"Michel\", \"Lang\", role=\"ctb\", comment = c(ORCID = \"0000-0001-9754-0393\")),\n             person(\"Viliam\", \"Simko\", role=\"ctb\"),\n             person(\"Kurt\", \"Hornik\", role=\"ctb\", comment = c(ORCID = \"0000-0003-4198-9911\")),\n             person(\"Radford\", \"Neal\", role=\"ctb\", comment = c(ORCID = \"0000-0002-2473-3407\")),\n             person(\"Kendon\", \"Bell\", role=\"ctb\", comment = c(ORCID = \"0000-0002-9093-8312\")),\n             person(\"Matthew\", \"de Queljoe\", role=\"ctb\"),\n             person(\"Dmitry\", \"Selivanov\", role=\"ctb\", comment = c(ORCID = \"0000-0003-0492-6647\")),\n             person(\"Ion\", \"Suruceanu\", role=\"ctb\", comment = c(ORCID = \"0009-0005-6446-4909\")),\n             person(\"Bill\", \"Denney\", role=\"ctb\", comment = c(ORCID = \"0000-0002-5759-428X\")),\n             person(\"Dirk\", \"Schumacher\", role=\"ctb\"),\n             person(\"András\", \"Svraka\", role=\"ctb\", comment = c(ORCID = \"0009-0008-8480-1329\")),\n             person(\"Sergey\", \"Fedorov\", role=\"ctb\", comment = c(ORCID = \"0000-0002-5970-7233\")),\n             person(\"Will\", \"Landau\", role=\"ctb\", comment = c(ORCID = \"0000-0003-1878-3253\")),\n             person(\"Floris\", \"Vanderhaeghe\", role=\"ctb\", comment = c(ORCID = \"0000-0002-6378-6229\")),\n             person(\"Kevin\", \"Tappe\", role=\"ctb\"),\n             person(\"Harris\", \"McGehee\", role=\"ctb\"),\n             person(\"Tim\", \"Mastny\", role=\"ctb\"),\n             person(\"Aaron\", \"Peikert\", role=\"ctb\", comment = c(ORCID = \"0000-0001-7813-818X\")),\n             person(\"Mark\", \"van der Loo\", role=\"ctb\", comment = c(ORCID = \"0000-0002-9807-4686\")),\n             person(\"Chris\", \"Muir\", role=\"ctb\", comment = c(ORCID = \"0000-0003-2555-3878\")),\n             person(\"Moritz\", \"Beller\", role=\"ctb\", comment = c(ORCID = \"0000-0003-4852-0526\")),\n             person(\"Sebastian\", \"Campbell\", role=\"ctb\", comment = c(ORCID = \"0009-0000-5948-4503\")),\n             person(\"Winston\", \"Chang\", role=\"ctb\", comment = c(ORCID = \"0000-0002-1576-2126\")),\n             person(\"Dean\", \"Attali\", role=\"ctb\", comment = c(ORCID = \"0000-0002-5645-3493\")),\n             person(\"Michael\", \"Chirico\", role=\"ctb\", comment = c(ORCID = \"0000-0003-0787-087X\")),\n             person(\"Kevin\", \"Ushey\", role=\"ctb\", comment = c(ORCID = \"0000-0003-2880-7407\")),\n             person(\"Carl\", \"Pearson\", role=\"ctb\", comment = c(ORCID = \"0000-0003-0701-7860\")))",
@@ -1561,7 +1561,7 @@
     },
     "downlit": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "downlit",
         "Title": "Syntax Highlighting and Automatic Linking",
@@ -1595,8 +1595,8 @@
       }
     },
     "dplyr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "dplyr",
@@ -1634,8 +1634,8 @@
       }
     },
     "e1071": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "e1071",
         "Version": "1.7-17",
@@ -1664,8 +1664,8 @@
       }
     },
     "evaluate": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "evaluate",
@@ -1700,7 +1700,7 @@
     },
     "fansi": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "fansi",
         "Title": "ANSI Control Sequence Aware String Functions",
@@ -1735,8 +1735,8 @@
       }
     },
     "farver": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "farver",
@@ -1768,8 +1768,8 @@
       }
     },
     "fastmap": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "fastmap",
         "Title": "Fast Data Structures",
@@ -1799,8 +1799,8 @@
       }
     },
     "fontawesome": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "fontawesome",
@@ -1836,7 +1836,7 @@
     },
     "foreign": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "foreign",
         "Priority": "recommended",
@@ -1865,8 +1865,8 @@
       }
     },
     "fs": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "fs",
         "Title": "Cross-Platform File System Operations Based on 'libuv'",
@@ -1905,8 +1905,8 @@
       }
     },
     "generics": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "generics",
         "Title": "Common S3 Generics not Provided by Base R Methods Related to\nModel Fitting",
@@ -1940,8 +1940,8 @@
       }
     },
     "ggplot2": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "ggplot2",
         "Title": "Create Elegant Data Visualisations Using the Grammar of Graphics",
@@ -1981,7 +1981,7 @@
     },
     "ggsci": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "ggsci",
         "Type": "Package",
@@ -2015,8 +2015,8 @@
       }
     },
     "ggtext": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "ggtext",
         "Type": "Package",
@@ -2055,7 +2055,7 @@
       "description": {
         "Package": "glcdp",
         "Title": "Discover, Access, and Import Global Light Commons Data Packages",
-        "Version": "1.0.0",
+        "Version": "1.0.0.9000",
         "Authors@R": "c(\n    person(\n      \"Johannes\", \"Zauner\",\n      email = \"johannes.zauner@tum.de\",\n      role = c(\"aut\", \"cre\", \"cph\"),\n      comment = c(ORCID = \"0000-0003-2171-4566\")\n    ),\n    person(\n      \"Salma M.\", \"Thalji\",\n      email = \"salma.thalji@tum.de\",\n      role = c(\"aut\", \"cph\"),\n      comment = c(ORCID = \"0009-0002-7320-9289\")\n    ),\n    person(\n      \"Manuel\", \"Spitschan\",\n      email = \"manuel.spitschan@tum.de\",\n      role = c(\"aut\", \"cph\"),\n      comment = c(ORCID = \"0000-0002-8572-9268\")\n    )\n  )",
         "Description": "Discovers Global Light Commons data packages through their\n    registry, opens immutable passing revisions, and provides searchable\n    inventories of package metadata. Selected metadata and measurement files\n    can be downloaded or imported with metadata-defined columns, types, factor\n    levels, date-time values, and time zones. 'Git Large File Storage' objects\n    are resolved without requiring an external 'Git LFS' installation, and\n    imported file groups can be explicitly collected into data suitable for\n    personal light exposure analysis workflows. An included 'shiny' application\n    supports interactive discovery, inspection, selection, preview, and\n    reproducible handoff to 'R'.",
         "License": "MIT + file LICENSE",
@@ -2072,23 +2072,23 @@
         "Config/roxygen2/version": "8.0.0",
         "Author": "Johannes Zauner [aut, cre, cph] (ORCID:\n    <https://orcid.org/0000-0003-2171-4566>),\n  Salma M. Thalji [aut, cph] (ORCID:\n    <https://orcid.org/0009-0002-7320-9289>),\n  Manuel Spitschan [aut, cph] (ORCID:\n    <https://orcid.org/0000-0002-8572-9268>)",
         "Maintainer": "Johannes Zauner <johannes.zauner@tum.de>",
-        "Built": "R 4.6.1; ; 2026-08-01 08:37:22 UTC; unix",
+        "Built": "R 4.6.1; ; 2026-08-14 19:19:19 UTC; unix",
         "RemoteType": "github",
         "RemoteHost": "api.github.com",
         "RemoteUsername": "tscnlab",
         "RemoteRepo": "glc-dp-r",
-        "RemoteRef": "bf97cb30555569886f08db0bdb25421c546ccf0a",
-        "RemoteSha": "bf97cb30555569886f08db0bdb25421c546ccf0a",
+        "RemoteRef": "e49fcf153a114916ce2680f8b40eb475e694e10d",
+        "RemoteSha": "e49fcf153a114916ce2680f8b40eb475e694e10d",
         "GithubHost": "api.github.com",
         "GithubRepo": "glc-dp-r",
         "GithubUsername": "tscnlab",
-        "GithubRef": "bf97cb30555569886f08db0bdb25421c546ccf0a",
-        "GithubSHA1": "bf97cb30555569886f08db0bdb25421c546ccf0a"
+        "GithubRef": "e49fcf153a114916ce2680f8b40eb475e694e10d",
+        "GithubSHA1": "e49fcf153a114916ce2680f8b40eb475e694e10d"
       }
     },
     "globals": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "globals",
         "Version": "0.19.1",
@@ -2122,8 +2122,8 @@
       }
     },
     "glue": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "glue",
         "Title": "Interpreted String Literals",
@@ -2160,8 +2160,8 @@
       }
     },
     "gridtext": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "gridtext",
         "Type": "Package",
@@ -2195,8 +2195,8 @@
       }
     },
     "gt": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "gt",
@@ -2235,8 +2235,8 @@
       }
     },
     "gtExtras": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "gtExtras",
@@ -2271,8 +2271,8 @@
       }
     },
     "gtable": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "gtable",
         "Title": "Arrange 'Grobs' in Tables",
@@ -2308,8 +2308,8 @@
       }
     },
     "highr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "highr",
         "Type": "Package",
@@ -2343,8 +2343,8 @@
       }
     },
     "hms": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "hms",
         "Title": "Pretty Time of Day",
@@ -2378,8 +2378,8 @@
       }
     },
     "htmltools": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "htmltools",
@@ -2416,8 +2416,8 @@
       }
     },
     "htmlwidgets": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "htmlwidgets",
@@ -2451,8 +2451,8 @@
       }
     },
     "httpuv": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "httpuv",
@@ -2492,7 +2492,7 @@
     },
     "httr2": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "httr2",
         "Title": "Perform HTTP Requests and Process the Responses",
@@ -2529,8 +2529,8 @@
       }
     },
     "isoband": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "isoband",
         "Title": "Generate Isolines and Isobands from Regularly Spaced Elevation\nGrids",
@@ -2568,7 +2568,7 @@
     },
     "jose": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "jose",
         "Type": "Package",
@@ -2603,8 +2603,8 @@
       }
     },
     "jpeg": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "jpeg",
         "Version": "0.1-11",
@@ -2634,8 +2634,8 @@
       }
     },
     "jquerylib": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "jquerylib",
         "Title": "Obtain 'jQuery' as an HTML Dependency Object",
@@ -2665,8 +2665,8 @@
       }
     },
     "jsonlite": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "jsonlite",
         "Version": "2.0.0",
@@ -2698,8 +2698,8 @@
       }
     },
     "juicyjuice": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "juicyjuice",
         "Title": "Inline CSS Properties into HTML Tags Using 'juice'",
@@ -2731,8 +2731,8 @@
       }
     },
     "knitr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "knitr",
         "Type": "Package",
@@ -2768,8 +2768,8 @@
       }
     },
     "labeling": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "labeling",
         "Type": "Package",
@@ -2798,8 +2798,8 @@
       }
     },
     "later": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "later",
@@ -2839,7 +2839,7 @@
     },
     "lattice": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "lattice",
         "Version": "0.22-9",
@@ -2868,7 +2868,7 @@
     },
     "lazyeval": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "lazyeval",
         "Version": "0.2.3",
@@ -2900,8 +2900,8 @@
       }
     },
     "lifecycle": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "lifecycle",
         "Title": "Manage the Life Cycle of your Package Functions",
@@ -2936,8 +2936,8 @@
       }
     },
     "litedown": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "litedown",
         "Type": "Package",
@@ -2971,8 +2971,8 @@
       }
     },
     "lubridate": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "lubridate",
@@ -3012,8 +3012,8 @@
       }
     },
     "magrittr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "magrittr",
@@ -3048,8 +3048,8 @@
       }
     },
     "markdown": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "markdown",
         "Type": "Package",
@@ -3083,7 +3083,7 @@
     },
     "melidosData": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "melidosData",
         "Title": "Load Data from the MeLiDos Field Study",
@@ -3117,8 +3117,8 @@
       }
     },
     "memoise": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "memoise",
         "Title": "'Memoisation' of Functions",
@@ -3150,7 +3150,7 @@
     },
     "mgcv": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "mgcv",
         "Version": "1.9-4",
@@ -3174,8 +3174,8 @@
       }
     },
     "mime": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "mime",
         "Type": "Package",
@@ -3207,7 +3207,7 @@
     },
     "mirai": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "mirai",
@@ -3246,8 +3246,8 @@
       }
     },
     "mvtnorm": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "mvtnorm",
         "Title": "Multivariate Normal and t Distributions",
@@ -3278,7 +3278,7 @@
     },
     "nanonext": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "nanonext",
@@ -3320,7 +3320,7 @@
     },
     "nlme": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "nlme",
         "Version": "3.1-170",
@@ -3358,7 +3358,7 @@
     },
     "nnet": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "nnet",
         "Priority": "recommended",
@@ -3382,8 +3382,8 @@
       }
     },
     "openssl": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "openssl",
         "Type": "Package",
@@ -3417,8 +3417,8 @@
       }
     },
     "otel": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "otel",
         "Title": "OpenTelemetry R API",
@@ -3453,7 +3453,7 @@
     },
     "packrat": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "packrat",
@@ -3487,8 +3487,8 @@
       }
     },
     "paletteer": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "paletteer",
         "Title": "Comprehensive Collection of Color Palettes",
@@ -3523,8 +3523,8 @@
       }
     },
     "pillar": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "pillar",
         "Title": "Coloured Formatting for Columns",
@@ -3564,7 +3564,7 @@
     },
     "pingr": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "pingr",
         "Title": "Check if a Remote Computer is Up",
@@ -3600,8 +3600,8 @@
       }
     },
     "pkgbuild": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "pkgbuild",
         "Title": "Find Tools Needed to Build R Packages",
@@ -3636,8 +3636,8 @@
       }
     },
     "pkgconfig": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "pkgconfig",
         "Title": "Private Configuration for 'R' Packages",
@@ -3668,7 +3668,7 @@
     },
     "pkgdown": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "pkgdown",
         "Title": "Make Static HTML Documentation for a Package",
@@ -3708,8 +3708,8 @@
       }
     },
     "pkgload": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "pkgload",
         "Title": "Simulate Package Installation and Attach",
@@ -3745,8 +3745,8 @@
       }
     },
     "png": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "png",
         "Version": "0.1-9",
@@ -3776,8 +3776,8 @@
       }
     },
     "praise": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "praise",
         "Title": "Praise Users",
@@ -3807,8 +3807,8 @@
       }
     },
     "prettyunits": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "prettyunits",
         "Title": "Pretty, Human Readable Formatting of Quantities",
@@ -3839,8 +3839,8 @@
       }
     },
     "prismatic": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "prismatic",
         "Title": "Color Manipulation Tools",
@@ -3873,8 +3873,8 @@
       }
     },
     "processx": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "processx",
         "Title": "Execute and Control System Processes",
@@ -3909,8 +3909,8 @@
       }
     },
     "progress": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "progress",
         "Title": "Terminal Progress Bars",
@@ -3944,8 +3944,8 @@
       }
     },
     "promises": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "promises",
@@ -3983,8 +3983,8 @@
       }
     },
     "proxy": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "proxy",
         "Type": "Package",
@@ -4015,8 +4015,8 @@
       }
     },
     "ps": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "ps",
         "Title": "List, Query, Manipulate System Processes",
@@ -4052,8 +4052,8 @@
       }
     },
     "purrr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "purrr",
         "Title": "Functional Programming Tools",
@@ -4093,7 +4093,7 @@
     },
     "quarto": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "quarto",
         "Title": "R Interface to 'Quarto' Markdown Publishing System",
@@ -4128,8 +4128,8 @@
       }
     },
     "ragg": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "ragg",
@@ -4167,8 +4167,8 @@
       }
     },
     "rappdirs": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "rappdirs",
@@ -4204,8 +4204,8 @@
       }
     },
     "reactR": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "reactR",
         "Type": "Package",
@@ -4239,8 +4239,8 @@
       }
     },
     "reactable": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "reactable",
         "Type": "Package",
@@ -4274,8 +4274,8 @@
       }
     },
     "readr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "readr",
         "Title": "Read Rectangular Text Data",
@@ -4314,8 +4314,8 @@
       }
     },
     "rematch2": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "rematch2",
         "Title": "Tidy Output from Regular Expression Matching",
@@ -4347,8 +4347,8 @@
       }
     },
     "renv": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "renv",
         "Type": "Package",
@@ -4372,14 +4372,21 @@
         "Packaged": "2026-05-16 18:11:48 UTC; kevin",
         "Author": "Kevin Ushey [aut, cre] (ORCID: <https://orcid.org/0000-0003-2880-7407>),\n  Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>),\n  Posit Software, PBC [cph, fnd]",
         "Maintainer": "Kevin Ushey <kevin@rstudio.com>",
-        "Repository": "CRAN",
+        "Repository": "RSPM",
         "Date/Publication": "2026-05-16 21:50:15 UTC",
-        "Built": "R 4.6.0; ; 2026-05-17 02:15:01 UTC; unix"
+        "Built": "R 4.6.0; ; 2026-05-17 05:18:20 UTC; unix",
+        "RemoteType": "standard",
+        "RemoteRef": "renv",
+        "RemotePkgRef": "renv",
+        "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "aarch64-apple-darwin23",
+        "RemoteSha": "1.2.3"
       }
     },
     "rlang": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "rlang",
         "Version": "1.3.0",
@@ -4418,8 +4425,8 @@
       }
     },
     "rmarkdown": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "rmarkdown",
@@ -4457,7 +4464,7 @@
     },
     "roxygen2": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "roxygen2",
         "Title": "In-Line Documentation for R",
@@ -4500,7 +4507,7 @@
     },
     "rpart": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "rpart",
         "Priority": "recommended",
@@ -4526,8 +4533,8 @@
       }
     },
     "rprojroot": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "rprojroot",
         "Title": "Finding Files in Project Subdirectories",
@@ -4564,7 +4571,7 @@
     },
     "rsconnect": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "rsconnect",
@@ -4602,8 +4609,8 @@
       }
     },
     "rstudioapi": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "rstudioapi",
         "Title": "Safely Access the RStudio API",
@@ -4634,8 +4641,8 @@
       }
     },
     "s2": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "s2",
         "Title": "Spherical Geometry Operators Using the S2 Geometry Library",
@@ -4671,8 +4678,8 @@
       }
     },
     "sass": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "sass",
@@ -4707,8 +4714,8 @@
       }
     },
     "scales": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "scales",
         "Title": "Scale Functions for Visualization",
@@ -4744,8 +4751,8 @@
       }
     },
     "sf": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "sf",
         "Version": "1.1-2",
@@ -4783,8 +4790,8 @@
       }
     },
     "shiny": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "shiny",
@@ -4821,7 +4828,7 @@
     },
     "shinycssloaders": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "shinycssloaders",
         "Title": "Add Loading Animations to a 'shiny' Output While It's\nRecalculating",
@@ -4854,7 +4861,7 @@
     },
     "shinytest2": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "shinytest2",
         "Title": "Testing for Shiny Applications",
@@ -4895,8 +4902,8 @@
       }
     },
     "slider": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "slider",
         "Title": "Sliding Window Functions",
@@ -4936,7 +4943,7 @@
     },
     "snowflakeauth": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "snowflakeauth",
         "Title": "Authentication Helpers for 'Snowflake'",
@@ -4968,8 +4975,8 @@
       }
     },
     "sourcetools": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "sourcetools",
         "Type": "Package",
@@ -5001,7 +5008,7 @@
     },
     "spatial": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "spatial",
         "Priority": "recommended",
@@ -5026,8 +5033,8 @@
       }
     },
     "stringi": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "stringi",
         "Version": "1.8.7",
@@ -5063,8 +5070,8 @@
       }
     },
     "stringr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "stringr",
         "Title": "Simple, Consistent Wrappers for Common String Operations",
@@ -5101,8 +5108,8 @@
       }
     },
     "suntools": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "suntools",
         "Version": "1.1.0",
@@ -5137,7 +5144,7 @@
     },
     "survival": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Title": "Survival Analysis",
         "Priority": "recommended",
@@ -5171,8 +5178,8 @@
       }
     },
     "sys": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "sys",
         "Type": "Package",
@@ -5204,8 +5211,8 @@
       }
     },
     "systemfonts": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "systemfonts",
@@ -5244,8 +5251,8 @@
       }
     },
     "testthat": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "testthat",
         "Title": "Unit Testing for R",
@@ -5282,8 +5289,8 @@
       }
     },
     "textshaping": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "textshaping",
         "Title": "Bindings to the 'HarfBuzz' and 'Fribidi' Libraries for Text\nShaping",
@@ -5321,8 +5328,8 @@
       }
     },
     "tibble": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "tibble",
         "Title": "Simple Data Frames",
@@ -5363,8 +5370,8 @@
       }
     },
     "tidyr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "tidyr",
         "Title": "Tidy Messy Data",
@@ -5402,8 +5409,8 @@
       }
     },
     "tidyselect": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "tidyselect",
         "Title": "Select from a Set of Strings",
@@ -5439,8 +5446,8 @@
       }
     },
     "timechange": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "timechange",
         "Title": "Efficient Manipulation of Date-Times",
@@ -5473,8 +5480,8 @@
       }
     },
     "tinytex": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "tinytex",
         "Type": "Package",
@@ -5506,8 +5513,8 @@
       }
     },
     "tzdb": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "tzdb",
         "Title": "Time Zone Database Information",
@@ -5542,8 +5549,8 @@
       }
     },
     "units": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "units",
         "Version": "1.0-1",
@@ -5579,8 +5586,8 @@
       }
     },
     "utf8": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "utf8",
         "Title": "Unicode Text Processing",
@@ -5613,8 +5620,8 @@
       }
     },
     "vctrs": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "vctrs",
         "Title": "Vector Helpers",
@@ -5653,8 +5660,8 @@
       }
     },
     "viridisLite": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "viridisLite",
         "Type": "Package",
@@ -5687,8 +5694,8 @@
       }
     },
     "vroom": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "vroom",
         "Title": "Read and Write Rectangular Text Data Quickly",
@@ -5729,8 +5736,8 @@
       }
     },
     "waldo": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "waldo",
         "Title": "Find Differences Between R Objects",
@@ -5764,8 +5771,8 @@
       }
     },
     "warp": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "warp",
         "Title": "Group Dates",
@@ -5801,8 +5808,8 @@
       }
     },
     "websocket": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "websocket",
         "Version": "1.4.4",
@@ -5837,7 +5844,7 @@
     },
     "whisker": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "whisker",
         "Maintainer": "Edwin de Jonge <edwindjonge@gmail.com>",
@@ -5866,8 +5873,8 @@
       }
     },
     "withr": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "withr",
         "Title": "Run Code 'With' Temporarily Modified Global State",
@@ -5903,8 +5910,8 @@
       }
     },
     "wk": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "wk",
         "Title": "Lightweight Well-Known Geometry Parsing",
@@ -5938,7 +5945,7 @@
     },
     "xfun": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "xfun",
         "Type": "Package",
@@ -5973,8 +5980,8 @@
       }
     },
     "xml2": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "xml2",
         "Title": "Parse XML",
@@ -6011,8 +6018,8 @@
       }
     },
     "xtable": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Package": "xtable",
         "Version": "1.8-8",
@@ -6044,8 +6051,8 @@
       }
     },
     "yaml": {
-      "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Source": "https://packagemanager.posit.co/cran/latest",
+      "Repository": null,
       "description": {
         "Type": "Package",
         "Package": "yaml",
@@ -6080,7 +6087,7 @@
     },
     "zip": {
       "Source": "CRAN",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": null,
       "description": {
         "Package": "zip",
         "Title": "Cross-Platform 'zip' Compression",
@@ -6117,17 +6124,1037 @@
     }
   },
   "files": {
+    "_brand.yml": {
+      "checksum": "cfa443718803a2b228a4d2e45edd5770"
+    },
+    ".Rbuildignore": {
+      "checksum": "5535f3a4b13127f9021f926cbdb3a72b"
+    },
+    ".Rprofile": {
+      "checksum": "387770852fcdcd77a44324adcf4de315"
+    },
     "app.R": {
       "checksum": "c3bee4557904cfc7d7e9e95012537770"
     },
     "DESCRIPTION": {
-      "checksum": "26670e9e95c08ea9b16aba4edfbeb6d7"
+      "checksum": "42a4b9397cfce66052fef6c54cf7571a"
+    },
+    "dev/analysis-principles.md": {
+      "checksum": "976fd91338f67661525fc6708d86e2e4"
+    },
+    "dev/brand/brand-checksums.sha256": {
+      "checksum": "8c870888bd101c21dbff412c89f4ad3f"
+    },
+    "dev/brand/brand-provenance.md": {
+      "checksum": "388657d2f40dd69748bd96b7a19f9a9b"
+    },
+    "dev/brand/generate-brand-assets.R": {
+      "checksum": "ff020bf0e196bba754cb36a4137f1942"
+    },
+    "dev/brand/legacy/logo_banner2.png": {
+      "checksum": "770ef2b6457cc69a3d1fe857c5bc1df5"
+    },
+    "dev/brand/legacy/logo_with_text-01.png": {
+      "checksum": "f7cb46fb96ed1b39bd691e2c9f1ba59a"
+    },
+    "dev/brand/legacy/logo.png": {
+      "checksum": "29624fc00ccf259de858df16d195abb6"
+    },
+    "dev/brand/lightlogweb-logo-master.svg": {
+      "checksum": "b904a935b3a9d618170acf263b060da9"
+    },
+    "dev/brand/render-brand-png.cjs": {
+      "checksum": "1774d447a20b44fc7aef570da2376af9"
+    },
+    "dev/component-gallery-app.R": {
+      "checksum": "e769c80c25fd7a4c70821e4de52775f3"
+    },
+    "dev/dependency-refresh-r-4.6.1.md": {
+      "checksum": "2e81799bcf5e4691c00c8d43ae7b9a53"
+    },
+    "dev/design-workshop/.next/types/routes.d.ts": {
+      "checksum": "7c32e223f792c0e7a3bc4ea7ad365504"
+    },
+    "dev/design-workshop/.openai/hosting.json": {
+      "checksum": "693eb8b65ef002913c686e9563388627"
+    },
+    "dev/design-workshop/.wrangler/deploy/config.json": {
+      "checksum": "9d663abcd158c67f171c437cb71f9503"
+    },
+    "dev/design-workshop/.wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite": {
+      "checksum": "1d53854755e8f3e3fe41b30387b240bc"
+    },
+    "dev/design-workshop/.wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite-shm": {
+      "checksum": "cb990fd0da0638007a67502e60b337cd"
+    },
+    "dev/design-workshop/.wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite-wal": {
+      "checksum": "f48a92668e289e953903903f63f75bdf"
+    },
+    "dev/design-workshop/dist/.openai/hosting.json": {
+      "checksum": "693eb8b65ef002913c686e9563388627"
+    },
+    "dev/design-workshop/dist/client/_headers": {
+      "checksum": "eaff846a2166d1fd67dd9ed4051bd141"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-400-normal-DPp7N0cD.woff": {
+      "checksum": "b216019a1a748d9352cf5591879ad0b7"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-400-normal-FfmJh7DR.woff2": {
+      "checksum": "e8da57bc0c3d87ba5fbe6c46bda389b8"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-500-normal-B0CYqHl3.woff": {
+      "checksum": "6b0dca91b353ab9160dfbadc4b829e4e"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-500-normal-gHP6TDRs.woff2": {
+      "checksum": "042e3fd7cb27e86fcb0c5dcd4b3792d0"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-ext-400-normal-BalHKn7d.woff2": {
+      "checksum": "bcad3501e62c685a6c85fb68966aa9a9"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-ext-400-normal-qxMiU51n.woff": {
+      "checksum": "39068e4d9edf8979f1b0213b64a0620d"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-ext-500-normal-CUASR3PD.woff2": {
+      "checksum": "ec2777870c242664e1db2d17a583badc"
+    },
+    "dev/design-workshop/dist/client/_next/static/atkinson-hyperlegible-next-latin-ext-500-normal-oZS3KxrF.woff": {
+      "checksum": "6068c296bdf7ca9baa9492f7bb052420"
+    },
+    "dev/design-workshop/dist/client/_next/static/ccef48bb-ea71-4af5-8714-f23fe4fd7030/_buildManifest.js": {
+      "checksum": "a7c393a226d9c126bfcec5fac232adb4"
+    },
+    "dev/design-workshop/dist/client/_next/static/ccef48bb-ea71-4af5-8714-f23fe4fd7030/_ssgManifest.js": {
+      "checksum": "abee47769bf307639ace4945f9cfd4ff"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/_app-DyuF5YXM.js": {
+      "checksum": "2f372a1ee1a70d5dbe08b4dc32fc4e58"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/config-matchers-BUxx3i6N.js": {
+      "checksum": "47527b5698413c245fe1132d1d57f8a8"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/error-DJ8Cxu88.js": {
+      "checksum": "39b98c697f967188848309d57d64ac6f"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/framework-ttvUFOyE.js": {
+      "checksum": "9befc96efe700ca7851261fc94291508"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/head-BVMNsQxM.js": {
+      "checksum": "8219d48c6cc9509d0e07f2bb86e020a6"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/hybrid-client-route-owner-CoOYoOXP.js": {
+      "checksum": "85541046c247c9e0c913558a81279a86"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/index-BGKpcbvE.js": {
+      "checksum": "1579f0a4822e227e3d0c98f3747027b1"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/pages-D4gjIy_4.js": {
+      "checksum": "26c5e327682d173f0fa5910709ed6f1e"
+    },
+    "dev/design-workshop/dist/client/_next/static/chunks/rolldown-runtime-QTnfLwEv.js": {
+      "checksum": "0b9fa1f21df87441aa366e428d1ebb49"
+    },
+    "dev/design-workshop/dist/client/_next/static/css/_app.Bxbv9s8k.css": {
+      "checksum": "1667a112533ae97af1f194db58ad5732"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-400-normal-BSMlKf0J.woff2": {
+      "checksum": "2f3900b1119134c30d984d0fb3726380"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-400-normal-CEL4l2ZJ.woff": {
+      "checksum": "a1aa22299bf8c1c4688139b1c0466351"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-500-normal-Ael50iVv.woff": {
+      "checksum": "259be8dbdec4afb0f9cca2b103c34b29"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-500-normal-Bq9vWWag.woff2": {
+      "checksum": "42375444a220c4d762dcc274460f2649"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-ext-400-normal-DMdlQ8Kv.woff": {
+      "checksum": "dc74ece9e4e1a11576df0838a81ed455"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-ext-400-normal-xuaO2J-f.woff2": {
+      "checksum": "89f877e20564f00cd9c140934e29c1df"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-ext-500-normal-BIfNGwUT.woff": {
+      "checksum": "2354eb64be04befb7db6a764a70d5c1b"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-cyrillic-ext-500-normal-BqneJy0T.woff2": {
+      "checksum": "a1a15515857bb502e85a3a3deb19e58d"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-400-normal-CvHOgSBP.woff": {
+      "checksum": "92e8083357bca2a1c767d53f00d2c2fb"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2": {
+      "checksum": "79936b18df9f734fb6b0a256b20d36b4"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-500-normal-CB9ihrfo.woff": {
+      "checksum": "f2f6e8289cbc3aa2647e8200883a4c0e"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-500-normal-DSY6xOcd.woff2": {
+      "checksum": "b1c8a895f5fd3fe6cbf5b4cf95c58d87"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-ext-400-normal-BmRBH3aV.woff2": {
+      "checksum": "8450d5944de23c9274ea801ad60fe5d8"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-ext-400-normal-D3D2R8hC.woff": {
+      "checksum": "83a920eb1d1f13d3886176583504787c"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-ext-500-normal-CAhNIIs5.woff2": {
+      "checksum": "fa8d8838b94a5b1388a12c5d6cad6500"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-latin-ext-500-normal-CZ70TYgx.woff": {
+      "checksum": "d666a280fbfcfde98733b9fa0d271f2a"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-vietnamese-400-normal-BulugwFq.woff2": {
+      "checksum": "4674a61782589211bb78cbc922647607"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-vietnamese-400-normal-DDuiU_S-.woff": {
+      "checksum": "baecdc44763aa9d7c51105ddd061aa58"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-vietnamese-500-normal-C8zxqsMH.woff": {
+      "checksum": "3daaf6f24abad27e497b72ef0cde6bc6"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-mono-vietnamese-500-normal-DZ4AoWbu.woff2": {
+      "checksum": "bec18f63784c1a33fef3c764a08533c0"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-400-normal-BTotfTJu.woff": {
+      "checksum": "47aef53303632bb6cc50a556393e83d4"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-400-normal-DZqxrq2p.woff2": {
+      "checksum": "7dec1409f343468112c9c2849f2ba0bb"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-500-normal-ByOcLdNv.woff": {
+      "checksum": "c5b6ade90afbab223e6df0ff3b3a8811"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-500-normal-CocWQlwt.woff2": {
+      "checksum": "eabefad2e9c0f5c507267aa02f9b21cb"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-ext-400-normal-Dsrv2Tcn.woff": {
+      "checksum": "bd1a0e9c4aab2f059ac5b1bfb954136a"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-ext-400-normal-g30qAdWV.woff2": {
+      "checksum": "608b4ac3aed5380ef43d7f50766ff08d"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-ext-500-normal-Cs5J6C77.woff2": {
+      "checksum": "22dc34fd340dcd2fa7a027e42f17ba2d"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-cyrillic-ext-500-normal-DB5PtV2g.woff": {
+      "checksum": "79d0ceba41c7ce03d6bd1cecc7c2ac34"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-greek-400-normal-_efipK4i.woff2": {
+      "checksum": "1a93269c08406b0f62fb460c1c6ceb3f"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-greek-400-normal-D9ESIMu3.woff": {
+      "checksum": "ebbe7ee75b6f57c028cfe2cdb36aa252"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-greek-500-normal-CuWXN6rf.woff": {
+      "checksum": "acdb8bb2aa62ed6514867a5827fc11a1"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-greek-500-normal-JMMifIXV.woff2": {
+      "checksum": "5a43914aefb7f3399c02fd52633c4792"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-400-normal-CDDApCn2.woff2": {
+      "checksum": "77bc026706571f32f04889dae5e7e5b2"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-400-normal-CYLoc0-x.woff": {
+      "checksum": "0013cead349cea238bf55e985f75b06d"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-500-normal-6ng42L7E.woff2": {
+      "checksum": "f7016cd446d2006a17eba99535d1b04e"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-500-normal-BgVn5rGT.woff": {
+      "checksum": "8a36a08598caf779f261efb59428d935"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-ext-400-normal-C5H60-Va.woff2": {
+      "checksum": "1bc0d8e41d21907cd701092bff9301c0"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-ext-400-normal-RBey6euL.woff": {
+      "checksum": "98a8cd1fcb04f8b4222024b64e93f846"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-ext-500-normal-D0aIdm-b.woff": {
+      "checksum": "adda14c648f95f54f8c73b547d417e0e"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-latin-ext-500-normal-DakdToA3.woff2": {
+      "checksum": "93a0df997e00bf98667771d1d2a2665c"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-vietnamese-400-normal-DG4YqDda.woff2": {
+      "checksum": "edf0debf38c2042bd29bf347052e7ccb"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-vietnamese-400-normal-fK1oJ5dG.woff": {
+      "checksum": "3cc55195f8b994c50ccd19cd281bacf4"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-vietnamese-500-normal-BEb3_waV.woff": {
+      "checksum": "b5ea211a26e94b7007640c2b4e125198"
+    },
+    "dev/design-workshop/dist/client/_next/static/ibm-plex-sans-vietnamese-500-normal-e4dixQRQ.woff2": {
+      "checksum": "3c0d2f5c0ab0919ea15d2ec7a184548f"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-400-normal.DPp7N0cD.woff": {
+      "checksum": "b216019a1a748d9352cf5591879ad0b7"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-400-normal.FfmJh7DR.woff2": {
+      "checksum": "e8da57bc0c3d87ba5fbe6c46bda389b8"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-500-normal.B0CYqHl3.woff": {
+      "checksum": "6b0dca91b353ab9160dfbadc4b829e4e"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-500-normal.gHP6TDRs.woff2": {
+      "checksum": "042e3fd7cb27e86fcb0c5dcd4b3792d0"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-ext-400-normal.BalHKn7d.woff2": {
+      "checksum": "bcad3501e62c685a6c85fb68966aa9a9"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-ext-400-normal.qxMiU51n.woff": {
+      "checksum": "39068e4d9edf8979f1b0213b64a0620d"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-ext-500-normal.CUASR3PD.woff2": {
+      "checksum": "ec2777870c242664e1db2d17a583badc"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/atkinson-hyperlegible-next-latin-ext-500-normal.oZS3KxrF.woff": {
+      "checksum": "6068c296bdf7ca9baa9492f7bb052420"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-400-normal.BSMlKf0J.woff2": {
+      "checksum": "2f3900b1119134c30d984d0fb3726380"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-400-normal.CEL4l2ZJ.woff": {
+      "checksum": "a1aa22299bf8c1c4688139b1c0466351"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-500-normal.Ael50iVv.woff": {
+      "checksum": "259be8dbdec4afb0f9cca2b103c34b29"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-500-normal.Bq9vWWag.woff2": {
+      "checksum": "42375444a220c4d762dcc274460f2649"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-ext-400-normal.DMdlQ8Kv.woff": {
+      "checksum": "dc74ece9e4e1a11576df0838a81ed455"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-ext-400-normal.xuaO2J-f.woff2": {
+      "checksum": "89f877e20564f00cd9c140934e29c1df"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-ext-500-normal.BIfNGwUT.woff": {
+      "checksum": "2354eb64be04befb7db6a764a70d5c1b"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-cyrillic-ext-500-normal.BqneJy0T.woff2": {
+      "checksum": "a1a15515857bb502e85a3a3deb19e58d"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-400-normal.CvHOgSBP.woff": {
+      "checksum": "92e8083357bca2a1c767d53f00d2c2fb"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-400-normal.DMJ8VG8y.woff2": {
+      "checksum": "79936b18df9f734fb6b0a256b20d36b4"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-500-normal.CB9ihrfo.woff": {
+      "checksum": "f2f6e8289cbc3aa2647e8200883a4c0e"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-500-normal.DSY6xOcd.woff2": {
+      "checksum": "b1c8a895f5fd3fe6cbf5b4cf95c58d87"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-ext-400-normal.BmRBH3aV.woff2": {
+      "checksum": "8450d5944de23c9274ea801ad60fe5d8"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-ext-400-normal.D3D2R8hC.woff": {
+      "checksum": "83a920eb1d1f13d3886176583504787c"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-ext-500-normal.CAhNIIs5.woff2": {
+      "checksum": "fa8d8838b94a5b1388a12c5d6cad6500"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-latin-ext-500-normal.CZ70TYgx.woff": {
+      "checksum": "d666a280fbfcfde98733b9fa0d271f2a"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-vietnamese-400-normal.BulugwFq.woff2": {
+      "checksum": "4674a61782589211bb78cbc922647607"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-vietnamese-400-normal.DDuiU_S-.woff": {
+      "checksum": "baecdc44763aa9d7c51105ddd061aa58"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-vietnamese-500-normal.C8zxqsMH.woff": {
+      "checksum": "3daaf6f24abad27e497b72ef0cde6bc6"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-mono-vietnamese-500-normal.DZ4AoWbu.woff2": {
+      "checksum": "bec18f63784c1a33fef3c764a08533c0"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-400-normal.BTotfTJu.woff": {
+      "checksum": "47aef53303632bb6cc50a556393e83d4"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-400-normal.DZqxrq2p.woff2": {
+      "checksum": "7dec1409f343468112c9c2849f2ba0bb"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-500-normal.ByOcLdNv.woff": {
+      "checksum": "c5b6ade90afbab223e6df0ff3b3a8811"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-500-normal.CocWQlwt.woff2": {
+      "checksum": "eabefad2e9c0f5c507267aa02f9b21cb"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-ext-400-normal.Dsrv2Tcn.woff": {
+      "checksum": "bd1a0e9c4aab2f059ac5b1bfb954136a"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-ext-400-normal.g30qAdWV.woff2": {
+      "checksum": "608b4ac3aed5380ef43d7f50766ff08d"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-ext-500-normal.Cs5J6C77.woff2": {
+      "checksum": "22dc34fd340dcd2fa7a027e42f17ba2d"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-cyrillic-ext-500-normal.DB5PtV2g.woff": {
+      "checksum": "79d0ceba41c7ce03d6bd1cecc7c2ac34"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-greek-400-normal._efipK4i.woff2": {
+      "checksum": "1a93269c08406b0f62fb460c1c6ceb3f"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-greek-400-normal.D9ESIMu3.woff": {
+      "checksum": "ebbe7ee75b6f57c028cfe2cdb36aa252"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-greek-500-normal.CuWXN6rf.woff": {
+      "checksum": "acdb8bb2aa62ed6514867a5827fc11a1"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-greek-500-normal.JMMifIXV.woff2": {
+      "checksum": "5a43914aefb7f3399c02fd52633c4792"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-400-normal.CDDApCn2.woff2": {
+      "checksum": "77bc026706571f32f04889dae5e7e5b2"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-400-normal.CYLoc0-x.woff": {
+      "checksum": "0013cead349cea238bf55e985f75b06d"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-500-normal.6ng42L7E.woff2": {
+      "checksum": "f7016cd446d2006a17eba99535d1b04e"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-500-normal.BgVn5rGT.woff": {
+      "checksum": "8a36a08598caf779f261efb59428d935"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-ext-400-normal.C5H60-Va.woff2": {
+      "checksum": "1bc0d8e41d21907cd701092bff9301c0"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-ext-400-normal.RBey6euL.woff": {
+      "checksum": "98a8cd1fcb04f8b4222024b64e93f846"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-ext-500-normal.D0aIdm-b.woff": {
+      "checksum": "adda14c648f95f54f8c73b547d417e0e"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-latin-ext-500-normal.DakdToA3.woff2": {
+      "checksum": "93a0df997e00bf98667771d1d2a2665c"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-vietnamese-400-normal.DG4YqDda.woff2": {
+      "checksum": "edf0debf38c2042bd29bf347052e7ccb"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-vietnamese-400-normal.fK1oJ5dG.woff": {
+      "checksum": "3cc55195f8b994c50ccd19cd281bacf4"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-vietnamese-500-normal.BEb3_waV.woff": {
+      "checksum": "b5ea211a26e94b7007640c2b4e125198"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/ibm-plex-sans-vietnamese-500-normal.e4dixQRQ.woff2": {
+      "checksum": "3c0d2f5c0ab0919ea15d2ec7a184548f"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-400-normal.7kQcAFpS.woff": {
+      "checksum": "a0e6b543dcf49c316f7817f646c6b7ce"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-400-normal.DjhbW-4D.woff2": {
+      "checksum": "bbdffcad8abac054a948e02755e673ca"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-500-normal.B7bCyCk_.woff": {
+      "checksum": "d1ea42f687134644148b60b84816d463"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-500-normal.BmnPaoCF.woff2": {
+      "checksum": "33697ed76e66e1bd5a5061e2c159c7ac"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-ext-400-normal.BwJdxs7r.woff2": {
+      "checksum": "e6e9cb9ca292600bb45d4bfb7fd4c76e"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-ext-400-normal.Cd63HKDh.woff": {
+      "checksum": "b39c167723189a8b13facaf0571a08ff"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-ext-500-normal.CaAUUz-j.woff": {
+      "checksum": "3c115e3b8e67faa62fe611324735a23a"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-cyrillic-ext-500-normal.D8Dd5jAI.woff2": {
+      "checksum": "1abb2e1b5fc790d93b80b524a18e0945"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-400-normal.DJm9Ud5h.woff": {
+      "checksum": "700f459545e8c4dd41285a5fcf4939eb"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-400-normal.DZReXJla.woff2": {
+      "checksum": "5837af767839444af514f7a93ae3a30a"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-500-normal.BOY5JFvG.woff": {
+      "checksum": "e86722c662c7df314a9555b69ba24e6a"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-500-normal.eLQqTu5G.woff2": {
+      "checksum": "1119cb7ac766fd627e5d3ed297cfd500"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-ext-400-normal.BI1kUwmR.woff": {
+      "checksum": "d8ba7bd2ae0cdfaba732e7ee6bf0ff15"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-ext-400-normal.CpIwTHMM.woff2": {
+      "checksum": "d6f441ff9e8bcfcbb04239b8cd528526"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-ext-500-normal.9wgnofA_.woff2": {
+      "checksum": "75ab06225c18541148ab357851be710d"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-greek-ext-500-normal.FO4an0ZF.woff": {
+      "checksum": "49bb73f94c54f263432dad26695edb4b"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-400-normal.AFMiCETP.woff": {
+      "checksum": "053dded0e7b341dd33df7e6b13aad7b6"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-400-normal.DQi5PRDE.woff2": {
+      "checksum": "27ab01c4cb5013775d870ae8accb1040"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-500-normal.BtDzq-z9.woff": {
+      "checksum": "ddc615c2b17454a20b86113fcf2bcf12"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-500-normal.DiWS0tcR.woff2": {
+      "checksum": "b3b7577030b9ac608d61004fdd6fd76c"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-ext-400-normal.BGPHfnm_.woff": {
+      "checksum": "9e1103730431b7e42e0c31fc11eca527"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-ext-400-normal.UNsKFIBq.woff2": {
+      "checksum": "397d4f3b04fb4bf230b8131fb7036eaf"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-ext-500-normal.DYiJOyLu.woff": {
+      "checksum": "d6f94e34843d85fd73a0a6e6c23f9afd"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-latin-ext-500-normal.tzH6xoxH.woff2": {
+      "checksum": "6118c1cb701ba4813aefa14db0562768"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-vietnamese-400-normal.CwtaIDr2.woff2": {
+      "checksum": "578fc152359297bf181c9423394e7943"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-vietnamese-400-normal.dYp9C364.woff": {
+      "checksum": "df7b02419d1913b2f955a426c6c9794e"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-vietnamese-500-normal.7g9Z1MMl.woff": {
+      "checksum": "cfcd130030b21be71070b6a490947cc9"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-sans-3-vietnamese-500-normal.BSXhk166.woff2": {
+      "checksum": "cb5bffeeb074f67462161fc7d4f98bab"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-400-normal.B8Z6Jvzv.woff": {
+      "checksum": "ed80386abbbaf6662d09fc7cf10a4069"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-400-normal.C44pakCn.woff2": {
+      "checksum": "c3a985b65184e358e4e06e1cd2ffb664"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-500-normal.Bb4u56_6.woff": {
+      "checksum": "b3853d778604a122f4fcb3f35f31abb2"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-500-normal.BdVUvljg.woff2": {
+      "checksum": "0f42ff9e256250d1758e975726a6045d"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-ext-400-normal.CWV284fw.woff2": {
+      "checksum": "23f5644ac8a47e47f42c429eac134ebb"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-ext-400-normal.DLkyKLvH.woff": {
+      "checksum": "cd2bb8d4b9d8f717c102bc193ad22ac5"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-ext-500-normal.8-8HP2PF.woff": {
+      "checksum": "c1b334df6d8d4d8791d7146a9325aab0"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-cyrillic-ext-500-normal.DaDZE_Na.woff2": {
+      "checksum": "f2444942c7c7d3406869dad793f5803a"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-greek-400-normal.BccYJ-vZ.woff": {
+      "checksum": "4c41bf1c6c20011599f704b56bc9bdb8"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-greek-400-normal.Cw5-AHNN.woff2": {
+      "checksum": "2b798988312fb2a2ad8bc5abb7a20743"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-greek-500-normal.By8GFJzz.woff2": {
+      "checksum": "e0786557fca3984f9d2e4f3852828658"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-greek-500-normal.z-Q6FFuG.woff": {
+      "checksum": "a79d0eb3f91e29178e02930f91fe3b82"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-400-normal.DJ5YJwmz.woff2": {
+      "checksum": "95bbd98f2b3cca6506dc39a6d8ee6359"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-400-normal.Dn3IlU-Z.woff": {
+      "checksum": "dd2cbd8a83a6b267c9bc2a0da934a8b2"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-500-normal.CUHe9xxf.woff2": {
+      "checksum": "157b737cd293d7a0a74c88f93d11a241"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-500-normal.DVVamBqs.woff": {
+      "checksum": "d2ef0dc6c106e2d9cad9fbfe27b6e65c"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-ext-400-normal.CEpydyUl.woff": {
+      "checksum": "7d72d9a1d7177d9270f48fa2003e3752"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-ext-400-normal.Cp7z-ARB.woff2": {
+      "checksum": "0d141968cf19cd84184ca22855f842f0"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-ext-500-normal.BYjRCDVy.woff2": {
+      "checksum": "5a7797e5cfa66bde76d7ad0947d5e29b"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-latin-ext-500-normal.D-qasQTj.woff": {
+      "checksum": "378667330eb7829e95346bc8cbe40785"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-vietnamese-400-normal.BbG3LG1A.woff2": {
+      "checksum": "708016956b446d473d6b6d1c85f26ad2"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-vietnamese-400-normal.DR1UuFon.woff": {
+      "checksum": "535543ca0eae065d27df04807e264b48"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-vietnamese-500-normal.8N8MYVKB.woff": {
+      "checksum": "b92cfbd7e6226359f2076dd856264f48"
+    },
+    "dev/design-workshop/dist/client/_next/static/media/source-serif-4-vietnamese-500-normal.Bi3OSTTW.woff2": {
+      "checksum": "9825671e8a6d100af9609108d85d32ad"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-400-normal-7kQcAFpS.woff": {
+      "checksum": "a0e6b543dcf49c316f7817f646c6b7ce"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-400-normal-DjhbW-4D.woff2": {
+      "checksum": "bbdffcad8abac054a948e02755e673ca"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-500-normal-B7bCyCk_.woff": {
+      "checksum": "d1ea42f687134644148b60b84816d463"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-500-normal-BmnPaoCF.woff2": {
+      "checksum": "33697ed76e66e1bd5a5061e2c159c7ac"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-ext-400-normal-BwJdxs7r.woff2": {
+      "checksum": "e6e9cb9ca292600bb45d4bfb7fd4c76e"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-ext-400-normal-Cd63HKDh.woff": {
+      "checksum": "b39c167723189a8b13facaf0571a08ff"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-ext-500-normal-CaAUUz-j.woff": {
+      "checksum": "3c115e3b8e67faa62fe611324735a23a"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-cyrillic-ext-500-normal-D8Dd5jAI.woff2": {
+      "checksum": "1abb2e1b5fc790d93b80b524a18e0945"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-400-normal-DJm9Ud5h.woff": {
+      "checksum": "700f459545e8c4dd41285a5fcf4939eb"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-400-normal-DZReXJla.woff2": {
+      "checksum": "5837af767839444af514f7a93ae3a30a"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-500-normal-BOY5JFvG.woff": {
+      "checksum": "e86722c662c7df314a9555b69ba24e6a"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-500-normal-eLQqTu5G.woff2": {
+      "checksum": "1119cb7ac766fd627e5d3ed297cfd500"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-ext-400-normal-BI1kUwmR.woff": {
+      "checksum": "d8ba7bd2ae0cdfaba732e7ee6bf0ff15"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-ext-400-normal-CpIwTHMM.woff2": {
+      "checksum": "d6f441ff9e8bcfcbb04239b8cd528526"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-ext-500-normal-9wgnofA_.woff2": {
+      "checksum": "75ab06225c18541148ab357851be710d"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-greek-ext-500-normal-FO4an0ZF.woff": {
+      "checksum": "49bb73f94c54f263432dad26695edb4b"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-400-normal-AFMiCETP.woff": {
+      "checksum": "053dded0e7b341dd33df7e6b13aad7b6"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-400-normal-DQi5PRDE.woff2": {
+      "checksum": "27ab01c4cb5013775d870ae8accb1040"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-500-normal-BtDzq-z9.woff": {
+      "checksum": "ddc615c2b17454a20b86113fcf2bcf12"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-500-normal-DiWS0tcR.woff2": {
+      "checksum": "b3b7577030b9ac608d61004fdd6fd76c"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-ext-400-normal-BGPHfnm_.woff": {
+      "checksum": "9e1103730431b7e42e0c31fc11eca527"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-ext-400-normal-UNsKFIBq.woff2": {
+      "checksum": "397d4f3b04fb4bf230b8131fb7036eaf"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-ext-500-normal-DYiJOyLu.woff": {
+      "checksum": "d6f94e34843d85fd73a0a6e6c23f9afd"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-latin-ext-500-normal-tzH6xoxH.woff2": {
+      "checksum": "6118c1cb701ba4813aefa14db0562768"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-vietnamese-400-normal-CwtaIDr2.woff2": {
+      "checksum": "578fc152359297bf181c9423394e7943"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-vietnamese-400-normal-dYp9C364.woff": {
+      "checksum": "df7b02419d1913b2f955a426c6c9794e"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-vietnamese-500-normal-7g9Z1MMl.woff": {
+      "checksum": "cfcd130030b21be71070b6a490947cc9"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-sans-3-vietnamese-500-normal-BSXhk166.woff2": {
+      "checksum": "cb5bffeeb074f67462161fc7d4f98bab"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-400-normal-B8Z6Jvzv.woff": {
+      "checksum": "ed80386abbbaf6662d09fc7cf10a4069"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-400-normal-C44pakCn.woff2": {
+      "checksum": "c3a985b65184e358e4e06e1cd2ffb664"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-500-normal-Bb4u56_6.woff": {
+      "checksum": "b3853d778604a122f4fcb3f35f31abb2"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-500-normal-BdVUvljg.woff2": {
+      "checksum": "0f42ff9e256250d1758e975726a6045d"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-ext-400-normal-CWV284fw.woff2": {
+      "checksum": "23f5644ac8a47e47f42c429eac134ebb"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-ext-400-normal-DLkyKLvH.woff": {
+      "checksum": "cd2bb8d4b9d8f717c102bc193ad22ac5"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-ext-500-normal-8-8HP2PF.woff": {
+      "checksum": "c1b334df6d8d4d8791d7146a9325aab0"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-cyrillic-ext-500-normal-DaDZE_Na.woff2": {
+      "checksum": "f2444942c7c7d3406869dad793f5803a"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-greek-400-normal-BccYJ-vZ.woff": {
+      "checksum": "4c41bf1c6c20011599f704b56bc9bdb8"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-greek-400-normal-Cw5-AHNN.woff2": {
+      "checksum": "2b798988312fb2a2ad8bc5abb7a20743"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-greek-500-normal-By8GFJzz.woff2": {
+      "checksum": "e0786557fca3984f9d2e4f3852828658"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-greek-500-normal-z-Q6FFuG.woff": {
+      "checksum": "a79d0eb3f91e29178e02930f91fe3b82"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-400-normal-DJ5YJwmz.woff2": {
+      "checksum": "95bbd98f2b3cca6506dc39a6d8ee6359"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-400-normal-Dn3IlU-Z.woff": {
+      "checksum": "dd2cbd8a83a6b267c9bc2a0da934a8b2"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-500-normal-CUHe9xxf.woff2": {
+      "checksum": "157b737cd293d7a0a74c88f93d11a241"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-500-normal-DVVamBqs.woff": {
+      "checksum": "d2ef0dc6c106e2d9cad9fbfe27b6e65c"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-ext-400-normal-CEpydyUl.woff": {
+      "checksum": "7d72d9a1d7177d9270f48fa2003e3752"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-ext-400-normal-Cp7z-ARB.woff2": {
+      "checksum": "0d141968cf19cd84184ca22855f842f0"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-ext-500-normal-BYjRCDVy.woff2": {
+      "checksum": "5a7797e5cfa66bde76d7ad0947d5e29b"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-latin-ext-500-normal-D-qasQTj.woff": {
+      "checksum": "378667330eb7829e95346bc8cbe40785"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-vietnamese-400-normal-BbG3LG1A.woff2": {
+      "checksum": "708016956b446d473d6b6d1c85f26ad2"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-vietnamese-400-normal-DR1UuFon.woff": {
+      "checksum": "535543ca0eae065d27df04807e264b48"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-vietnamese-500-normal-8N8MYVKB.woff": {
+      "checksum": "b92cfbd7e6226359f2076dd856264f48"
+    },
+    "dev/design-workshop/dist/client/_next/static/source-serif-4-vietnamese-500-normal-Bi3OSTTW.woff2": {
+      "checksum": "9825671e8a6d100af9609108d85d32ad"
+    },
+    "dev/design-workshop/dist/client/.assetsignore": {
+      "checksum": "e01e97f4cc527c6a135f513ed284b6c2"
+    },
+    "dev/design-workshop/dist/client/.vite/ssr-manifest.json": {
+      "checksum": "09efe4a545f961e80cd494f65358581d"
+    },
+    "dev/design-workshop/dist/client/mood-circadian-field.png": {
+      "checksum": "5e8096d4a26c0a7e515da0f5f87bd5bc"
+    },
+    "dev/design-workshop/dist/client/mood-clear-measure.png": {
+      "checksum": "15e2f2b03461a2f8e0c18f36f5451d26"
+    },
+    "dev/design-workshop/dist/client/mood-daylight-almanac.png": {
+      "checksum": "279f6f9c8d0b19bb271b586d15574f80"
+    },
+    "dev/design-workshop/dist/client/mood-spectral-console.png": {
+      "checksum": "2fb1fd00c399fd73ce75dde2178e38a1"
+    },
+    "dev/design-workshop/dist/client/reference-lightlogr-logo.png": {
+      "checksum": "29624fc00ccf259de858df16d195abb6"
+    },
+    "dev/design-workshop/dist/client/vinext-client-entry-manifest.json": {
+      "checksum": "3cd2cd242b702423f64c2c01dfaa7c89"
+    },
+    "dev/design-workshop/dist/server/_next/static/hybrid-client-route-owner-CgfRKi-O.js": {
+      "checksum": "b15aff99ca2cf8e1de8b1f5a03a914fe"
+    },
+    "dev/design-workshop/dist/server/_next/static/hybrid-client-route-owner-direct-DjquG3Mf.js": {
+      "checksum": "dfdfae1e72b148e981b1456f05f8ee22"
+    },
+    "dev/design-workshop/dist/server/_next/static/index-CKA-bkq3.css": {
+      "checksum": "8bf1da7cc2393b0058d6c6b4d9a08cb9"
+    },
+    "dev/design-workshop/dist/server/BUILD_ID": {
+      "checksum": "56009216b66a08174f2baaaabaefa1bf"
+    },
+    "dev/design-workshop/dist/server/index.js": {
+      "checksum": "231b945cab75f037e3a516f630aa6f23"
+    },
+    "dev/design-workshop/dist/server/vinext-client-assets.js": {
+      "checksum": "b135c73ff06733b95b8d68a3b63cb352"
+    },
+    "dev/design-workshop/dist/server/wrangler.json": {
+      "checksum": "9a8e9682a0f1faf014cba0441ffeb33d"
+    },
+    "dev/design-workshop/lib/review.js": {
+      "checksum": "7545849f7d3d7d02dc9933316c66c0d2"
+    },
+    "dev/design-workshop/moodboard-prompts.md": {
+      "checksum": "a03089115b4948f903313d467e8167d3"
+    },
+    "dev/design-workshop/next-env.d.ts": {
+      "checksum": "5f7d60a6ab60b212deb45e6c80a64372"
+    },
+    "dev/design-workshop/next.config.js": {
+      "checksum": "74e23b60f1c2916a5ca6eb732f16cbed"
+    },
+    "dev/design-workshop/package.json": {
+      "checksum": "19e0c48db002c71f3fb60449c2725be9"
+    },
+    "dev/design-workshop/pages/_app.jsx": {
+      "checksum": "e8134699fe575df3bd8cadd809ef3c54"
+    },
+    "dev/design-workshop/pages/_document.jsx": {
+      "checksum": "db6f10b3cfc88951cedc4568262a359c"
+    },
+    "dev/design-workshop/pages/index.jsx": {
+      "checksum": "60993546f22ebad91c12537f686c016d"
+    },
+    "dev/design-workshop/pnpm-lock.yaml": {
+      "checksum": "38705e3ad9a8d95d89c70fbfb835fb57"
+    },
+    "dev/design-workshop/pnpm-workspace.yaml": {
+      "checksum": "473fff3e75ca386d701b62f00db064c2"
+    },
+    "dev/design-workshop/public/_headers": {
+      "checksum": "eaff846a2166d1fd67dd9ed4051bd141"
+    },
+    "dev/design-workshop/public/mood-circadian-field.png": {
+      "checksum": "5e8096d4a26c0a7e515da0f5f87bd5bc"
+    },
+    "dev/design-workshop/public/mood-clear-measure.png": {
+      "checksum": "15e2f2b03461a2f8e0c18f36f5451d26"
+    },
+    "dev/design-workshop/public/mood-daylight-almanac.png": {
+      "checksum": "279f6f9c8d0b19bb271b586d15574f80"
+    },
+    "dev/design-workshop/public/mood-spectral-console.png": {
+      "checksum": "2fb1fd00c399fd73ce75dde2178e38a1"
+    },
+    "dev/design-workshop/public/reference-lightlogr-logo.png": {
+      "checksum": "29624fc00ccf259de858df16d195abb6"
+    },
+    "dev/design-workshop/README.md": {
+      "checksum": "c7bcc148d641b18451ac3fc5685a1c92"
+    },
+    "dev/design-workshop/scripts/check-contrast.mjs": {
+      "checksum": "a7a5ece0cd7a17d5a2660da8f7954771"
+    },
+    "dev/design-workshop/scripts/copy-hosting.mjs": {
+      "checksum": "dfd7c8d88b347d6c1b4c070fb865ac43"
+    },
+    "dev/design-workshop/styles/globals.css": {
+      "checksum": "bc9c536da42dac91f7ad2ae8d5f9e4f3"
+    },
+    "dev/design-workshop/tests/review-state.test.mjs": {
+      "checksum": "8da978564d88dfddf0b31a7d4390d842"
+    },
+    "dev/design-workshop/vite.config.js": {
+      "checksum": "df05f9dbd01b6387e7ce180fa4af8624"
+    },
+    "dev/design-workshop/wrangler.jsonc": {
+      "checksum": "c3f01e17f2f73f03bb9a80f27d08188f"
+    },
+    "dev/fixtures/melidos-iztech-light-glasses-1minute.rds": {
+      "checksum": "4a7a24de4df9024c6144cc3493e3d73b"
+    },
+    "dev/fixtures/raw/malformed_actlumus.txt": {
+      "checksum": "e715df333c7bf25079ac3122f2616522"
+    },
+    "dev/fixtures/raw/P01_actlumus.txt": {
+      "checksum": "50ad65d1ad8331dd789a6cc2bad8b824"
+    },
+    "dev/fixtures/README.md": {
+      "checksum": "64b1c3f31ce1dae2094539553a08fdba"
+    },
+    "dev/generate-milestone-3-fixtures.R": {
+      "checksum": "235e2737b01f8f222083bf21a25a3cf8"
+    },
+    "dev/legacy-audit.md": {
+      "checksum": "18457c3e71ac5866e28baa6478b28283"
+    },
+    "dev/milestone-0-baseline.md": {
+      "checksum": "5f8735a9c40b50be754112284054d062"
+    },
+    "dev/milestone-1-core-app.R": {
+      "checksum": "34d00afa82551ff2215dc574af193bf8"
+    },
+    "dev/milestone-1-core-architecture.md": {
+      "checksum": "914b44584758aa73e6c14deba8cb8d71"
+    },
+    "dev/milestone-2-design-guide.md": {
+      "checksum": "d9baf709960243dced6792c2bd46d482"
+    },
+    "dev/milestone-3-raw-import.md": {
+      "checksum": "938539e1b4fd5f0d38b1ce0282d6a59c"
+    },
+    "dev/milestone-4-dataset-library-and-append.md": {
+      "checksum": "dd2751dfc7da08d3554afccc26bde297"
+    },
+    "dev/milestone-5-scalable-dashboard.md": {
+      "checksum": "9a6184584b5e6598d47693c309650b10"
+    },
+    "dev/milestone-6-glc-source-app.R": {
+      "checksum": "aed3f3c34d9633d794f9f42b00650c1c"
+    },
+    "dev/run-milestone-3-large-file-acceptance.R": {
+      "checksum": "d4ec75155c583933580f9faed9ef6135"
+    },
+    "dev/run-milestone-5-scale-acceptance.R": {
+      "checksum": "46d22169a91b30583cdce9dbdc942e83"
+    },
+    "dev/run-testdevice-import-acceptance.R": {
+      "checksum": "c0bbd9a4468778c786318920770d25a0"
+    },
+    "dev/visual-direction-brief.md": {
+      "checksum": "d4615ae7d3924bd5cc48dc2f3f3f66d0"
+    },
+    "inst/app/scss/lightlogweb.scss": {
+      "checksum": "5b65fca74ee22c161d02acc6c526deed"
+    },
+    "inst/app/www/brand/apple-touch-icon.png": {
+      "checksum": "4f38b00ff91d95b2bef3f64e5360c9b9"
+    },
+    "inst/app/www/brand/favicon-16.png": {
+      "checksum": "994258c6cea26e0e9332398e445b819b"
+    },
+    "inst/app/www/brand/favicon-32.png": {
+      "checksum": "6ba9756f17d1d9035eed4d000c704222"
+    },
+    "inst/app/www/brand/favicon-48.png": {
+      "checksum": "b3ce702f07742d0ff699a476b9a0c8a2"
+    },
+    "inst/app/www/brand/favicon.svg": {
+      "checksum": "17c9bc450fd5d46712b209f3a3e1349e"
+    },
+    "inst/app/www/brand/icon-192.png": {
+      "checksum": "5cf0ee0b896a7aa533c5d12f24156935"
+    },
+    "inst/app/www/brand/icon-512.png": {
+      "checksum": "f65d6702ac43e90cd752a8232ce7b8b1"
+    },
+    "inst/app/www/brand/lightlogweb-mark-1024.png": {
+      "checksum": "db52c821a92eb28a84aa50a7a579223b"
+    },
+    "inst/app/www/brand/lightlogweb-mark-2048.png": {
+      "checksum": "083a817e62f2c58edee2769652ddc7ab"
+    },
+    "inst/app/www/brand/lightlogweb-mark-dark-1024.png": {
+      "checksum": "90dc0e315542c5efd8f49b70d2c1d9cb"
+    },
+    "inst/app/www/brand/lightlogweb-mark-dark-2048.png": {
+      "checksum": "f95ff3a6e0f750aa6b524f281646ddef"
+    },
+    "inst/app/www/brand/lightlogweb-mark-dark.svg": {
+      "checksum": "67aa915131dae96daa57c5e09cc254ac"
+    },
+    "inst/app/www/brand/lightlogweb-mark-light.svg": {
+      "checksum": "11bf727e5642e5a7e9783d9cf0c70bb0"
+    },
+    "inst/app/www/brand/lightlogweb-mark-monochrome.svg": {
+      "checksum": "cf63b7e4edc040193e2fbfeded1c3fd1"
+    },
+    "inst/app/www/brand/lightlogweb-mark-reversed.svg": {
+      "checksum": "2728826ff63f8db49c46785f39ef94d6"
+    },
+    "inst/app/www/brand/lightlogweb-mark-square-dark.svg": {
+      "checksum": "be6d39ef048600dca4d1bd6dde93ce16"
+    },
+    "inst/app/www/brand/lightlogweb-mark-square.svg": {
+      "checksum": "ac0438f9a7486e740638e8ec89957645"
+    },
+    "inst/app/www/brand/lightlogweb-mark.svg": {
+      "checksum": "32658a835f7994706114932f0757c361"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-horizontal-dark.svg": {
+      "checksum": "9306eb42a9b05476ff0e1a4fadaa027b"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-horizontal-light.svg": {
+      "checksum": "9d4560cef3d9f29f056a2cd79933b400"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-horizontal-monochrome.svg": {
+      "checksum": "37b8e794daa0b2a9a073d0e428989a16"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-horizontal-reversed.svg": {
+      "checksum": "250a0865db8ee0c0d673500905939b47"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-horizontal.svg": {
+      "checksum": "5c5b2b47f5267f269c9fac20e70ab65f"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-stacked-dark.svg": {
+      "checksum": "9c80f85e81919c4ce4c150bc461facd8"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-stacked-light.svg": {
+      "checksum": "3b78b489c4a5dbd822843600ebf96a3d"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-stacked-monochrome.svg": {
+      "checksum": "5af9f7e316931877471f83555e8de50d"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-stacked-reversed.svg": {
+      "checksum": "03d5b6551d2d407ff6af0caa4d8c8d79"
+    },
+    "inst/app/www/brand/lightlogweb-wordmark-stacked.svg": {
+      "checksum": "07971f3e72bdfa106404515a83577070"
+    },
+    "inst/app/www/css/lightlogweb-fonts.css": {
+      "checksum": "f97e81e1e9d23e205985a23f5242b2be"
+    },
+    "inst/app/www/fonts/OFL.txt": {
+      "checksum": "4538a5afdd18ccebd224405ffe3dee4b"
+    },
+    "inst/app/www/fonts/source-sans-3-latin-400-normal.woff2": {
+      "checksum": "27ab01c4cb5013775d870ae8accb1040"
+    },
+    "inst/app/www/fonts/source-sans-3-latin-500-normal.woff2": {
+      "checksum": "b3b7577030b9ac608d61004fdd6fd76c"
+    },
+    "inst/app/www/fonts/source-sans-3-latin-600-normal.woff2": {
+      "checksum": "9a35cba76edada19c5c0f79f29c41bb3"
+    },
+    "inst/app/www/fonts/source-sans-3-latin-ext-400-normal.woff2": {
+      "checksum": "397d4f3b04fb4bf230b8131fb7036eaf"
+    },
+    "inst/app/www/fonts/source-sans-3-latin-ext-500-normal.woff2": {
+      "checksum": "6118c1cb701ba4813aefa14db0562768"
+    },
+    "inst/app/www/fonts/source-sans-3-latin-ext-600-normal.woff2": {
+      "checksum": "2d5f5a2133ba888058eb06428d7ea743"
     },
     "LICENSE": {
       "checksum": "322a2e326823cf579ab6b36e62c62c01"
     },
+    "LICENSE.md": {
+      "checksum": "a3beace08ff7d6f5a6d348225a625768"
+    },
+    "man/figures/logo.svg": {
+      "checksum": "5c5b2b47f5267f269c9fac20e70ab65f"
+    },
+    "man/LightLogWeb-package.Rd": {
+      "checksum": "695b847e7e86150dbf56bc4e18a6d94b"
+    },
+    "man/LightLogWeb.Rd": {
+      "checksum": "0e0478c350a077756737ae8f37de5fa5"
+    },
     "NAMESPACE": {
       "checksum": "286cc9767199344295e35000c681d6c8"
+    },
+    "project-plan.md": {
+      "checksum": "92228939081dce09b782f45fb14a633e"
     },
     "R/aaa.R": {
       "checksum": "1f09f4b55017d0a7b3e34273c855f90c"
@@ -6154,7 +7181,7 @@
       "checksum": "afcc46e6d898b789d9b3d5228bd00087"
     },
     "R/glcdp-adapter.R": {
-      "checksum": "8cdd0b9c47504578a98ed03b562695ff"
+      "checksum": "25d6415c38627a07472a8bdb6760d8c7"
     },
     "R/helper.R": {
       "checksum": "539ec6f3da6793428739a8cf58da6349"
@@ -6186,8 +7213,11 @@
     "R/m_dataset_manager.R": {
       "checksum": "3ebd0a60ee8e5bd1c8d9ecd204b7f100"
     },
+    "R/m_glc_preview.R": {
+      "checksum": "1703da3acb1bcfaa9b7ab9abe7c6b5fe"
+    },
     "R/m_glc_source.R": {
-      "checksum": "5da8e028e0cb5143a4b7cd8ccb3173f8"
+      "checksum": "44742ad1daa4f186ad8032e16d23f8c8"
     },
     "R/m_import_wizard.R": {
       "checksum": "332f2cd7e0aa7da210a89d9271ca9bf0"
@@ -6217,7 +7247,175 @@
       "checksum": "a0928ecffc3531cedab2e57dc0a0f267"
     },
     "renv.lock": {
-      "checksum": "96f594f40de70fc92b3ee7d328cf429a"
+      "checksum": "7d8518ff4ac7739dc35eadc409f5599a"
+    },
+    "testdevices/ActLumus/4023.txt": {
+      "checksum": "f0d787e0e177b8a7231f40dd47ed1365"
+    },
+    "testdevices/ActLumus/4067.txt": {
+      "checksum": "c897ca41e3aa6ada4b9c581bd7ca8a9f"
+    },
+    "testdevices/ActLumus/4081.txt": {
+      "checksum": "3c01c9e55a151707cbaf96c3299ba956"
+    },
+    "testdevices/ActLumus/4103.txt": {
+      "checksum": "2724c7c5d622acc4790c2d1d9b2c4f30"
+    },
+    "testdevices/ActLumus/4394.txt": {
+      "checksum": "13151bf5f15d3a0766ac1243f027b6c0"
+    },
+    "testdevices/ActLumus/4396.txt": {
+      "checksum": "905c0ae2e20910ddc21994431eb0fc3d"
+    },
+    "testdevices/ActLumus/4524.txt": {
+      "checksum": "bb7949e8ab55c436b1e43bbaf0d39b14"
+    },
+    "testdevices/ActLumus/4536.txt": {
+      "checksum": "7976bc434f77d9a0f1dc1c60c2a7c2e5"
+    },
+    "testdevices/ActLumus/4789.txt": {
+      "checksum": "c4e03b2d1bdca6bae6b10a7b7e2fe817"
+    },
+    "testdevices/ActLumus/4914.txt": {
+      "checksum": "17c6af5d2bd866382078feb76fac1365"
+    },
+    "testdevices/ActLumus/5090.txt": {
+      "checksum": "206d01369c1da2f27857ddaa92246dc5"
+    },
+    "testdevices/ActLumus/5110.txt": {
+      "checksum": "919ab1e3f90985160231b4ac3a470e8b"
+    },
+    "testdevices/ActLumus/5160.txt": {
+      "checksum": "17a9150dc887f01b8e7f4719109ac20d"
+    },
+    "testdevices/ActLumus/5163.txt": {
+      "checksum": "ddc30f8aae07faaa11ff5897dffa7e48"
+    },
+    "testdevices/ActLumus/5236.txt": {
+      "checksum": "3791404f1e4b64f8d3afba34fc50dc1e"
+    },
+    "testdevices/ActLumus/5349.txt": {
+      "checksum": "08c2d47fa241ffa042ca09039b597a18"
+    },
+    "testdevices/ActLumus/5399.txt": {
+      "checksum": "e278612c3d50a95fe6d111bac90e3da1"
+    },
+    "testdevices/ActLumus/5655.txt": {
+      "checksum": "b7a07b3554914f8cb7ff842ee5e5149b"
+    },
+    "testdevices/ActLumus/5692.txt": {
+      "checksum": "e811d5028f297e1e56f1a046a33b1e33"
+    },
+    "testdevices/ActLumus/5716.txt": {
+      "checksum": "ee6e0acb39933527f36eef3a91a17b52"
+    },
+    "testdevices/Speccy/ID01_asean_part_1.csv": {
+      "checksum": "022996b55b609fa998e7b6d70596a6f9"
+    },
+    "testdevices/Speccy/ID01_asean_part_2.csv": {
+      "checksum": "ccabc3f4204c8df05b3366876a6f0027"
+    },
+    "testdevices/Speccy/ID01_asean_part_3.csv": {
+      "checksum": "55e46720785f6a07de6c972c01dcfa9a"
+    },
+    "testdevices/Speccy/ID01_asean_part_4.csv": {
+      "checksum": "e340344cb11cec28178fe104fe257231"
+    },
+    "testdevices/Speccy/ID02_Data1_logData_MSS_10100082_2023-08-07_15-47-10.csv": {
+      "checksum": "0893eb1dabb0f976b42446975e411cf0"
+    },
+    "testdevices/Speccy/ID02_Data2_logData_MSS_10100082_2023-08-23_16-39-12.csv": {
+      "checksum": "1479fff47c35c961a0d305a1b7bb5143"
+    },
+    "testdevices/Speccy/ID04_Data1_logData_MSS_10100076_2023-08-07_12-51-24.csv": {
+      "checksum": "34c5a8fbfd39d4f0669dd5808b9d259b"
+    },
+    "testdevices/Speccy/ID04_Data2_logData_MSS_10100076_2023-08-23_14-55-38.csv": {
+      "checksum": "fadbfe446e1b5d34bbd7acf594d4dd68"
+    },
+    "testdevices/VEET/01_VEET_L.csv": {
+      "checksum": "428e3bfc008f90cd6b5dd623f7358a70"
+    },
+    "testdevices/VEET/01_VEET_L.csv.zip": {
+      "checksum": "60eb510c60f72d7774a9ed620081b28c"
+    },
+    "testdevices/VEET/02_VEET_L.csv": {
+      "checksum": "5f34da4430e97ad25d22c5a2739579da"
+    },
+    "testdevices/VEET/02_VEET_L.csv.zip": {
+      "checksum": "e6fd9d62a403520f717f653f6581c8d3"
+    },
+    "tests/testthat.R": {
+      "checksum": "99d189bb80de20c939e1e11cecd1021d"
+    },
+    "tests/testthat/helper-milestone-1.R": {
+      "checksum": "35be5890e097a2fe9ac76caf7f066932"
+    },
+    "tests/testthat/helper-milestone-3.R": {
+      "checksum": "40c12f9981f8f98e710d1c6d06f6b630"
+    },
+    "tests/testthat/helper-milestone-4.R": {
+      "checksum": "acd16266f9c75c9174cd340f3efdbbc4"
+    },
+    "tests/testthat/helper-sass-cache.R": {
+      "checksum": "7ad1b3d365572801d7c3aa60cb55f722"
+    },
+    "tests/testthat/test-app-smoke.R": {
+      "checksum": "321271b34d6eba7f903b93bac8f361ca"
+    },
+    "tests/testthat/test-append-merge.R": {
+      "checksum": "139a579ae4d336a63ef250b502defd69"
+    },
+    "tests/testthat/test-conditions.R": {
+      "checksum": "273af3e0a51df89e51e63a739888bdf9"
+    },
+    "tests/testthat/test-dashboard-data.R": {
+      "checksum": "4db324ed6f0e0ffdb8f4d6bec00e19ed"
+    },
+    "tests/testthat/test-dashboard-navigation.R": {
+      "checksum": "f1b037ae2fdf8e152cd366d8140bcad2"
+    },
+    "tests/testthat/test-dashboard-refinements.R": {
+      "checksum": "5facb163fc5dcda5dd71834724073ac8"
+    },
+    "tests/testthat/test-design-system.R": {
+      "checksum": "3de2c9793877895956f5796243cda31a"
+    },
+    "tests/testthat/test-example-library.R": {
+      "checksum": "bd2686b6e5435f74fb481c73bab71565"
+    },
+    "tests/testthat/test-glc-preview.R": {
+      "checksum": "78f89aaad502483c985fcc2c32db6f6f"
+    },
+    "tests/testthat/test-glc-source.R": {
+      "checksum": "0d649d21ec1106a3854b8764379cd6fa"
+    },
+    "tests/testthat/test-glcdp-adapter.R": {
+      "checksum": "98e1f2ce5c852810bf3979d861101ed8"
+    },
+    "tests/testthat/test-import-boundary.R": {
+      "checksum": "04a14343674de2bb99293dfeb073b5ba"
+    },
+    "tests/testthat/test-import-wizard.R": {
+      "checksum": "d4c4a30475b53370c6013fb695758bcc"
+    },
+    "tests/testthat/test-long-task.R": {
+      "checksum": "1ab7ce7323bb0303eafe4179b4cbff1a"
+    },
+    "tests/testthat/test-module-contracts.R": {
+      "checksum": "0e4fa951f1c1bdf2ceeb34fc6bfa428f"
+    },
+    "tests/testthat/test-raw-import-contract.R": {
+      "checksum": "71481a1c067317e9d3f1632664218985"
+    },
+    "tests/testthat/test-raw-import-quality.R": {
+      "checksum": "6d0b1c66ceeb7a6583b1cea8d630de56"
+    },
+    "tests/testthat/test-resource-profile.R": {
+      "checksum": "99a1bfc8d4060030decf2045fdc84585"
+    },
+    "tests/testthat/test-session-model.R": {
+      "checksum": "8491b86743378d7f3ec6348378997bcf"
     }
   },
   "users": null

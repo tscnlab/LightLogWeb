@@ -4,8 +4,35 @@ glc_source_showcase_registry_url <- function() {
   "https://tscnlab.github.io/glc-registry/registry.json"
 }
 
+glc_source_showcase_deep_link_query <- function(packages, raw_query = "") {
+  validate_glc_registry(packages)
+  parsed <- parse_glc_repository_query(raw_query %||% "")
+  if (identical(parsed$state, "valid")) return(raw_query)
+  if (!identical(parsed$state, "absent")) return(raw_query)
+
+  candidates <- as.character(
+    packages$repository[packages$has_latest_pass %in% TRUE]
+  )
+  preferred <- "tscnlab/melidos-iztech-glc-dataset"
+  repository <- if (preferred %in% candidates) {
+    preferred
+  } else if (length(candidates) > 0L) {
+    candidates[[1L]]
+  } else {
+    NULL
+  }
+  if (is.null(repository)) return(NULL)
+  paste0("?repo=", utils::URLencode(repository, reserved = TRUE))
+}
+
 glc_source_showcase_app <- function() {
   registry_url <- glc_source_showcase_registry_url()
+  glcdp_provenance <- glcdp_runtime_provenance()
+  runtime_profile <- resolve_runtime_profile(
+    profile = "hosted",
+    workers = 1L,
+    is_interactive = TRUE
+  )
 
   ui <- lightlogweb_page(page_fluid(
     lightlogweb_head(),
@@ -15,16 +42,23 @@ glc_source_showcase_app <- function() {
       class = "llw-main-shell",
       tabindex = "-1",
       llw_view_header(
-        "Milestone 6 · Slice 1",
-        "Live GLC registry and exact repository selection",
+        "Milestone 6 · Slice 2A",
+        "Inspect package information and narrow compatible groups",
         paste(
           "This standalone review app reads the current public GLC registry",
-          "through the pinned glcdp 1.0.0 API. Discovery, search, and source",
-          "selection do not open packages or transfer package data."
+          "through the pinned glcdp planner revision. A source choice starts",
+          "metadata-only inspection before compatibility planning. Measurement",
+          "files cannot be read here."
         )
       ),
+      glcPreviewUI(
+        "glc_preview",
+        source_ui = glcSourceUI("glc_source")
+      ),
       card(
-        card_header("Live registry connection"),
+        card_header("Development-only registry checks"),
+        uiOutput("arrival_mode_control"),
+        uiOutput("arrival_mode_status"),
         tags$p(
           tags$strong("Registry source: "),
           tags$a(
@@ -37,8 +71,9 @@ glc_source_showcase_app <- function() {
         tags$p(
           class = "llw-secondary",
           paste(
-            "The registry is loaded when this page starts. Its records and",
-            "row count are live and may change independently of this app."
+            "The registry loads when this page starts. Its records and row",
+            "count are live and may change independently of this app. These",
+            "controls exercise recovery behavior and are not production UI."
           )
         ),
         checkboxInput(
@@ -49,9 +84,9 @@ glc_source_showcase_app <- function() {
         tags$p(
           class = "llw-secondary",
           paste(
-            "After a successful load, enable the simulation and use Refresh",
-            "registry below. The last successful registry and selection remain",
-            "visible. Disable it and refresh again to retry the live endpoint."
+            "After a successful load, enable the simulation and return to Step",
+            "1 to use Refresh registry. The last successful registry and",
+            "selection remain visible. Disable it and refresh again to retry."
           )
         ),
         tags$div(
@@ -69,12 +104,43 @@ glc_source_showcase_app <- function() {
           )
         )
       ),
-      glcSourceUI("glc_source")
+      card(
+        card_header("Slice 2A safety boundary"),
+        tags$p(
+          class = "mb-1",
+          tags$strong("Pinned public API: "),
+          "glcdp ",
+          tags$code(glcdp_provenance$version),
+          " at ",
+          tags$code(glcdp_provenance$revision)
+        ),
+        tags$p(
+          class = "mb-1",
+          tags$strong("Inspection transfer: "),
+          paste(
+            "validated package information and core metadata only; the",
+            "size is not available and is shown as an informational note before",
+            "the explicit inspection action."
+          )
+        ),
+        tags$p(
+          class = "mb-0",
+          tags$strong("Measurement transfer: "),
+          paste(
+            "unavailable in Slice 2A. This app exposes no read, preview,",
+            "collect, import, or download action."
+          )
+        )
+      )
     ),
     theme = lightlogweb_theme()
   ))
 
   server <- function(input, output, session) {
+    runtime <- new_session_runtime(
+      runtime_profile,
+      session = session
+    )
     registry_loader <- function(registry_url, refresh = FALSE) {
       if (isTRUE(refresh) && isTRUE(input$fail_refresh)) {
         stop(structure(
@@ -97,10 +163,127 @@ glc_source_showcase_app <- function() {
       )
     }
 
+    arrival_mode_default <- function() "fresh"
+    arrival_status <- reactiveVal(list(
+      state = "idle",
+      heading = "Fresh workflow",
+      message = "No package is preselected. Choose one source in Step 1."
+    ))
+
+    output$arrival_mode_control <- renderUI({
+      tagList(
+        radioButtons(
+          "arrival_mode",
+          "Simulated arrival path",
+          choices = c(
+            "Fresh workflow: begin at source selection" = "fresh",
+            "Deep-link workflow: preselect and inspect" = "deep_link"
+          ),
+          selected = arrival_mode_default(),
+          inline = TRUE
+        ),
+        tags$p(
+          class = "small llw-secondary",
+          paste(
+            "This development-only control resets the wizard so both entry",
+            "paths can be reviewed. Fresh clears the source selection.",
+            "Deep-link applies the strict repo= query and begins inspection.",
+            "It is not production UI."
+          )
+        )
+      )
+    })
+
     source_state <- glcSourceServer(
       "glc_source",
       registry_url = registry_url,
+      raw_query = "",
       registry_loader = registry_loader
+    )
+    observeEvent(
+      list(input$arrival_mode, source_state$registry()),
+      {
+        mode <- input$arrival_mode %||% arrival_mode_default()
+        if (identical(mode, "deep_link")) {
+          packages <- source_state$registry()
+          if (is.null(packages)) {
+            arrival_status(list(
+              state = "queued",
+              heading = "Preparing deep-link workflow",
+              message = "Waiting for the public registry before choosing a source."
+            ))
+            return(invisible(NULL))
+          }
+          query <- glc_source_showcase_deep_link_query(
+            packages,
+            session$clientData$url_search %||% ""
+          )
+          if (is.null(query)) {
+            source_state$clear_selection()
+            arrival_status(list(
+              state = "warning",
+              heading = "No validated deep-link source",
+              message = paste(
+                "The current registry has no package with an exact passing",
+                "revision. Switch to Fresh or retry after refreshing the registry."
+              )
+            ))
+            return(invisible(NULL))
+          }
+          matched <- source_state$apply_deep_link(query)
+          deep_link <- source_state$deep_link()
+          arrival_status(list(
+            state = if (isTRUE(matched)) "complete" else "warning",
+            heading = if (isTRUE(matched)) {
+              "Deep-link workflow applied"
+            } else {
+              "Deep-link workflow needs attention"
+            },
+            message = if (isTRUE(matched)) {
+              paste(
+                "Preselected", deep_link$repository,
+                "from the strict repository query and started metadata-only inspection."
+              )
+            } else {
+              deep_link$message %||% paste(
+                "The simulated query could not be applied.",
+                "Switch to Fresh or select another package."
+              )
+            }
+          ))
+        } else {
+          source_state$clear_selection()
+          arrival_status(list(
+            state = "idle",
+            heading = "Fresh workflow",
+            message = "No package is preselected. Choose one source in Step 1."
+          ))
+        }
+      },
+      ignoreNULL = FALSE
+    )
+
+    output$arrival_mode_status <- renderUI({
+      status <- arrival_status()
+      llw_status_callout(
+        status$state,
+        status$message,
+        heading = status$heading,
+        live = TRUE,
+        compact = TRUE
+      )
+    })
+    glcPreviewServer(
+      "glc_preview",
+      source_selection = source_state$selection,
+      runtime = runtime,
+      cache_dir = runtime$paths$cache,
+      auto_inspect = reactive({
+        identical(
+          input$arrival_mode %||% arrival_mode_default(),
+          "deep_link"
+        )
+      })
     )
 
     output$live_registry_review <- renderUI({

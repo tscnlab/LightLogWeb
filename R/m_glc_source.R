@@ -448,7 +448,6 @@ glcSourceUI <- function(id) {
     card(
       card_header("Current registry"),
       uiOutput(ns("registry_status")),
-      uiOutput(ns("deep_link_status")),
       tags$div(
         class = paste(
           "d-flex flex-column flex-md-row align-items-md-end gap-2",
@@ -474,10 +473,6 @@ glcSourceUI <- function(id) {
         )
       ),
       uiOutput(ns("registry_table"))
-    ),
-    card(
-      card_header("Selected source"),
-      uiOutput(ns("selection_detail"))
     )
   )
 }
@@ -517,10 +512,11 @@ glcSourceServer <- function(
     deep_link_value <- reactiveVal(new_glc_deep_link("absent"))
     error_value <- reactiveVal(NULL)
     status_value <- reactiveVal(list(
-      state = "idle",
-      heading = "Registry not loaded",
-      message = "Waiting to load the GLC registry."
+      state = "queued",
+      heading = "Loading registry",
+      message = "Contacting the official public registry."
     ))
+    initial_load_started <- FALSE
     selection_observers <- list()
 
     select_repository <- function(packages, repository) {
@@ -531,6 +527,46 @@ glcSourceServer <- function(
       )
       selection_value(selection)
       selection
+    }
+
+    clear_selection <- function() {
+      selection_value(NULL)
+      deep_link_value(new_glc_deep_link("absent"))
+      invisible(NULL)
+    }
+
+    apply_deep_link <- function(raw_query_value) {
+      deep_link <- parse_glc_repository_query(raw_query_value)
+      deep_link_value(deep_link)
+      selection_value(NULL)
+      packages <- registry_value()
+      if (
+        is.null(packages) ||
+          !identical(deep_link$state, "valid")
+      ) {
+        return(invisible(FALSE))
+      }
+      matched <- select_repository(packages, deep_link$repository)
+      if (is.null(matched)) {
+        deep_link_value(new_glc_deep_link(
+          "unmatched",
+          repository = deep_link$repository,
+          message = paste(
+            "The repository is well formed but does not exactly match",
+            "the current registry."
+          )
+        ))
+        return(invisible(FALSE))
+      }
+      deep_link_value(new_glc_deep_link(
+        "matched",
+        repository = deep_link$repository,
+        message = paste(
+          "The exact registry repository was preselected.",
+          "No package data were read or downloaded."
+        )
+      ))
+      invisible(TRUE)
     }
 
     clear_selection_observers <- function() {
@@ -657,15 +693,17 @@ glcSourceServer <- function(
       invisible(TRUE)
     }
 
-    observeEvent(
-      query_source(),
-      {
-        deep_link_value(parse_glc_repository_query(query_source()))
+    initialize_registry <- function() {
+      if (isTRUE(initial_load_started)) return(invisible(FALSE))
+      initial_load_started <<- TRUE
+      isolate({
+        initial_query <- query_source()
+        deep_link_value(parse_glc_repository_query(initial_query))
         load_registry_now(refresh = FALSE, apply_deep_link = TRUE)
-      },
-      ignoreNULL = FALSE,
-      once = TRUE
-    )
+      })
+    }
+
+    session$onFlushed(initialize_registry, once = TRUE)
 
     observeEvent(input$refresh, {
       load_registry_now(refresh = TRUE, apply_deep_link = FALSE)
@@ -685,35 +723,35 @@ glcSourceServer <- function(
 
     output$registry_status <- renderUI({
       status <- status_value()
-      llw_status_callout(
-        status$state,
-        status$message,
-        heading = status$heading,
-        live = TRUE,
-        compact = TRUE
-      )
-    })
-
-    output$deep_link_status <- renderUI({
       deep_link <- deep_link_value()
-      if (identical(deep_link$state, "absent")) {
-        return(NULL)
-      }
-      state <- if (deep_link$state %in% c("valid", "matched")) {
-        "complete"
+      deep_link_message <- if (identical(deep_link$state, "absent")) {
+        NULL
       } else {
+        deep_link$message %||% "The GLC deep link was inspected."
+      }
+      state <- if (
+        identical(status$state, "complete") &&
+          deep_link$state %in% c("invalid", "unmatched")
+      ) {
         "warning"
+      } else {
+        status$state
+      }
+      heading <- if (!identical(status$state, "complete")) {
+        status$heading
+      } else {
+        switch(
+          deep_link$state,
+          invalid = "Registry ready; deep link rejected",
+          unmatched = "Registry ready; deep link not found",
+          status$heading
+        )
       }
       llw_status_callout(
         state,
-        deep_link$message %||% "The GLC deep link was inspected.",
-        heading = switch(
-          deep_link$state,
-          valid = "Deep link valid",
-          matched = "Deep link matched",
-          unmatched = "Deep link not found",
-          invalid = "Deep link rejected"
-        ),
+        paste(c(status$message, deep_link_message), collapse = " "),
+        heading = heading,
+        live = TRUE,
         compact = TRUE
       )
     })
@@ -730,6 +768,12 @@ glcSourceServer <- function(
         ns = session$ns
       )
     })
+
+    # The source selector is embedded in a hidden wizard panel. Keep its live
+    # registry outputs current so returning from a later step cannot expose
+    # indefinitely suspended, empty output containers.
+    outputOptions(output, "registry_status", suspendWhenHidden = FALSE)
+    outputOptions(output, "registry_table", suspendWhenHidden = FALSE)
 
     output$selection_detail <- renderUI({
       selection <- selection_value()
@@ -828,7 +872,10 @@ glcSourceServer <- function(
       selection = reactive(selection_value()),
       deep_link = reactive(deep_link_value()),
       status = reactive(status_value()),
-      error = reactive(error_value())
+      error = reactive(error_value()),
+      initialize = initialize_registry,
+      clear_selection = clear_selection,
+      apply_deep_link = apply_deep_link
     )
   })
 }

@@ -2050,7 +2050,7 @@
     },
     "glcdp": {
       "Package": "glcdp",
-      "Version": "1.0.0",
+      "Version": "1.0.0.9000",
       "Source": "GitHub",
       "Title": "Discover, Access, and Import Global Light Commons Data Packages",
       "Authors@R": "c( person( \"Johannes\", \"Zauner\", email = \"johannes.zauner@tum.de\", role = c(\"aut\", \"cre\", \"cph\"), comment = c(ORCID = \"0000-0003-2171-4566\") ), person( \"Salma M.\", \"Thalji\", email = \"salma.thalji@tum.de\", role = c(\"aut\", \"cph\"), comment = c(ORCID = \"0009-0002-7320-9289\") ), person( \"Manuel\", \"Spitschan\", email = \"manuel.spitschan@tum.de\", role = c(\"aut\", \"cph\"), comment = c(ORCID = \"0000-0002-8572-9268\") ) )",
@@ -2090,8 +2090,8 @@
       "RemoteHost": "api.github.com",
       "RemoteUsername": "tscnlab",
       "RemoteRepo": "glc-dp-r",
-      "RemoteRef": "bf97cb30555569886f08db0bdb25421c546ccf0a",
-      "RemoteSha": "bf97cb30555569886f08db0bdb25421c546ccf0a"
+      "RemoteRef": "e49fcf153a114916ce2680f8b40eb475e694e10d",
+      "RemoteSha": "e49fcf153a114916ce2680f8b40eb475e694e10d"
     },
     "globals": {
       "Package": "globals",
