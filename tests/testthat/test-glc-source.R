@@ -542,6 +542,8 @@ test_that("GLC source UI states that selection performs no data transfer", {
   expect_false(grepl("Selected source", html, fixed = TRUE))
   expect_false(grepl("deep_link_status", html, fixed = TRUE))
   expect_match(html, "llw-glc-registry-controls", fixed = TRUE)
+  expect_match(html, "llw-glc-registry-table-scroll", fixed = TRUE)
+  expect_match(html, "overflow-x: auto; overflow-y: hidden", fixed = TRUE)
   expect_match(html, "btn-primary llw-glc-refresh-button", fixed = TRUE)
   expect_match(html, "height: 2.75rem", fixed = TRUE)
   expect_false(grepl("btn-outline-secondary", html, fixed = TRUE))

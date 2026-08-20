@@ -386,7 +386,7 @@ glc_registry_table_tag <- function(
   })
 
   tags$div(
-    class = "table-responsive text-nowrap",
+    class = "table-responsive text-nowrap llw-glc-registry-table-scroll",
     tags$table(
       class = "table table-striped table-hover align-middle mb-0",
       tags$caption(
@@ -432,7 +432,9 @@ glcSourceUI <- function(id) {
       "height: 2.75rem; min-height: 2.75rem; }",
       ".llw-glc-source .llw-glc-select-button {",
       "align-items: center; display: inline-flex; justify-content: center;",
-      "width: 6.75rem; }"
+      "width: 6.75rem; }",
+      ".llw-glc-source .llw-glc-registry-table-scroll {",
+      "overflow-x: auto; overflow-y: hidden; }"
     ))),
     tags$div(
       class = "mb-4",

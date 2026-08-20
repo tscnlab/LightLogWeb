@@ -1304,7 +1304,10 @@ new_glc_phase_log <- function(progress_path = NULL) {
   complete <- function(detail) {
     assert_scalar_string(detail, "detail")
     if (is.null(state$active_phase) || is.null(state$active_started)) {
-      abort_llw("No active GLC task phase can be completed.", type = "validation")
+      abort_llw(
+        "No active GLC task phase can be completed.",
+        type = "validation"
+      )
     }
     elapsed <- as.numeric(difftime(
       Sys.time(),
@@ -1461,7 +1464,9 @@ glcdp_inspect_source <- function(
       )
       terms <- glc_term_catalogue(variables)
       expected_bytes <- as.numeric(files$expected_bytes)
-      byte_warnings <- if (length(expected_bytes) > 0L && anyNA(expected_bytes)) {
+      byte_warnings <- if (
+        length(expected_bytes) > 0L && anyNA(expected_bytes)
+      ) {
         paste(
           sum(is.na(expected_bytes)),
           "measurement file size(s) are unavailable."
@@ -1507,7 +1512,9 @@ glcdp_inspect_source <- function(
       inspection
     },
     error = function(cnd) {
-      progress$fail("This phase did not complete. Review the task error and retry.")
+      progress$fail(
+        "This phase did not complete. Review the task error and retry."
+      )
       if (inherits(cnd, "llw_error")) {
         stop(cnd)
       }
@@ -1769,76 +1776,180 @@ glc_collection_plan_metadata_tables <- function() {
   list(
     resource_status = c("resource", "declared", "status", "record_count"),
     studies = c(
-      "study_id", "schema_version", "title", "short_description",
-      "preregistration", "registration", "ethics", "sample",
-      "intervention", "setting", "geographical_location", "study_type",
-      "funding_sources", "keywords", "dataset_ids"
+      "study_id",
+      "schema_version",
+      "title",
+      "short_description",
+      "preregistration",
+      "registration",
+      "ethics",
+      "sample",
+      "intervention",
+      "setting",
+      "geographical_location",
+      "study_type",
+      "funding_sources",
+      "keywords",
+      "dataset_ids"
     ),
     study_groups = c(
-      "study_id", "position", "name", "description", "size",
-      "inclusion", "exclusion", "dataset_ids"
+      "study_id",
+      "position",
+      "name",
+      "description",
+      "size",
+      "inclusion",
+      "exclusion",
+      "dataset_ids"
     ),
     study_contributors = c(
-      "study_id", "position", "full_name", "roles", "email", "orcid",
-      "institution_name", "institution_city", "institution_country"
+      "study_id",
+      "position",
+      "full_name",
+      "roles",
+      "email",
+      "orcid",
+      "institution_name",
+      "institution_city",
+      "institution_country"
     ),
     contributors = c(
-      "contributor_id", "position", "full_name", "roles", "email", "orcid",
-      "institution_name", "institution_city", "institution_country"
+      "contributor_id",
+      "position",
+      "full_name",
+      "roles",
+      "email",
+      "orcid",
+      "institution_name",
+      "institution_city",
+      "institution_country"
     ),
     datasets = c(
-      "dataset_id", "schema_version", "study_id", "study_link_status",
-      "participant_id", "participant_associated", "participant_link_status",
-      "timezone", "latitude", "longitude", "file_group_count", "file_count",
-      "modalities", "device_ids", "primary_variables"
+      "dataset_id",
+      "schema_version",
+      "study_id",
+      "study_link_status",
+      "participant_id",
+      "participant_associated",
+      "participant_link_status",
+      "timezone",
+      "latitude",
+      "longitude",
+      "file_group_count",
+      "file_count",
+      "modalities",
+      "device_ids",
+      "primary_variables"
     ),
     dataset_terms = c("dataset_id", "position", "term", "label"),
     participants = c("participant_id", "age", "sex", "gender"),
     participant_characteristics = c(
-      "participant_id", "participant_link_status", "characteristic_position",
-      "value_position", "name", "value", "value_type", "unit", "description"
+      "participant_id",
+      "participant_link_status",
+      "characteristic_position",
+      "value_position",
+      "name",
+      "value",
+      "value_type",
+      "unit",
+      "description"
     ),
     devices = c(
-      "device_id", "schema_version", "manufacturer", "model",
-      "serial_number", "calibration_date", "firmware_version",
-      "datasheet_id", "datasheet_link_status"
+      "device_id",
+      "schema_version",
+      "manufacturer",
+      "model",
+      "serial_number",
+      "calibration_date",
+      "firmware_version",
+      "datasheet_id",
+      "datasheet_link_status"
     ),
     device_sensors = c(
-      "device_id", "position", "sensor_type", "datasheet_id",
+      "device_id",
+      "position",
+      "sensor_type",
+      "datasheet_id",
       "datasheet_link_status"
     ),
     datasheets = c(
-      "datasheet_id", "schema_version", "datasheet_version", "manufacturer",
-      "type", "modalities", "modality_other", "model",
-      "calibration_interval", "calibration_method", "calibration_accuracy",
-      "calibration_range", "calibration_notes",
-      "calibration_spectral_sensitivity", "calibration_linearity",
+      "datasheet_id",
+      "schema_version",
+      "datasheet_version",
+      "manufacturer",
+      "type",
+      "modalities",
+      "modality_other",
+      "model",
+      "calibration_interval",
+      "calibration_method",
+      "calibration_accuracy",
+      "calibration_range",
+      "calibration_notes",
+      "calibration_spectral_sensitivity",
+      "calibration_linearity",
       "calibration_directional_response"
     ),
     datasheet_parameters = c(
-      "datasheet_id", "position", "name", "value", "value_type", "unit",
+      "datasheet_id",
+      "position",
+      "name",
+      "value",
+      "value_type",
+      "unit",
       "description"
     ),
     datasheet_channels = c(
-      "datasheet_id", "position", "channel_number", "name", "description",
+      "datasheet_id",
+      "position",
+      "channel_number",
+      "name",
+      "description",
       "unit"
     ),
     instruments = c(
-      "dataset_id", "file_group_id", "instrument_type", "instrument_name",
-      "collection_method", "recorded_by", "software_name"
+      "dataset_id",
+      "file_group_id",
+      "instrument_type",
+      "instrument_name",
+      "collection_method",
+      "recorded_by",
+      "software_name"
     ),
     file_group_variables = c(
-      "dataset_id", "file_group_id", "declaration_position",
-      "selected_by_request", "selected_for_output", "selection_origin",
-      "name", "label", "description", "unit", "calibration", "type",
-      "term", "term_name", "primary", "factor_level_count"
+      "dataset_id",
+      "file_group_id",
+      "declaration_position",
+      "selected_by_request",
+      "selected_for_output",
+      "selection_origin",
+      "name",
+      "label",
+      "description",
+      "unit",
+      "calibration",
+      "type",
+      "term",
+      "term_name",
+      "primary",
+      "factor_level_count"
     ),
     file_group_factor_levels = c(
-      "dataset_id", "file_group_id", "variable_position", "variable_name",
-      "level_position", "value", "label", "description"
+      "dataset_id",
+      "file_group_id",
+      "variable_position",
+      "variable_name",
+      "level_position",
+      "value",
+      "label",
+      "description"
     ),
     extensions = c(
-      "resource", "entity_type", "entity_id", "parent_id", "position",
+      "resource",
+      "entity_type",
+      "entity_id",
+      "parent_id",
+      "position",
       "metadata"
     )
   )
@@ -1847,7 +1958,9 @@ glc_collection_plan_metadata_tables <- function() {
 new_glc_planning_request <- function(
   term = NULL,
   modality = NULL,
-  file_group_ids = character()
+  file_group_ids = character(),
+  variable_scope = NULL,
+  source_variables = character()
 ) {
   normalize_optional_scalar <- function(value, name) {
     if (is.null(value)) return(NULL)
@@ -1859,9 +1972,29 @@ new_glc_planning_request <- function(
   term <- normalize_optional_scalar(term, "term")
   modality <- normalize_optional_scalar(modality, "modality")
   file_group_ids <- glc_nonempty_unique(file_group_ids)
-  if (is.null(term) && is.null(modality)) {
+  raw_source_variables <- as.character(source_variables)
+  raw_source_variables <- trimws(enc2utf8(
+    raw_source_variables[!is.na(raw_source_variables)]
+  ))
+  raw_source_variables <- raw_source_variables[nzchar(raw_source_variables)]
+  if (anyDuplicated(raw_source_variables)) {
     abort_llw(
-      "Choose a canonical term, a modality, or both before planning.",
+      "Custom variables must use unique exact source names.",
+      type = "validation"
+    )
+  }
+  source_variables <- sort(raw_source_variables, method = "radix")
+  if (is.null(variable_scope)) {
+    variable_scope <- "all"
+  }
+  assert_scalar_string(variable_scope, "variable_scope")
+  variable_scope <- match.arg(variable_scope, c("matched", "all", "selected"))
+  if (is.null(term) && is.null(modality) && length(file_group_ids) == 0L) {
+    abort_llw(
+      paste(
+        "Choose a canonical term, a modality, or stable file groups before",
+        "planning."
+      ),
       type = "validation"
     )
   }
@@ -1871,9 +2004,21 @@ new_glc_planning_request <- function(
       type = "validation"
     )
   }
-  if (is.null(modality) && length(file_group_ids) > 0L) {
+  if (identical(variable_scope, "matched") && is.null(term)) {
     abort_llw(
-      "File-group restrictions require a selected modality.",
+      "Matched variable scope requires a canonical term.",
+      type = "validation"
+    )
+  }
+  if (identical(variable_scope, "selected") && length(source_variables) == 0L) {
+    abort_llw(
+      "Custom variable scope requires at least one exact source name.",
+      type = "validation"
+    )
+  }
+  if (!identical(variable_scope, "selected") && length(source_variables) > 0L) {
+    abort_llw(
+      "Exact source variables are valid only for custom variable scope.",
       type = "validation"
     )
   }
@@ -1882,7 +2027,8 @@ new_glc_planning_request <- function(
       term = term,
       modality = modality,
       file_group_ids = file_group_ids,
-      variable_scope = if (is.null(term)) "all" else "matched"
+      variable_scope = variable_scope,
+      source_variables = source_variables
     ),
     class = c("llw_glc_planning_request", "list")
   )
@@ -1900,7 +2046,9 @@ validate_glc_planning_request <- function(request) {
   rebuilt <- new_glc_planning_request(
     term = request$term,
     modality = request$modality,
-    file_group_ids = request$file_group_ids
+    file_group_ids = request$file_group_ids,
+    variable_scope = request$variable_scope,
+    source_variables = request$source_variables
   )
   if (!identical(request, rebuilt)) {
     abort_llw("The GLC planning request is not canonical.", type = "validation")
@@ -1979,10 +2127,19 @@ validate_glc_collection_plan <- function(plan, source, request) {
   }
   expected_terms <- request$term %||% character()
   expected_file_groups <- request$file_group_ids
+  expected_variables <- if (identical(request$variable_scope, "selected")) {
+    request$source_variables
+  } else {
+    character()
+  }
   if (
     !is.list(plan$request) ||
       !identical(plan$request$variable_scope, request$variable_scope) ||
       !identical(as.character(plan$request$terms), expected_terms) ||
+      !identical(
+        sort(as.character(plan$request$requested_variables), method = "radix"),
+        expected_variables
+      ) ||
       !identical(as.character(plan$request$file_group), expected_file_groups) ||
       !identical(plan$request$standardize, "lightlogr")
   ) {
@@ -2129,15 +2286,297 @@ validate_glc_collection_plan <- function(plan, source, request) {
   invisible(plan)
 }
 
+glc_scope_parent_identity <- function(
+  source,
+  parent_request,
+  parent_plan,
+  parent_compatibility_id,
+  parent_refinement
+) {
+  source <- validate_glc_source_spec(source)
+  parent_request <- validate_glc_planning_request(parent_request)
+  validate_glc_collection_plan(parent_plan, source, parent_request)
+  assert_scalar_string(
+    parent_compatibility_id,
+    "parent_compatibility_id"
+  )
+  if (
+    !inherits(parent_refinement, "glc_collection_refinement") ||
+      !is.list(parent_refinement) ||
+      !is.list(parent_refinement$request)
+  ) {
+    abort_llw(
+      "Output projection requires a valid finalized metadata refinement.",
+      type = "validation"
+    )
+  }
+  refined_file_group_ids <- glc_nonempty_unique(
+    parent_refinement$request$file_group %||% character()
+  )
+  validate_glc_collection_refinement(
+    parent_refinement,
+    parent_plan,
+    parent_compatibility_id,
+    refined_file_group_ids
+  )
+  if (length(refined_file_group_ids) == 0L) {
+    abort_llw(
+      "Output projection requires a finalized metadata refinement.",
+      type = "validation"
+    )
+  }
+  list(
+    source = source,
+    request = parent_request,
+    plan = parent_plan,
+    compatibility_id = parent_compatibility_id,
+    refinement = parent_refinement,
+    refined_file_group_ids = refined_file_group_ids
+  )
+}
+
+new_glc_projection_review <- function(
+  source,
+  source_variables,
+  parent_request,
+  parent_plan,
+  parent_compatibility_id,
+  parent_refinement,
+  metadata_filters = list()
+) {
+  source <- validate_glc_source_spec(source)
+  parent <- glc_scope_parent_identity(
+    source,
+    parent_request,
+    parent_plan,
+    parent_compatibility_id,
+    parent_refinement
+  )
+  refined_file_group_ids <- parent$refined_file_group_ids
+  if (!identical(parent_request$variable_scope, "all")) {
+    abort_llw(
+      paste(
+        "Variable projection requires a Slice 2A plan that validated the",
+        "complete file schema."
+      ),
+      type = "validation"
+    )
+  }
+  source_variables <- trimws(enc2utf8(as.character(source_variables)))
+  source_variables <- source_variables[
+    !is.na(source_variables) & nzchar(source_variables)
+  ]
+  if (length(source_variables) == 0L) {
+    abort_llw(
+      "Choose at least one exact source variable for the output projection.",
+      type = "validation"
+    )
+  }
+  if (anyDuplicated(source_variables)) {
+    abort_llw(
+      "Output projection variables must use unique exact source names.",
+      type = "validation"
+    )
+  }
+  source_variables <- sort(source_variables, method = "radix")
+  if (!is.list(metadata_filters)) {
+    abort_llw(
+      "Metadata-filter provenance must be a serializable list.",
+      type = "validation"
+    )
+  }
+  assert_serializable_value(metadata_filters, "Metadata-filter provenance")
+
+  groups <- parent_plan$groups[
+    parent_plan$groups$status == "included" &
+      parent_plan$groups$compatibility_id == parent_compatibility_id &
+      parent_plan$groups$file_group_id %in% refined_file_group_ids,
+    ,
+    drop = FALSE
+  ]
+  group_ids <- glc_nonempty_unique(groups$file_group_id)
+  if (
+    length(group_ids) == 0L ||
+      !setequal(group_ids, refined_file_group_ids)
+  ) {
+    abort_llw(
+      "The retained Slice 2A structure does not match the refined groups.",
+      type = "validation"
+    )
+  }
+  selected_unit_ids <- glc_nonempty_unique(parent_refinement$units$unit_id)
+  if (length(selected_unit_ids) == 0L) {
+    abort_llw(
+      "The retained Slice 2A refinement has no stable unit identity.",
+      type = "validation"
+    )
+  }
+
+  variable_rows <- parent_plan$variables$file_group_id %in% group_ids
+  available <- parent_plan$variables[variable_rows, , drop = FALSE]
+  availability <- vapply(
+    source_variables,
+    function(name) {
+      setequal(
+        glc_nonempty_unique(available$file_group_id[available$name == name]),
+        group_ids
+      )
+    },
+    logical(1)
+  )
+  if (any(!availability)) {
+    abort_llw(
+      paste0(
+        "Exact source variable(s) are not available in every retained file ",
+        "group: ",
+        paste(source_variables[!availability], collapse = ", "),
+        "."
+      ),
+      type = "validation"
+    )
+  }
+
+  files <- parent_plan$files[
+    parent_plan$files$status == "included" &
+      parent_plan$files$file_group_id %in% group_ids,
+    ,
+    drop = FALSE
+  ]
+  read_columns <- parent_plan$read_columns[
+    parent_plan$read_columns$unit_id %in% selected_unit_ids &
+      parent_plan$read_columns$file_group_id %in% group_ids &
+      (
+        parent_plan$read_columns$name %in% source_variables |
+          parent_plan$read_columns$automatic %in% TRUE
+      ),
+    ,
+    drop = FALSE
+  ]
+  output_columns <- parent_plan$output_columns[
+    parent_plan$output_columns$unit_id %in% selected_unit_ids &
+      (
+        parent_plan$output_columns$name %in% source_variables |
+          parent_plan$output_columns$automatic %in% TRUE
+      ),
+    ,
+    drop = FALSE
+  ]
+  diagnostic_rows <- vapply(
+    parent_plan$compatibility_diagnostics$compatibility_ids,
+    function(ids) parent_compatibility_id %in% as.character(ids),
+    logical(1)
+  )
+  diagnostics <- parent_plan$compatibility_diagnostics[
+    diagnostic_rows,
+    ,
+    drop = FALSE
+  ]
+  diagnostic_groups <- parent_plan$compatibility_diagnostic_groups[
+    parent_plan$compatibility_diagnostic_groups$diagnostic_id %in%
+      diagnostics$diagnostic_id,
+    ,
+    drop = FALSE
+  ]
+  known_bytes <- as.numeric(
+    files$declared_bytes[!is.na(files$bytes_known) & files$bytes_known]
+  )
+  known_bytes <- known_bytes[!is.na(known_bytes)]
+  if (any(!is.finite(known_bytes)) || any(known_bytes < 0)) {
+    abort_llw(
+      "The retained plan contains invalid listed file sizes.",
+      type = "validation"
+    )
+  }
+  known_total <- sum(known_bytes)
+  bytes_complete <- nrow(files) > 0L &&
+    all(!is.na(files$bytes_known)) &&
+    all(files$bytes_known)
+
+  review <- structure(
+    list(
+      review_schema = "llw-glc-variable-projection-review",
+      review_version = "1.0.0",
+      source = list(
+        registry_url = source$registry_url,
+        registry_generated_at = source$registry_generated_at,
+        repository = source$repository,
+        resolved_revision = source$resolved_revision,
+        validation_state = source$validation_state,
+        attestation_verified = source$attestation_verified,
+        schema_version = source$schema_version,
+        glcdp_version = source$glcdp_version
+      ),
+      refined_file_group_ids = refined_file_group_ids,
+      parent = list(
+        plan_schema = parent_plan$plan_schema,
+        plan_version = parent_plan$plan_version,
+        plan_fingerprint = parent_plan$refinement_input$fingerprint,
+        request = parent_request,
+        compatibility_id = parent_compatibility_id,
+        refinement_schema = parent_refinement$refinement_schema,
+        refinement_version = parent_refinement$refinement_version,
+        refinement_parent_fingerprint = parent_refinement$parent$fingerprint,
+        refinement_file_group_ids = refined_file_group_ids
+      ),
+      selected_source_variables = source_variables,
+      metadata_filters = metadata_filters,
+      selected_compatibility_id = parent_compatibility_id,
+      selected_unit_ids = selected_unit_ids,
+      selected_groups = groups,
+      diagnostics = diagnostics,
+      diagnostic_groups = diagnostic_groups,
+      read_columns = read_columns,
+      output_columns = output_columns,
+      files = files,
+      byte_evidence = list(
+        file_count = nrow(files),
+        known_file_count = sum(files$bytes_known %in% TRUE),
+        unknown_file_count = sum(!files$bytes_known %in% TRUE),
+        known_declared_bytes = known_total,
+        declared_bytes_complete = bytes_complete,
+        declared_total_bytes = if (bytes_complete) known_total else NA_real_
+      ),
+      assurance = list(
+        projection_only = TRUE,
+        compatibility_replanned = FALSE,
+        compatibility_identity_changed = FALSE,
+        metadata_only = TRUE,
+        measurement_contents_transferred = FALSE,
+        measurement_contents_inspected = FALSE,
+        runtime_validation_required = TRUE
+      )
+    ),
+    class = c("llw_glc_projection_review", "list")
+  )
+  assert_serializable_value(review, "GLC variable projection review")
+  if (glc_value_contains_path(review, source$cache_dir)) {
+    abort_llw(
+      "The variable projection retained session transport state.",
+      type = "validation"
+    )
+  }
+  review
+}
+
 glc_collection_refinement_required_tables <- function() {
   list(
     units = glc_collection_plan_required_tables()$units,
     groups = c(
-      "status", "unit_id", "compatibility_id", "dataset_id", "file_group",
-      "file_group_id", "study_id", "participant_id",
-      "participant_associated", "study_link_status",
-      "participant_link_status", "device_id", "device_link_status",
-      "reason_codes", "messages"
+      "status",
+      "unit_id",
+      "compatibility_id",
+      "dataset_id",
+      "file_group",
+      "file_group_id",
+      "study_id",
+      "participant_id",
+      "participant_associated",
+      "study_link_status",
+      "participant_link_status",
+      "device_id",
+      "device_link_status",
+      "reason_codes",
+      "messages"
     ),
     constraints = c("compatibility_id", "code", "message", "resolved")
   )
@@ -2171,16 +2610,25 @@ validate_glc_collection_refinement <- function(
   if (!inherits(plan, "glc_collection_plan") || !is.list(plan)) {
     abort_llw("The parent collection plan is invalid.", type = "validation")
   }
-  if (!inherits(refinement, "glc_collection_refinement") || !is.list(refinement)) {
+  if (
+    !inherits(refinement, "glc_collection_refinement") || !is.list(refinement)
+  ) {
     abort_llw(
       "glcdp did not return a glc_collection_refinement object.",
       type = "validation"
     )
   }
   required <- c(
-    "refinement_schema", "refinement_version", "parent", "provenance",
-    "request", "assurance", "compatibility_id", "final_selection_required",
-    "preferred_unit_id", names(glc_collection_refinement_required_tables())
+    "refinement_schema",
+    "refinement_version",
+    "parent",
+    "provenance",
+    "request",
+    "assurance",
+    "compatibility_id",
+    "final_selection_required",
+    "preferred_unit_id",
+    names(glc_collection_refinement_required_tables())
   )
   missing <- setdiff(required, names(refinement))
   if (length(missing) > 0L) {
@@ -2263,7 +2711,9 @@ validate_glc_collection_refinement <- function(
       table_contract[[name]]
     )
   }
-  if (!setequal(as.character(refinement$groups$file_group_id), file_group_ids)) {
+  if (
+    !setequal(as.character(refinement$groups$file_group_id), file_group_ids)
+  ) {
     abort_llw(
       "The collection refinement returned unexpected file-group membership.",
       type = "validation"
@@ -2381,7 +2831,11 @@ glcdp_plan_source <- function(payload, api = NULL) {
         x = handle,
         terms = request$term,
         variable_scope = request$variable_scope,
-        variables = NULL,
+        variables = if (identical(request$variable_scope, "selected")) {
+          request$source_variables
+        } else {
+          NULL
+        },
         dataset_id = NULL,
         file_group = if (length(request$file_group_ids) > 0L) {
           request$file_group_ids
@@ -2405,7 +2859,9 @@ glcdp_plan_source <- function(payload, api = NULL) {
       plan
     },
     error = function(cnd) {
-      progress$fail("This phase did not complete. Review the task error and retry.")
+      progress$fail(
+        "This phase did not complete. Review the task error and retry."
+      )
       if (inherits(cnd, "llw_error")) {
         stop(cnd)
       }

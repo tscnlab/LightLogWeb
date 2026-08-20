@@ -193,6 +193,49 @@ glc_preview_test_modality_inspection <- function(
   )
 }
 
+glc_preview_test_scope_inspection <- function(
+  selection = glc_preview_test_selection(),
+  cache_dir = tempfile("glc-cache-")
+) {
+  inspection <- glc_preview_test_inspection(selection, cache_dir)
+  variables <- inspection$variables
+  additional <- data.frame(
+    dataset_id = c("dataset-a", "dataset-a", "dataset-b", "dataset-a"),
+    file_group_id = c(
+      "dataset-a:1",
+      "dataset-a:2",
+      "dataset-b:1",
+      "dataset-a:2"
+    ),
+    name = c("Id", "Id", "Id", "ability"),
+    label = c(rep("Participant ID", 3L), "Participant ability"),
+    description = c(
+      rep("Stable participant identity.", 3L),
+      "Participant ability score."
+    ),
+    unit = NA_character_,
+    type = c(rep("string", 3L), "number"),
+    term = c(rep("participant_id", 3L), "ability"),
+    term_name = c(rep("Participant ID", 3L), "Participant ability"),
+    primary = c(rep(FALSE, 3L), TRUE),
+    stringsAsFactors = FALSE
+  )
+  additional$factor_values <- rep(list(character()), nrow(additional))
+  additional$factor_labels <- rep(list(character()), nrow(additional))
+  additional$factor_descriptions <- rep(list(character()), nrow(additional))
+  variables <- rbind(variables, additional)
+  new_glc_inspection(
+    source = inspection$source,
+    summary = inspection$summary,
+    datasets = inspection$datasets,
+    files = inspection$files,
+    variables = variables,
+    resources = inspection$resources,
+    metadata = inspection$metadata,
+    warnings = inspection$warnings
+  )
+}
+
 glc_preview_empty_table <- function(columns, rows = 0L) {
   values <- stats::setNames(
     replicate(length(columns), rep(NA_character_, rows), simplify = FALSE),
@@ -536,6 +579,8 @@ glc_preview_test_plan <- function(
       request = list(
         terms = request$term %||% character(),
         variable_scope = request$variable_scope,
+        requested_variables = request$source_variables,
+        resolved_variables = request$source_variables,
         file_group = request$file_group_ids,
         standardize = "lightlogr"
       ),
@@ -648,6 +693,220 @@ glc_preview_test_factor_diagnostic <- function(plan, applies = TRUE) {
   plan
 }
 
+glc_preview_test_rekey_plan <- function(
+  plan,
+  compatibility_digit = "9",
+  unit_digit = "8"
+) {
+  stopifnot(
+    nrow(plan$compatibility_sets) == 1L,
+    nrow(plan$units) == 1L,
+    grepl("^[0-9a-f]$", compatibility_digit),
+    grepl("^[0-9a-f]$", unit_digit)
+  )
+  old_compatibility <- plan$compatibility_sets$compatibility_id[[1L]]
+  old_unit <- plan$units$unit_id[[1L]]
+  new_compatibility <- paste0("glcc_", strrep(compatibility_digit, 64L))
+  new_unit <- paste0("glcu_", strrep(unit_digit, 64L))
+  replace_compatibility <- function(value) {
+    replace <- !is.na(value) & value == old_compatibility
+    value[replace] <- new_compatibility
+    value
+  }
+  replace_unit <- function(value) {
+    replace <- !is.na(value) & value == old_unit
+    value[replace] <- new_unit
+    value
+  }
+
+  plan$preferred_unit_id <- new_unit
+  plan$units$unit_id <- replace_unit(plan$units$unit_id)
+  plan$units$compatibility_id <- replace_compatibility(
+    plan$units$compatibility_id
+  )
+  for (table in c("groups", "variables", "read_columns", "files")) {
+    plan[[table]]$unit_id <- replace_unit(plan[[table]]$unit_id)
+  }
+  plan$output_columns$unit_id <- replace_unit(plan$output_columns$unit_id)
+  plan$compatibility$unit_id <- replace_unit(plan$compatibility$unit_id)
+  plan$compatibility_sets$compatibility_id <- replace_compatibility(
+    plan$compatibility_sets$compatibility_id
+  )
+  plan$groups$compatibility_id <- replace_compatibility(
+    plan$groups$compatibility_id
+  )
+  plan$compatibility_sets$final_unit_ids <- lapply(
+    plan$compatibility_sets$final_unit_ids,
+    replace_unit
+  )
+  if (nrow(plan$compatibility_diagnostics) > 0L) {
+    plan$compatibility_diagnostics$compatibility_ids <- lapply(
+      plan$compatibility_diagnostics$compatibility_ids,
+      replace_compatibility
+    )
+    plan$compatibility_diagnostics$unit_ids <- lapply(
+      plan$compatibility_diagnostics$unit_ids,
+      replace_unit
+    )
+  }
+  if (nrow(plan$compatibility_diagnostic_groups) > 0L) {
+    plan$compatibility_diagnostic_groups$compatibility_id <-
+      replace_compatibility(
+        plan$compatibility_diagnostic_groups$compatibility_id
+      )
+    plan$compatibility_diagnostic_groups$unit_id <- replace_unit(
+      plan$compatibility_diagnostic_groups$unit_id
+    )
+  }
+  plan$refinement_input$fingerprint <- strrep(compatibility_digit, 64L)
+  plan
+}
+
+glc_preview_test_one_unit_membership <- function(
+  plan,
+  included_file_group_ids,
+  selected_name = NULL
+) {
+  stopifnot(
+    nrow(plan$compatibility_sets) == 1L,
+    nrow(plan$units) == 1L
+  )
+  included_file_group_ids <- sort(
+    unique(as.character(included_file_group_ids)),
+    method = "radix"
+  )
+  known_ids <- as.character(plan$groups$file_group_id)
+  stopifnot(
+    length(included_file_group_ids) > 0L,
+    all(included_file_group_ids %in% known_ids)
+  )
+  included <- known_ids %in% included_file_group_ids
+  compatibility_id <- plan$compatibility_sets$compatibility_id[[1L]]
+  unit_id <- plan$units$unit_id[[1L]]
+
+  plan$groups$status <- ifelse(included, "included", "excluded")
+  plan$groups$unit_id <- ifelse(included, unit_id, NA_character_)
+  plan$groups$compatibility_id <- ifelse(
+    included,
+    compatibility_id,
+    NA_character_
+  )
+  plan$groups$selected_variables <- lapply(
+    included,
+    function(value)
+      if (value && !is.null(selected_name)) {
+        selected_name
+      } else {
+        character()
+      }
+  )
+  plan$groups$reason_codes <- lapply(
+    included,
+    function(value) if (value) "included" else "variable_missing"
+  )
+  plan$groups$messages <- lapply(
+    included,
+    function(value)
+      if (value) {
+        "Included."
+      } else {
+        "The selected source variable is absent."
+      }
+  )
+  plan$files$status <- plan$groups$status
+  plan$files$unit_id <- plan$groups$unit_id
+
+  included_files <- plan$files[included, , drop = FALSE]
+  known <- included_files$bytes_known %in% TRUE
+  listed_bytes <- as.numeric(included_files$declared_bytes[known])
+  listed_bytes <- listed_bytes[is.finite(listed_bytes)]
+  dataset_count <- length(unique(plan$groups$dataset_id[included]))
+  file_count <- nrow(included_files)
+  known_count <- sum(known)
+  unknown_count <- file_count - known_count
+  bytes_complete <- file_count > 0L && unknown_count == 0L
+  declared_bytes <- sum(listed_bytes)
+
+  plan$units$dataset_count <- dataset_count
+  plan$units$file_group_count <- length(included_file_group_ids)
+  plan$units$file_count <- file_count
+  plan$units$declared_bytes <- declared_bytes
+  plan$units$known_file_count <- known_count
+  plan$units$unknown_file_count <- unknown_count
+  plan$units$declared_bytes_complete <- bytes_complete
+  plan$units$file_group_ids <- list(included_file_group_ids)
+  plan$compatibility_sets$dataset_count <- dataset_count
+  plan$compatibility_sets$file_group_count <- length(included_file_group_ids)
+  plan$compatibility_sets$file_count <- file_count
+  plan$compatibility_sets$declared_bytes <- declared_bytes
+  plan$compatibility_sets$known_file_count <- known_count
+  plan$compatibility_sets$unknown_file_count <- unknown_count
+  plan$compatibility_sets$declared_bytes_complete <- bytes_complete
+  plan$compatibility_sets$file_group_ids <- list(included_file_group_ids)
+
+  if (!is.null(selected_name)) {
+    plan$variables$name <- selected_name
+    plan$variables$label <- selected_name
+    plan$variables$selection_origin <- if (
+      identical(plan$request$variable_scope, "selected")
+    ) {
+      "selected"
+    } else {
+      "matched"
+    }
+    plan$read_columns$name <- selected_name
+    plan$output_columns$name <- selected_name
+    plan$compatibility$selected_names <- list(selected_name)
+    plan$compatibility_sets$selected_names <- list(selected_name)
+  }
+  plan
+}
+
+glc_preview_test_add_automatic_read_column <- function(
+  plan,
+  name = "Datetime",
+  declared_type = "datetime"
+) {
+  rows <- plan$read_columns
+  rows$position <- rows$position + 1L
+  rows$name <- name
+  rows$declared_type <- declared_type
+  rows$origin <- "required"
+  rows$selected_for_output <- FALSE
+  rows$automatic <- TRUE
+  rows$message <- paste(name, "is required to assemble the selected output.")
+  plan$read_columns <- rbind(plan$read_columns, rows)
+  plan
+}
+
+glc_preview_test_zero_structure_plan <- function(plan) {
+  plan$preferred_unit_id <- NA_character_
+  for (table in c(
+    "units",
+    "variables",
+    "read_columns",
+    "output_columns",
+    "compatibility",
+    "compatibility_sets",
+    "compatibility_diagnostics",
+    "compatibility_diagnostic_groups"
+  )) {
+    plan[[table]] <- plan[[table]][0, , drop = FALSE]
+  }
+  plan$groups$status <- "excluded"
+  plan$groups$unit_id <- NA_character_
+  plan$groups$compatibility_id <- NA_character_
+  plan$groups$selected_variables <- rep(list(character()), nrow(plan$groups))
+  plan$groups$reason_codes <- rep(list("variable_missing"), nrow(plan$groups))
+  plan$groups$messages <- rep(
+    list("The selected source variable is absent."),
+    nrow(plan$groups)
+  )
+  plan$files$status <- "excluded"
+  plan$files$unit_id <- NA_character_
+  plan
+}
+
 glc_preview_test_refinement <- function(
   plan,
   compatibility_id,
@@ -710,7 +969,32 @@ glc_preview_test_runtime <- function() {
   )
 }
 
-test_that("Slice 2A UI is a metadata-only five-step wizard", {
+glc_preview_async_test_runtime <- function() {
+  new_session_runtime(
+    resolve_runtime_profile(
+      "hosted",
+      workers = 1L,
+      is_interactive = FALSE,
+      available_cores = 2L
+    ),
+    session = NULL
+  )
+}
+
+glc_preview_wait_for <- function(session, predicate, timeout_seconds = 6) {
+  deadline <- Sys.time() + timeout_seconds
+  repeat {
+    session$elapse(100)
+    flush_m1_promises(session, times = 2L)
+    if (isTRUE(predicate())) return(invisible(TRUE))
+    if (Sys.time() >= deadline) {
+      stop("Timed out while waiting for the module lifecycle state.")
+    }
+    Sys.sleep(0.01)
+  }
+}
+
+test_that("Slice 2B UI extends the metadata-only wizard with variable scope", {
   html <- htmltools::renderTags(glcPreviewUI("glc"))$html
 
   expect_match(html, "Choose source", fixed = TRUE)
@@ -718,12 +1002,20 @@ test_that("Slice 2A UI is a metadata-only five-step wizard", {
   expect_match(html, "Inventory &amp; discovery")
   expect_match(html, "Choose structure", fixed = TRUE)
   expect_match(html, "Narrow with metadata", fixed = TRUE)
+  expect_match(html, "Choose variables", fixed = TRUE)
   expect_match(html, "core-metadata transfer size", fixed = TRUE)
   expect_match(html, "Metadata transfer size unavailable", fixed = TRUE)
   expect_match(html, ">Inspect package<", fixed = TRUE)
   expect_match(html, "Collect compatible groups", fixed = TRUE)
   expect_match(html, "modality and/or term", fixed = TRUE)
-  expect_match(html, "Metadata-only through Slice 2A", fixed = TRUE)
+  expect_match(html, "validates their complete file schemas", fixed = TRUE)
+  expect_false(grepl("compares the selected columns", html, fixed = TRUE))
+  expect_match(html, "Metadata-only through Slice 2B", fixed = TRUE)
+  expect_match(html, "Project the output columns", fixed = TRUE)
+  expect_match(html, "scope_mode_selector", fixed = TRUE)
+  expect_match(html, "scope_review", fixed = TRUE)
+  expect_match(html, "llw-glc-scope-review-output", fixed = TRUE)
+  expect_false(grepl("llw-glc-scope-review-result", html, fixed = TRUE))
   expect_false(grepl("confirm_inspection", html, fixed = TRUE))
   expect_false(grepl("Exact inspection request", html, fixed = TRUE))
   expect_false(grepl("inspection_status", html, fixed = TRUE))
@@ -736,11 +1028,78 @@ test_that("Slice 2A UI is a metadata-only five-step wizard", {
     html,
     fixed = TRUE
   ))
-  expect_equal(length(glc_wizard_steps()$value), 5L)
+  expect_equal(length(glc_wizard_steps()$value), 6L)
   expect_lt(
     regexpr("glc-plan_summary", html, fixed = TRUE)[[1L]],
     regexpr("glc-continue_structure_button", html, fixed = TRUE)[[1L]]
   )
+})
+
+test_that("scope review substitutes useful evidence when every size is unknown", {
+  review <- structure(
+    list(
+      selected_groups = data.frame(
+        dataset_id = c("dataset-a", "dataset-b"),
+        stringsAsFactors = FALSE
+      ),
+      selected_source_variables = c("MEDI", "Datetime"),
+      read_columns = data.frame(
+        name = c("MEDI", "Datetime"),
+        automatic = c(FALSE, TRUE),
+        stringsAsFactors = FALSE
+      ),
+      output_columns = data.frame(
+        name = c("MEDI", "Datetime"),
+        automatic = c(FALSE, TRUE),
+        stringsAsFactors = FALSE
+      ),
+      files = data.frame(path = c("a.csv", "b.csv")),
+      byte_evidence = list(
+        file_count = 2L,
+        known_file_count = 0L,
+        unknown_file_count = 2L,
+        known_declared_bytes = 0,
+        declared_bytes_complete = FALSE,
+        declared_total_bytes = NA_real_
+      ),
+      diagnostics = data.frame(),
+      source = list(
+        repository = "fixture/package",
+        resolved_revision = strrep("a", 40L)
+      ),
+      selected_compatibility_id = paste0("glcc_", strrep("b", 64L)),
+      selected_unit_ids = paste0("glcu_", strrep("c", 64L))
+    ),
+    class = c("llw_glc_projection_review", "list")
+  )
+
+  unknown_html <- htmltools::renderTags(glc_scope_review_ui(review))$html
+  expect_match(unknown_html, "Included variables", fixed = TRUE)
+  expect_match(unknown_html, "Selected for the output", fixed = TRUE)
+  expect_false(grepl("Listed size", unknown_html, fixed = TRUE))
+  expect_false(grepl("0 B known", unknown_html, fixed = TRUE))
+
+  result_html <- htmltools::renderTags(
+    glc_scope_review_result_ui(glc_scope_review_ui(review))
+  )$html
+  expect_match(
+    result_html,
+    'class="llw-glc-scope-review-result mt-3"',
+    fixed = TRUE
+  )
+  expect_match(
+    result_html,
+    "Output variables are ready for review",
+    fixed = TRUE
+  )
+
+  review$byte_evidence$known_file_count <- 1L
+  review$byte_evidence$unknown_file_count <- 1L
+  review$byte_evidence$known_declared_bytes <- 2048
+  partial_html <- htmltools::renderTags(glc_scope_review_ui(review))$html
+  expect_match(partial_html, "Listed size", fixed = TRUE)
+  expect_match(partial_html, "2.00 KiB known; 1 unknown", fixed = TRUE)
+  expect_false(grepl("Included variables", partial_html, fixed = TRUE))
 })
 
 test_that("inventory overview is explained and delegates full exploration", {
@@ -936,6 +1295,31 @@ test_that("progress UI exposes real phase completion accessibly", {
   )$html
   expect_false(grepl("disabled=", enabled_cancel, fixed = TRUE))
   expect_match(disabled_cancel, "disabled=\"disabled\"", fixed = TRUE)
+
+  planning_progress <- data.frame(
+    phase = "plan",
+    label = "Building collectable units",
+    status = "running",
+    elapsed_seconds = NA_real_,
+    detail = "Applying the engine to a selected canonical term.",
+    stringsAsFactors = FALSE
+  )
+  displayed_progress <- glc_planning_progress_for_display(planning_progress)
+  expect_match(
+    displayed_progress$detail,
+    "identify candidate file groups",
+    fixed = TRUE
+  )
+  expect_match(
+    displayed_progress$detail,
+    "complete file schema",
+    fixed = TRUE
+  )
+  expect_false(grepl(
+    "engine to a selected canonical term",
+    displayed_progress$detail,
+    fixed = TRUE
+  ))
 })
 
 test_that("inspection retries wait for complete controller release", {
@@ -1154,20 +1538,26 @@ test_that("cancelled inspection attempts use fresh controllers on retry", {
       expect_equal(calls$count, 1L)
       session$setInputs(cancel_inspection = 1L)
       expect_identical(returned$inspection_status()$state, "cancelled")
-      flush_m1_promises(session)
-      expect_equal(runtime$active_count(), 0L)
-
+      # Retry immediately. A synchronous test worker may already have released
+      # its runtime slot, while the separate bounded-deadline test exercises
+      # the queued path. In both cases the retry must use a fresh controller.
       session$setInputs(inspect = 2L)
       flush_m1_promises(session)
       expect_equal(calls$count, 2L)
+      expect_equal(runtime$active_count(), 0L)
       expect_equal(returned$inspection_controller_revision(), 1L)
       expect_false(returned$inspection_pending())
       expect_identical(returned$inspection_status()$state, "complete")
 
       session$setInputs(inspect = 3L)
-      flush_m1_promises(session)
       expect_equal(calls$count, 3L)
-      expect_equal(returned$inspection_controller_revision(), 2L)
+      session$setInputs(cancel_inspection = 2L)
+      expect_identical(returned$inspection_status()$state, "cancelled")
+      session$setInputs(inspect = 4L)
+      flush_m1_promises(session)
+      expect_equal(calls$count, 4L)
+      expect_equal(runtime$active_count(), 0L)
+      expect_equal(returned$inspection_controller_revision(), 3L)
       expect_identical(returned$inspection_status()$state, "complete")
 
       source(glc_preview_test_selection(
@@ -1178,15 +1568,336 @@ test_that("cancelled inspection attempts use fresh controllers on retry", {
       expect_null(returned$inspection())
       expect_identical(returned$inspection_status()$state, "idle")
 
-      session$setInputs(inspect = 4L)
+      session$setInputs(inspect = 5L)
       flush_m1_promises(session)
-      expect_equal(calls$count, 4L)
-      expect_equal(returned$inspection_controller_revision(), 3L)
+      expect_equal(calls$count, 5L)
+      expect_equal(returned$inspection_controller_revision(), 4L)
       expect_identical(returned$inspection_status()$state, "complete")
       expect_identical(
         returned$inspection()$source$repository,
         "fixture/second"
       )
+    }
+  )
+})
+
+test_that("pending inspection startup settles at its bounded deadline", {
+  runtime <- glc_preview_test_runtime()
+  on.exit(runtime$cleanup(), add = TRUE)
+  source <- shiny::reactiveVal(glc_preview_test_selection())
+  calls <- new.env(parent = emptyenv())
+  calls$count <- 0L
+  inspection_worker <- function(payload, spec) {
+    calls$count <- calls$count + 1L
+    glc_preview_test_inspection(
+      glc_preview_test_selection(
+        repository = payload$request$repository,
+        revision = payload$request$resolved_revision
+      ),
+      cache_dir = payload$request$cache_dir
+    )
+  }
+
+  shiny::testServer(
+    glcPreviewServer,
+    args = list(
+      source_selection = source,
+      runtime = runtime,
+      cache_dir = runtime$paths$cache,
+      inspection_worker = inspection_worker,
+      task_start_timeout_seconds = 0.1
+    ),
+    {
+      returned <- session$getReturned()
+      session$flushReact()
+      expect_identical(
+        runtime$submit(
+          "inspection-capacity-blocker",
+          function() invisible(NULL)
+        ),
+        "running"
+      )
+
+      session$setInputs(inspect = 1L)
+      expect_true(returned$inspection_pending())
+      expect_equal(calls$count, 0L)
+      Sys.sleep(0.15)
+      session$elapse(150)
+      session$flushReact()
+      expect_false(returned$inspection_pending())
+      expect_identical(returned$inspection_status()$state, "error")
+      expect_match(
+        returned$inspection_status()$message,
+        "still stopping",
+        fixed = TRUE
+      )
+
+      runtime$release("inspection-capacity-blocker")
+      session$setInputs(inspect = 2L)
+      flush_m1_promises(session)
+      expect_equal(calls$count, 1L)
+      expect_identical(returned$inspection_status()$state, "complete")
+    }
+  )
+})
+
+test_that("long-lived inspection controllers release across Deep and Fresh", {
+  skip_if_not_installed("mirai")
+  runtime <- glc_preview_async_test_runtime()
+  on.exit(runtime$cleanup(), add = TRUE)
+  if (inherits(runtime$startup_error, "llw_error")) {
+    skip("mirai daemons are unavailable in this test runtime")
+  }
+
+  selection <- glc_preview_test_selection()
+  fixture <- glc_preview_test_inspection(
+    selection,
+    cache_dir = runtime$paths$cache
+  )
+  request <- new_glc_planning_request(
+    term = "melanopic_edi",
+    variable_scope = "all"
+  )
+  plan <- glc_preview_test_plan(fixture, request)
+  source <- shiny::reactiveVal(selection)
+  auto <- shiny::reactiveVal(FALSE)
+  inspection_worker <- local({
+    value <- fixture
+    function(payload, spec) {
+      Sys.sleep(0.25)
+      value
+    }
+  })
+  planning_worker <- local({
+    value <- plan
+    function(payload, spec) {
+      Sys.sleep(0.2)
+      value
+    }
+  })
+
+  shiny::testServer(
+    glcPreviewServer,
+    args = list(
+      source_selection = source,
+      runtime = runtime,
+      cache_dir = runtime$paths$cache,
+      auto_inspect = auto,
+      inspection_worker = inspection_worker,
+      planning_worker = planning_worker,
+      task_start_timeout_seconds = 2
+    ),
+    {
+      returned <- session$getReturned()
+      session$flushReact()
+
+      session$setInputs(inspect = 1L)
+      glc_preview_wait_for(session, function() {
+        identical(returned$inspection_status()$state, "complete")
+      })
+      session$setInputs(term_id = "melanopic_edi")
+      session$setInputs(plan = 1L)
+      glc_preview_wait_for(session, function() {
+        identical(returned$plan_status()$state, "complete")
+      })
+
+      auto(TRUE)
+      glc_preview_wait_for(session, returned$inspection_active)
+      auto(FALSE)
+      session$flushReact()
+      expect_null(returned$inspection())
+      expect_identical(returned$inspection_status()$state, "idle")
+      glc_preview_wait_for(session, function() runtime$active_count() == 0L)
+
+      auto(TRUE)
+      glc_preview_wait_for(session, function() {
+        identical(returned$inspection_status()$state, "complete")
+      })
+
+      for (attempt in seq_len(2L)) {
+        session$setInputs(inspect = attempt + 1L)
+        glc_preview_wait_for(session, returned$inspection_active)
+        session$setInputs(cancel_inspection = attempt)
+        expect_identical(returned$inspection_status()$state, "cancelled")
+        expect_false(returned$inspection_active())
+
+        session$setInputs(inspect = attempt + 10L)
+        expect_true(
+          returned$inspection_pending() || returned$inspection_active()
+        )
+        glc_preview_wait_for(session, function() {
+          identical(returned$inspection_status()$state, "complete")
+        })
+      }
+
+      expect_equal(runtime$active_count(), 0L)
+      expect_false(returned$inspection_pending())
+      expect_false(returned$inspection_active())
+    }
+  )
+})
+
+test_that("invoked inspection startup has a bounded recoverable deadline", {
+  skip_if_not_installed("mirai")
+  runtime <- glc_preview_async_test_runtime()
+  on.exit(runtime$cleanup(), add = TRUE)
+  if (inherits(runtime$startup_error, "llw_error")) {
+    skip("mirai daemons are unavailable in this test runtime")
+  }
+
+  selection <- glc_preview_test_selection()
+  fixture <- glc_preview_test_inspection(
+    selection,
+    cache_dir = runtime$paths$cache
+  )
+  marker <- file.path(runtime$paths$tasks, "inspection-startup-marker")
+  source <- shiny::reactiveVal(selection)
+  inspection_worker <- local({
+    value <- fixture
+    marker_path <- marker
+    function(payload, spec) {
+      first <- !file.exists(marker_path)
+      if (first) {
+        writeLines("started", marker_path, useBytes = TRUE)
+        Sys.sleep(1.5)
+      } else {
+        saveRDS(
+          data.frame(
+            phase = "open",
+            label = "Opening exact revision",
+            status = "running",
+            elapsed_seconds = NA_real_,
+            detail = "The retry worker started successfully.",
+            stringsAsFactors = FALSE
+          ),
+          payload$progress_path,
+          version = 2
+        )
+      }
+      value
+    }
+  })
+
+  shiny::testServer(
+    glcPreviewServer,
+    args = list(
+      source_selection = source,
+      runtime = runtime,
+      cache_dir = runtime$paths$cache,
+      inspection_worker = inspection_worker,
+      task_start_timeout_seconds = 0.5
+    ),
+    {
+      returned <- session$getReturned()
+      session$flushReact()
+      session$setInputs(inspect = 1L)
+      glc_preview_wait_for(session, function() {
+        identical(returned$inspection_status()$state, "error")
+      })
+      expect_match(
+        returned$inspection_status()$message,
+        "could not start in time",
+        fixed = TRUE
+      )
+      expect_false(returned$inspection_active())
+
+      glc_preview_wait_for(session, function() runtime$active_count() == 0L)
+      session$setInputs(inspect = 2L)
+      glc_preview_wait_for(session, function() {
+        identical(returned$inspection_status()$state, "complete")
+      })
+      expect_s3_class(returned$inspection(), "llw_glc_inspection")
+      expect_equal(runtime$active_count(), 0L)
+    }
+  )
+})
+
+test_that("cancelled planning workers release for immediate repeated retries", {
+  skip_if_not_installed("mirai")
+  runtime <- glc_preview_async_test_runtime()
+  on.exit(runtime$cleanup(), add = TRUE)
+  if (inherits(runtime$startup_error, "llw_error")) {
+    skip("mirai daemons are unavailable in this test runtime")
+  }
+
+  selection <- glc_preview_test_selection()
+  fixture <- glc_preview_test_inspection(
+    selection,
+    cache_dir = runtime$paths$cache
+  )
+  request <- new_glc_planning_request(
+    term = "melanopic_edi",
+    modality = "light",
+    file_group_ids = glc_modality_file_groups(fixture$files, "light"),
+    variable_scope = "all"
+  )
+  plan <- glc_preview_test_plan(fixture, request)
+  source <- shiny::reactiveVal(selection)
+  inspection_worker <- local({
+    value <- fixture
+    function(payload, spec) value
+  })
+  planning_worker <- local({
+    value <- plan
+    function(payload, spec) {
+      saveRDS(
+        data.frame(
+          phase = "plan",
+          label = "Building collectable units",
+          status = "running",
+          elapsed_seconds = NA_real_,
+          detail = "The planning worker started successfully.",
+          stringsAsFactors = FALSE
+        ),
+        payload$progress_path,
+        version = 2
+      )
+      Sys.sleep(0.25)
+      value
+    }
+  })
+
+  shiny::testServer(
+    glcPreviewServer,
+    args = list(
+      source_selection = source,
+      runtime = runtime,
+      cache_dir = runtime$paths$cache,
+      inspection_worker = inspection_worker,
+      planning_worker = planning_worker,
+      task_start_timeout_seconds = 2
+    ),
+    {
+      returned <- session$getReturned()
+      session$flushReact()
+      session$setInputs(inspect = 1L)
+      glc_preview_wait_for(session, function() {
+        identical(returned$inspection_status()$state, "complete")
+      })
+      session$setInputs(modality_id = "light")
+      session$setInputs(term_id = "melanopic_edi")
+      session$flushReact()
+
+      for (attempt in seq_len(2L)) {
+        session$setInputs(plan = attempt)
+        glc_preview_wait_for(session, returned$planning_active)
+        session$setInputs(cancel_plan = attempt)
+        expect_identical(returned$plan_status()$state, "cancelled")
+        expect_identical(returned$selected_term(), "melanopic_edi")
+        expect_identical(returned$selected_modality(), "light")
+        expect_false(returned$planning_active())
+
+        session$setInputs(plan = attempt + 10L)
+        expect_true(returned$planning_pending() || returned$planning_active())
+        glc_preview_wait_for(session, function() {
+          identical(returned$plan_status()$state, "complete")
+        })
+      }
+
+      expect_equal(runtime$active_count(), 0L)
+      expect_false(returned$planning_pending())
+      expect_false(returned$planning_active())
+      expect_s3_class(returned$plan(), "glc_collection_plan")
     }
   )
 })
@@ -1539,7 +2250,7 @@ test_that("inspection and planning require separate explicit actions", {
         calls$planning_payload$source$resolved_revision,
         strrep("a", 40L)
       )
-      expect_identical(calls$planning_payload$request$variable_scope, "matched")
+      expect_identical(calls$planning_payload$request$variable_scope, "all")
 
       filter_revision <- returned$metadata_filter_revision()
       position_input <- glc_metadata_filter_input_id(
@@ -1745,6 +2456,34 @@ test_that("a modality scopes canonical terms and clears an incompatible term", {
       expect_match(activity_html, "activity_context", fixed = TRUE)
       feedback_html <- htmltools::renderTags(output$discovery_feedback)$html
       expect_match(feedback_html, "within modality activity", fixed = TRUE)
+      expect_match(
+        feedback_html,
+        "identifies candidate file groups",
+        fixed = TRUE
+      )
+      expect_match(feedback_html, "complete file schema", fixed = TRUE)
+      expect_match(feedback_html, "Step 6", fixed = TRUE)
+
+      session$setInputs(term_id = "activity_context")
+      session$flushReact()
+      combined_feedback <- htmltools::renderTags(
+        output$discovery_feedback
+      )$html
+      expect_match(
+        combined_feedback,
+        "term and modality identify candidate file",
+        fixed = TRUE
+      )
+
+      session$setInputs(modality_id = "")
+      session$flushReact()
+      term_feedback <- htmltools::renderTags(output$discovery_feedback)$html
+      expect_match(
+        term_feedback,
+        "canonical term identifies candidate file groups",
+        fixed = TRUE
+      )
+      expect_match(term_feedback, "complete file schema", fixed = TRUE)
 
       session$setInputs(term_search = "no matching term")
       session$flushReact()
@@ -1794,6 +2533,16 @@ test_that("structural sets stay stable while typed metadata narrows membership",
   expect_match(card_html, "Broadest coverage", fixed = TRUE)
   expect_match(card_html, ">Modalities<", fixed = TRUE)
   expect_match(card_html, ">light<", fixed = TRUE)
+  expect_match(
+    card_html,
+    "Complete file schema validated for compatibility",
+    fixed = TRUE
+  )
+  expect_false(grepl(
+    "Variables selected by this discovery request",
+    card_html,
+    fixed = TRUE
+  ))
 
   active_factor_plan <- glc_preview_test_factor_diagnostic(plan, applies = TRUE)
   expect_no_error(validate_glc_collection_plan(
@@ -2055,4 +2804,447 @@ test_that("hidden metadata controls cannot retain an active filter", {
     glc_filter_compatibility_groups(plan, second_id, no_device_filters),
     "dataset-a:2"
   )
+})
+
+glc_preview_test_projection_inspection <- function(
+  selection = glc_preview_test_selection(),
+  cache_dir = tempfile("glc-cache-")
+) {
+  inspection <- glc_preview_test_inspection(selection, cache_dir)
+  variables <- inspection$variables
+  variables$name[variables$name == "melEDI"] <- "MEDI"
+  datetime_row <- variables[
+    variables$file_group_id == "dataset-a:2" &
+      variables$name == "Datetime",
+    ,
+    drop = FALSE
+  ]
+  datetime_row$dataset_id <- "dataset-a"
+  datetime_row$file_group_id <- "dataset-a:1"
+  variables <- rbind(variables, datetime_row)
+  variables <- variables[
+    order(
+      variables$dataset_id,
+      variables$file_group_id,
+      variables$name,
+      method = "radix"
+    ),
+    ,
+    drop = FALSE
+  ]
+  new_glc_inspection(
+    source = inspection$source,
+    summary = inspection$summary,
+    datasets = inspection$datasets,
+    files = inspection$files,
+    variables = variables,
+    resources = inspection$resources,
+    metadata = inspection$metadata,
+    warnings = inspection$warnings
+  )
+}
+
+glc_preview_test_projection_plan <- function(
+  inspection = glc_preview_test_projection_inspection(),
+  request = new_glc_planning_request(
+    term = "melanopic_edi",
+    variable_scope = "all"
+  )
+) {
+  plan <- glc_preview_test_plan(
+    inspection,
+    request,
+    two_units = FALSE
+  )
+  plan$units$variable_count <- 2L
+  plan$compatibility_sets$variable_count <- 2L
+  plan$groups$selected_variables <- rep(
+    list(c("Datetime", "MEDI")),
+    nrow(plan$groups)
+  )
+
+  variables <- plan$variables
+  variables$name[variables$name == "melEDI"] <- "MEDI"
+  variables$selection_origin <- "all"
+  datetime_rows <- variables
+  datetime_rows$position <- 2L
+  datetime_rows$name <- "Datetime"
+  datetime_rows$label <- "Date and time"
+  datetime_rows$description <- "Measurement timestamp."
+  datetime_rows$unit <- NA_character_
+  datetime_rows$type <- "datetime"
+  datetime_rows$term <- "datetime"
+  datetime_rows$term_name <- "Date and time"
+  datetime_rows$primary <- FALSE
+  datetime_rows$selection_origin <- "all"
+  plan$variables <- rbind(variables, datetime_rows)
+  plan$variables <- plan$variables[
+    order(
+      plan$variables$dataset_id,
+      plan$variables$file_group_id,
+      plan$variables$position,
+      method = "radix"
+    ),
+    ,
+    drop = FALSE
+  ]
+
+  read_columns <- plan$read_columns
+  read_columns$name[read_columns$name == "melEDI"] <- "MEDI"
+  read_columns$origin <- "selected"
+  read_columns$selected_for_output <- TRUE
+  read_columns$automatic <- FALSE
+  read_columns$message <- "Selected from the complete file schema."
+  automatic_rows <- read_columns
+  automatic_rows$position <- 2L
+  automatic_rows$name <- "Datetime"
+  automatic_rows$declared_type <- "datetime"
+  automatic_rows$origin <- "required"
+  automatic_rows$selected_for_output <- FALSE
+  automatic_rows$automatic <- TRUE
+  automatic_rows$message <- paste(
+    "Datetime is required to validate and assemble the selected output."
+  )
+  plan$read_columns <- rbind(read_columns, automatic_rows)
+  plan$read_columns <- plan$read_columns[
+    order(
+      plan$read_columns$dataset_id,
+      plan$read_columns$file_group_id,
+      plan$read_columns$position,
+      method = "radix"
+    ),
+    ,
+    drop = FALSE
+  ]
+
+  output_datetime <- plan$output_columns
+  output_datetime$position <- 2L
+  output_datetime$name <- "Datetime"
+  output_datetime$source_declared_type <- "datetime"
+  output_datetime$expected_type <- "POSIXct"
+  output_datetime$origin <- "required"
+  output_datetime$automatic <- TRUE
+  output_datetime$message <- "Standardized time column retained by glcdp."
+  plan$output_columns <- rbind(plan$output_columns, output_datetime)
+
+  selected_names <- c("Datetime", "MEDI")
+  plan$compatibility$selected_names <- list(selected_names)
+  plan$compatibility$declared_types <- list(c("datetime", "number"))
+  plan$compatibility_sets$selected_names <- list(selected_names)
+  plan$compatibility_sets$declared_types <- list(c("datetime", "number"))
+  plan$metadata$file_group_variables$selected_by_request <- TRUE
+  plan$metadata$file_group_variables$selection_origin <- "all"
+  plan
+}
+
+test_that("numeric-looking scalar characteristics use a lossless range rule", {
+  plan <- glc_preview_test_plan()
+  first_id <- plan$compatibility_sets$compatibility_id[[1L]]
+  characteristics <- glc_preview_empty_table(
+    glc_collection_plan_metadata_tables()$participant_characteristics,
+    4L
+  )
+  characteristics$participant_id <- rep(
+    c("participant-a", "participant-b"),
+    2L
+  )
+  characteristics$participant_link_status <- "resolved"
+  characteristics$characteristic_position <- rep(1:2, each = 2L)
+  characteristics$value_position <- 1L
+  characteristics$name <- rep(c("VLSQ8", "Outdoor minutes"), each = 2L)
+  characteristics$description <- rep(
+    c("Validated questionnaire score.", "Time spent outdoors."),
+    each = 2L
+  )
+  characteristics$value <- list("14", "22", "30", "120")
+  characteristics$value_type <- "character"
+  characteristics$unit <- c("", "", "minutes", "minutes")
+  plan$metadata$participant_characteristics <- characteristics
+
+  catalogue <- glc_metadata_filter_catalogue(plan, first_id)
+  vlsq8 <- glc_characteristic_filter_spec(
+    catalogue$characteristics,
+    "VLSQ8"
+  )
+  outdoor <- glc_characteristic_filter_spec(
+    catalogue$characteristics,
+    "Outdoor minutes"
+  )
+  expect_identical(vlsq8$type, "numeric")
+  expect_identical(outdoor$type, "numeric")
+  expect_equal(c(vlsq8$slider$min, vlsq8$slider$max), c(14, 22))
+  expect_equal(c(outdoor$slider$min, outdoor$slider$max), c(30, 120))
+  expect_identical(
+    vlsq8$numeric_projection$original_token,
+    c("14", "22")
+  )
+
+  filters <- glc_metadata_filters_from_input(
+    list(
+      filter_characteristic_name = "VLSQ8",
+      filter_characteristic_values = c(14, 14)
+    ),
+    catalogue
+  )
+  expect_equal(filters$characteristic_range, c(14, 14))
+  expect_identical(
+    filters$characteristic_numeric_tokens$original_token,
+    c("14", "22")
+  )
+  expect_identical(
+    glc_filter_compatibility_groups(plan, first_id, filters),
+    "dataset-a:1"
+  )
+  expect_identical(
+    glc_characteristic_value_input_id("VLSQ8"),
+    "filter_characteristic_values"
+  )
+  vlsq8_input_id <- glc_characteristic_value_input_id("VLSQ8", 4L)
+  outdoor_input_id <- glc_characteristic_value_input_id(
+    "Outdoor minutes",
+    4L
+  )
+  expect_false(identical(vlsq8_input_id, outdoor_input_id))
+  switched_inputs <- list(filter_characteristic_name_r4 = "Outdoor minutes")
+  switched_inputs[[vlsq8_input_id]] <- c(14, 14)
+  switched_filters <- glc_metadata_filters_from_input(
+    switched_inputs,
+    catalogue,
+    revision = 4L
+  )
+  expect_length(switched_filters$characteristic_range, 0L)
+  expect_equal(glc_active_metadata_filter_count(switched_filters), 0L)
+  switched_inputs[[outdoor_input_id]] <- c(30, 120)
+  switched_filters <- glc_metadata_filters_from_input(
+    switched_inputs,
+    catalogue,
+    revision = 4L
+  )
+  expect_length(switched_filters$characteristic_range, 0L)
+  expect_equal(glc_active_metadata_filter_count(switched_filters), 0L)
+
+  decimal_outdoor <- characteristics[characteristics$name == "Outdoor minutes", ]
+  decimal_outdoor$value <- list("60", "565.714285714286")
+  plan$metadata$participant_characteristics <- rbind(
+    characteristics[characteristics$name != "Outdoor minutes", ],
+    decimal_outdoor
+  )
+  decimal_catalogue <- glc_metadata_filter_catalogue(plan, first_id)
+  decimal_inputs <- list(filter_characteristic_name_r4 = "Outdoor minutes")
+  decimal_inputs[[outdoor_input_id]] <- c(60, 565.7)
+  decimal_filters <- glc_metadata_filters_from_input(
+    decimal_inputs,
+    decimal_catalogue,
+    revision = 4L
+  )
+  expect_length(decimal_filters$characteristic_range, 0L)
+  expect_equal(glc_active_metadata_filter_count(decimal_filters), 0L)
+  decimal_inputs[[outdoor_input_id]] <- c(60, 560.6)
+  decimal_filters <- glc_metadata_filters_from_input(
+    decimal_inputs,
+    decimal_catalogue,
+    revision = 4L
+  )
+  expect_equal(decimal_filters$characteristic_range, c(60, 560.6))
+  expect_equal(glc_active_metadata_filter_count(decimal_filters), 1L)
+  slider_html <- htmltools::renderTags(glc_characteristic_value_input(
+    identity,
+    catalogue,
+    "VLSQ8"
+  ))$html
+  expect_match(slider_html, "VLSQ8 range", fixed = TRUE)
+  expect_match(slider_html, "class=\"js-range-slider\"", fixed = TRUE)
+
+  unsafe <- function(tokens, units = rep("", length(tokens)), values = NULL) {
+    data.frame(
+      value_type = rep("character", length(tokens)),
+      unit = units,
+      value_key = tokens,
+      numeric_value = suppressWarnings(as.numeric(tokens)),
+      scalar_value = rep(TRUE, length(tokens)),
+      stringsAsFactors = FALSE
+    )
+  }
+  expect_null(glc_numeric_characteristic_projection(
+    unsafe(c("01", "1"))
+  ))
+  expect_null(glc_numeric_characteristic_projection(
+    unsafe(c("1", "2"), c("points", "percent"))
+  ))
+  non_scalar <- unsafe(c("1", "2"))
+  non_scalar$scalar_value[[2L]] <- FALSE
+  expect_null(glc_numeric_characteristic_projection(non_scalar))
+  expect_null(glc_numeric_characteristic_projection(
+    unsafe(c("1", "not numeric"))
+  ))
+  expect_null(glc_numeric_characteristic_projection(
+    unsafe(c("1", "Inf"))
+  ))
+})
+
+test_that("variable projection preserves the fixed Slice 2A structure", {
+  runtime <- glc_preview_test_runtime()
+  on.exit(runtime$cleanup(), add = TRUE)
+  source <- shiny::reactiveVal(glc_preview_test_selection())
+  calls <- new.env(parent = emptyenv())
+  calls$planning <- 0L
+
+  inspection_worker <- function(payload, spec) {
+    glc_preview_test_projection_inspection(
+      glc_preview_test_selection(
+        repository = payload$request$repository,
+        revision = payload$request$resolved_revision
+      ),
+      cache_dir = payload$request$cache_dir
+    )
+  }
+  planning_worker <- function(payload, spec) {
+    calls$planning <- calls$planning + 1L
+    inspection <- glc_preview_test_projection_inspection(
+      glc_preview_test_selection(
+        repository = payload$source$repository,
+        revision = payload$source$resolved_revision
+      ),
+      cache_dir = payload$source$cache_dir
+    )
+    glc_preview_test_projection_plan(inspection, payload$request)
+  }
+
+  shiny::testServer(
+    glcPreviewServer,
+    args = list(
+      source_selection = source,
+      runtime = runtime,
+      cache_dir = runtime$paths$cache,
+      inspection_worker = inspection_worker,
+      planning_worker = planning_worker,
+      refine_collection = glc_preview_test_refinement
+    ),
+    {
+      returned <- session$getReturned()
+      set_scope_input <- function(id, value) {
+        input_id <- glc_scope_input_id(
+          id,
+          returned$scope_input_revision()
+        )
+        do.call(
+          session$setInputs,
+          stats::setNames(list(value), input_id)
+        )
+        session$flushReact()
+        invisible(input_id)
+      }
+      session$flushReact()
+      session$setInputs(inspect = 1L)
+      flush_m1_promises(session)
+      session$setInputs(term_id = "melanopic_edi")
+      session$flushReact()
+      session$setInputs(plan = 1L)
+      flush_m1_promises(session)
+
+      expect_equal(calls$planning, 1L)
+      expect_identical(returned$planning_request()$variable_scope, "all")
+      parent_id <- returned$selected_compatibility_id()
+      parent_unit_ids <- returned$plan()$compatibility_sets$final_unit_ids[[1L]]
+
+      session$setInputs(refine = 1L)
+      session$flushReact()
+      refined_ids <- returned$refinement()$request$file_group
+      expect_setequal(refined_ids, c("dataset-a:1", "dataset-b:1"))
+
+      set_scope_input("scope_mode", "discovery")
+      session$setInputs(scope_apply = 1L)
+      session$flushReact()
+      discovery_review <- returned$scope_review()
+      expect_equal(calls$planning, 1L)
+      expect_s3_class(discovery_review, "llw_glc_projection_review")
+      expect_identical(discovery_review$selected_source_variables, "MEDI")
+      expect_identical(
+        discovery_review$selected_compatibility_id,
+        parent_id
+      )
+      expect_identical(discovery_review$selected_unit_ids, parent_unit_ids)
+      expect_identical(
+        discovery_review$refined_file_group_ids,
+        refined_ids
+      )
+      expect_false(discovery_review$assurance$compatibility_replanned)
+      expect_true(any(
+        discovery_review$read_columns$name == "Datetime" &
+          discovery_review$read_columns$automatic %in% TRUE
+      ))
+
+      set_scope_input("scope_mode", "all")
+      session$setInputs(scope_apply = 2L)
+      session$flushReact()
+      all_review <- returned$scope_review()
+      expect_equal(calls$planning, 1L)
+      expect_identical(
+        all_review$selected_source_variables,
+        c("Datetime", "MEDI")
+      )
+      expect_identical(all_review$selected_compatibility_id, parent_id)
+      expect_identical(all_review$selected_unit_ids, parent_unit_ids)
+
+      set_scope_input("scope_mode", "custom")
+      set_scope_input("scope_custom_variables", "MEDI")
+      session$setInputs(scope_apply = 3L)
+      session$flushReact()
+      custom_review <- returned$scope_review()
+      expect_equal(calls$planning, 1L)
+      expect_identical(custom_review$selected_source_variables, "MEDI")
+      expect_identical(custom_review$selected_compatibility_id, parent_id)
+      expect_identical(custom_review$selected_unit_ids, parent_unit_ids)
+      expect_null(nonserializable_path(custom_review))
+      expect_type(serialize(custom_review, NULL), "raw")
+
+      prior_scope_revision <- returned$scope_input_revision()
+      session$setInputs(term_id = "datetime")
+      session$flushReact()
+      expect_gt(returned$scope_input_revision(), prior_scope_revision)
+      expect_null(returned$scope_review())
+      expect_null(returned$plan())
+
+      session$setInputs(plan = 2L)
+      flush_m1_promises(session)
+      session$setInputs(refine = 2L)
+      session$flushReact()
+      expect_identical(returned$scope_mode(), "discovery")
+      expect_identical(returned$scope_projection_variables(), "Datetime")
+      expect_false("MEDI" %in% returned$scope_projection_variables())
+
+      set_scope_input("scope_mode", "custom")
+      set_scope_input("scope_custom_variables", character())
+      expect_null(returned$scope_review())
+      button_html <- htmltools::renderTags(output$scope_apply_button)$html
+      expect_match(button_html, "disabled=\"disabled\"", fixed = TRUE)
+
+      source(glc_preview_test_selection(
+        repository = "tscnlab/melidos-knust-glc-dataset",
+        revision = strrep("b", 40L)
+      ))
+      session$flushReact()
+      expect_null(returned$scope_review())
+      expect_equal(calls$planning, 2L)
+    }
+  )
+})
+
+test_that("variable projection choices never invent a matched modality scope", {
+  term_choices <- glc_scope_mode_choices(new_glc_planning_request(
+    term = "melanopic_edi",
+    variable_scope = "all"
+  ))
+  modality_choices <- glc_scope_mode_choices(new_glc_planning_request(
+    modality = "light",
+    file_group_ids = c("dataset-a:1", "dataset-b:1"),
+    variable_scope = "all"
+  ))
+
+  expect_identical(
+    term_choices$values,
+    c("discovery", "all", "custom")
+  )
+  expect_identical(modality_choices$values, c("all", "custom"))
+  expect_false("matched" %in% c(term_choices$values, modality_choices$values))
 })

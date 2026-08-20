@@ -44,20 +44,29 @@ glc_compact_display_value <- function(value) {
 
 glc_wizard_steps <- function() {
   data.frame(
-    value = c("source", "inspect", "discovery", "structure", "narrow"),
+    value = c(
+      "source",
+      "inspect",
+      "discovery",
+      "structure",
+      "narrow",
+      "variables"
+    ),
     label = c(
       "Choose source",
       "Inspect package",
       "Inventory & discovery",
       "Choose structure",
-      "Narrow with metadata"
+      "Narrow with metadata",
+      "Choose variables"
     ),
     icon = c(
       "cloud-arrow-down",
       "box-arrow-in-down",
       "search",
       "collection",
-      "filter"
+      "filter",
+      "columns-gap"
     ),
     stringsAsFactors = FALSE
   )
@@ -69,7 +78,8 @@ glc_wizard_stepper <- function(
   source_ready = FALSE,
   inspection_ready = FALSE,
   plan_ready = FALSE,
-  structure_ready = FALSE
+  structure_ready = FALSE,
+  refinement_ready = FALSE
 ) {
   steps <- glc_wizard_steps()
   active_index <- match(active, steps$value)
@@ -81,13 +91,15 @@ glc_wizard_stepper <- function(
     inspect = isTRUE(source_ready),
     discovery = isTRUE(inspection_ready),
     structure = isTRUE(plan_ready),
-    narrow = isTRUE(structure_ready)
+    narrow = isTRUE(structure_ready),
+    variables = isTRUE(refinement_ready)
   )
   completed <- c(
     if (isTRUE(source_ready)) "source",
     if (isTRUE(inspection_ready)) "inspect",
     if (isTRUE(plan_ready)) "discovery",
-    if (isTRUE(structure_ready)) "structure"
+    if (isTRUE(structure_ready)) "structure",
+    if (isTRUE(refinement_ready)) "narrow"
   )
   tags$ol(
     class = "llw-import-stepper",
@@ -351,6 +363,23 @@ glc_task_progress_ui <- function(
       })
     )
   )
+}
+
+glc_planning_progress_for_display <- function(progress) {
+  if (is.null(progress) || !is.data.frame(progress) || nrow(progress) == 0L) {
+    return(progress)
+  }
+  required <- c("phase", "detail")
+  if (!all(required %in% names(progress))) return(progress)
+  planning_phase <- progress$phase == "plan"
+  if (any(planning_phase)) {
+    progress$detail[planning_phase] <- paste(
+      "The term and modality identify candidate file groups.",
+      "glcdp validates each candidate's complete file schema to establish",
+      "groups that can be read and collected together."
+    )
+  }
+  progress
 }
 
 glc_inspection_request_from_selection <- function(selection, cache_dir) {
@@ -795,6 +824,335 @@ glc_variable_display_values <- function(variables) {
     glc_nonempty_unique()
 }
 
+glc_scope_variable_catalogue <- function(inspection, file_group_ids) {
+  inspection <- validate_glc_inspection(inspection)
+  file_group_ids <- glc_nonempty_unique(file_group_ids)
+  if (length(file_group_ids) == 0L) {
+    return(data.frame(
+      name = character(),
+      display = character(),
+      group_count = integer(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  variables <- inspection$variables[
+    inspection$variables$file_group_id %in% file_group_ids,
+    ,
+    drop = FALSE
+  ]
+  names <- sort(glc_nonempty_unique(variables$name), method = "radix")
+  if (length(names) == 0L) {
+    return(data.frame(
+      name = character(),
+      display = character(),
+      group_count = integer(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  rows <- lapply(names, function(name) {
+    current <- variables[variables$name == name, , drop = FALSE]
+    labels <- glc_nonempty_unique(current$label)
+    descriptions <- glc_nonempty_unique(current$description)
+    units <- glc_nonempty_unique(current$unit)
+    primary <- if (length(labels) == 1L && !identical(labels, name)) {
+      labels
+    } else {
+      name
+    }
+    detail <- c(
+      paste0("source: ", name),
+      if (length(units) > 0L) paste0("unit: ", paste(units, collapse = ", ")),
+      if (length(descriptions) > 0L) descriptions[[1L]]
+    )
+    data.frame(
+      name = name,
+      display = paste0(primary, " | ", paste(detail, collapse = " | ")),
+      group_count = length(glc_nonempty_unique(current$file_group_id)),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+glc_scope_mode_choices <- function(parent_request) {
+  parent_request <- validate_glc_planning_request(parent_request)
+  names <- list()
+  values <- character()
+  if (!is.null(parent_request$term)) {
+    names <- c(
+      names,
+      list(tags$span(
+        tags$strong("Variables matching the discovery term"),
+        tags$small(
+          class = "d-block llw-secondary",
+          paste(
+            "Project the exact source variables associated with the selected",
+            "canonical term. The validated structure stays fixed."
+          )
+        )
+      ))
+    )
+    values <- c(values, "discovery")
+  }
+  names <- c(
+    names,
+    list(tags$span(
+      tags$strong("All variables in the selected unit"),
+      tags$small(
+        class = "d-block llw-secondary",
+        paste(
+          "Retain every source variable from the already validated",
+          "collectable unit."
+        )
+      )
+    )),
+    list(tags$span(
+      tags$strong("Custom variables"),
+      tags$small(
+        class = "d-block llw-secondary",
+        paste(
+          "Choose exact source variables for the output. This does not",
+          "change file groups, structures, or stable identifiers."
+        )
+      )
+    ))
+  )
+  values <- c(values, "all", "custom")
+  list(names = names, values = values)
+}
+
+glc_scope_review_ui <- function(review) {
+  if (!inherits(review, "llw_glc_projection_review") || !is.list(review)) {
+    abort_llw("The variable projection review is invalid.", type = "validation")
+  }
+  groups <- review$selected_groups
+  output_names <- review$selected_source_variables
+  automatic_rows <- review$read_columns$automatic %in% TRUE
+  automatic_names <- glc_nonempty_unique(
+    review$read_columns$name[automatic_rows]
+  )
+  automatic_output_names <- glc_nonempty_unique(
+    review$output_columns$name[review$output_columns$automatic %in% TRUE]
+  )
+  bytes <- review$byte_evidence
+  all_sizes_unknown <- nrow(review$files) > 0L &&
+    isTRUE(as.integer(bytes$known_file_count) == 0L) &&
+    isTRUE(as.integer(bytes$unknown_file_count) == nrow(review$files))
+  evidence_metric <- if (all_sizes_unknown) {
+    glc_metric_with_help(
+      "columns-gap",
+      "Included variables",
+      format(length(output_names), big.mark = ","),
+      "Selected for the output",
+      paste(
+        "Exact source variables selected for the later result. No retained",
+        "file has a package-listed size, so an uninformative size total is",
+        "not shown."
+      )
+    )
+  } else {
+    byte_value <- if (isTRUE(bytes$declared_bytes_complete)) {
+      glc_format_bytes(bytes$declared_total_bytes)
+    } else {
+      paste0(
+        glc_format_bytes(bytes$known_declared_bytes),
+        " known; ",
+        bytes$unknown_file_count,
+        " unknown"
+      )
+    }
+    glc_metric_with_help(
+      "device-hdd",
+      "Listed size",
+      byte_value,
+      if (isTRUE(bytes$declared_bytes_complete)) "Complete" else
+        "Partly unknown",
+      paste(
+        "These are package-listed file sizes. Any unknown size remains",
+        "unknown and is not treated as zero."
+      )
+    )
+  }
+  tagList(
+    llw_status_callout(
+      "complete",
+      paste(
+        "The output projection keeps the exact validated Slice 2A structure,",
+        "unit, and file groups. No package was reopened and compatibility was",
+        "not replanned."
+      ),
+      heading = "Output variables are ready for review",
+      compact = TRUE
+    ),
+    tags$div(
+      class = "llw-glc-metrics llw-glc-scope-metrics",
+      layout_column_wrap(
+        width = 1 / 4,
+        heights_equal = "row",
+        fillable = FALSE,
+        glc_metric_with_help(
+          "folder-check",
+          "File groups",
+          format(nrow(groups), big.mark = ","),
+          "Fixed by Slice 2A",
+          "Stable file groups retained by the selected public planner structure."
+        ),
+        glc_metric_with_help(
+          "database",
+          "Datasets",
+          format(length(glc_nonempty_unique(groups$dataset_id)), big.mark = ","),
+          "Represented in the unit",
+          "Unique datasets represented by the retained file groups."
+        ),
+        glc_metric_with_help(
+          "file-earmark",
+          "Files",
+          format(nrow(review$files), big.mark = ","),
+          "Fixed transfer set",
+          "Files associated with the retained collectable unit."
+        ),
+        evidence_metric
+      )
+    ),
+    tags$section(
+      class = "llw-wizard-field-group mt-3",
+      tags$h4("Selected output variables"),
+      glc_full_variable_list_tag(output_names, summary_items = 12L),
+      tags$h4(class = "mt-3", "Automatic read inputs"),
+      if (length(automatic_names) == 0L) {
+        tags$p(
+          class = "llw-secondary mb-0",
+          "No additional identity, time, or key columns are required."
+        )
+      } else {
+        tagList(
+          tags$p(
+            class = "llw-secondary",
+            paste(
+              "glcdp will also read these identity, time, or key columns to",
+              "validate and assemble the requested output. They are not added",
+              "to the output unless the public plan lists them there."
+            )
+          ),
+          glc_full_variable_list_tag(automatic_names, summary_items = 12L)
+        )
+      },
+      if (length(automatic_output_names) > 0L) {
+        tagList(
+          tags$h4(class = "mt-3", "Automatic result columns"),
+          tags$p(
+            class = "llw-secondary",
+            paste(
+              "glcdp reserves these standardized identity, time, or file",
+              "columns for the later collected result."
+            )
+          ),
+          glc_full_variable_list_tag(
+            automatic_output_names,
+            summary_items = 12L
+          )
+        )
+      },
+      if (nrow(review$diagnostics) > 0L) {
+        tags$details(
+          class = "llw-glc-card-disclosure mt-3",
+          tags$summary("Compatibility and harmonization diagnostics"),
+          glc_diagnostic_list_tag(review$diagnostics)
+        )
+      },
+      tags$details(
+        class = "llw-glc-card-disclosure mt-3",
+        tags$summary("Technical output-projection provenance"),
+        tags$dl(
+          class = "row mt-2 mb-0",
+          tags$dt(class = "col-sm-4", "Exact source"),
+          tags$dd(
+            class = "col-sm-8",
+            paste0(
+              review$source$repository,
+              "@",
+              review$source$resolved_revision
+            )
+          ),
+          tags$dt(class = "col-sm-4", "Projection"),
+          tags$dd(
+            class = "col-sm-8",
+            "Output columns only; compatibility was not replanned"
+          ),
+          tags$dt(class = "col-sm-4", "Compatibility ID"),
+          tags$dd(class = "col-sm-8", review$selected_compatibility_id),
+          tags$dt(class = "col-sm-4", "Final unit IDs"),
+          tags$dd(
+            class = "col-sm-8",
+            paste(review$selected_unit_ids, collapse = ", ")
+          )
+        )
+      )
+    )
+  )
+}
+
+glc_scope_review_result_ui <- function(content) {
+  tags$div(
+    class = "llw-glc-scope-review-result mt-3",
+    content
+  )
+}
+
+glc_scope_exclusion_ui <- function(plan) {
+  excluded <- plan$groups[plan$groups$status != "included", , drop = FALSE]
+  if (nrow(excluded) == 0L) return(NULL)
+
+  messages <- vapply(
+    excluded$messages,
+    function(value) {
+      value <- glc_nonempty_unique(value)
+      if (length(value) == 0L) "Excluded by the public plan." else
+        paste(value, collapse = " ")
+    },
+    character(1)
+  )
+  message_counts <- sort(table(messages), decreasing = TRUE)
+  tags$details(
+    class = "llw-glc-card-disclosure mt-3",
+    tags$summary(glc_pluralized_count(
+      nrow(excluded),
+      "Show excluded file group",
+      "Show excluded file groups"
+    )),
+    tags$p(
+      class = "llw-secondary mt-2",
+      paste(
+        "These exclusions come directly from the public glcdp plan for the",
+        "changed variable request."
+      )
+    ),
+    tags$ul(
+      class = "mb-2",
+      lapply(seq_along(message_counts), function(index) {
+        tags$li(
+          tags$strong(paste0(as.integer(message_counts[[index]]), ": ")),
+          names(message_counts)[[index]]
+        )
+      })
+    ),
+    tags$details(
+      class = "llw-glc-variable-disclosure",
+      tags$summary("Show exact stable file-group identities"),
+      tags$ul(
+        class = "llw-glc-variable-list mt-2 mb-0",
+        lapply(seq_len(nrow(excluded)), function(index) {
+          tags$li(
+            tags$code(as.character(excluded$file_group_id[[index]])),
+            paste0(" in dataset ", excluded$dataset_id[[index]], ": "),
+            messages[[index]]
+          )
+        })
+      )
+    )
+  )
+}
+
 glc_plan_compatibility_default <- function(plan) {
   if (
     !inherits(plan, "glc_collection_plan") ||
@@ -1081,7 +1439,7 @@ glc_compatibility_choice_tag <- function(context, index, broadest = FALSE) {
       },
       tags$div(
         class = "llw-glc-unit-facts__wide",
-        tags$dt("Variables selected by this discovery request"),
+        tags$dt("Complete file schema validated for compatibility"),
         tags$dd(glc_display_list(context$selected_variables, max_items = 7L))
       ),
       if (length(context$other_variables) > 0L) {
@@ -1166,8 +1524,9 @@ glc_compatibility_summary_ui <- function(plan, modality = NULL) {
         format(nrow(sets), big.mark = ","),
         "Provided by glcdp",
         paste(
-          "Each structure contains file groups with the same selected columns,",
-          "types, factor contract, time handling, modality, role, and data state."
+          "Each structure contains file groups whose complete file schemas",
+          "share the columns, types, factor contract, time handling, modality,",
+          "role, and data state required for reading and collection."
         )
       ),
       glc_metric_with_help(
@@ -1224,6 +1583,7 @@ glc_characteristic_catalogue <- function(characteristics, participant_ids) {
       value_key = character(),
       value_label = character(),
       numeric_value = numeric(),
+      scalar_value = logical(),
       stringsAsFactors = FALSE
     ))
   }
@@ -1248,13 +1608,6 @@ glc_characteristic_catalogue <- function(characteristics, participant_ids) {
     }
     value_text <- as.character(values)
     numeric_values <- suppressWarnings(as.numeric(value_text))
-    numeric_type <- value_type %in%
-      c(
-        "double",
-        "integer",
-        "number",
-        "numeric"
-      )
     data.frame(
       name = name,
       description = description,
@@ -1271,8 +1624,8 @@ glc_characteristic_catalogue <- function(characteristics, participant_ids) {
         character(1),
         unit = unit
       ),
-      numeric_value = if (numeric_type) numeric_values else
-        rep(NA_real_, length(values)),
+      numeric_value = numeric_values,
+      scalar_value = rep(length(values) == 1L, length(values)),
       stringsAsFactors = FALSE
     )
   })
@@ -1287,6 +1640,7 @@ glc_characteristic_catalogue <- function(characteristics, participant_ids) {
       value_key = character(),
       value_label = character(),
       numeric_value = numeric(),
+      scalar_value = logical(),
       stringsAsFactors = FALSE
     ))
   }
@@ -1303,6 +1657,59 @@ glc_characteristic_catalogue <- function(characteristics, participant_ids) {
   ]
 }
 
+glc_numeric_characteristic_projection <- function(records) {
+  if (
+    !is.data.frame(records) ||
+      nrow(records) == 0L ||
+      !all(c(
+        "value_type",
+        "unit",
+        "value_key",
+        "numeric_value",
+        "scalar_value"
+      ) %in% names(records)) ||
+      !all(records$scalar_value %in% TRUE)
+  ) {
+    return(NULL)
+  }
+  value_types <- unique(tolower(trimws(as.character(records$value_type))))
+  numeric_types <- c("double", "integer", "number", "numeric")
+  character_types <- c("character", "string", "text")
+  if (
+    !(all(value_types %in% numeric_types) ||
+      all(value_types %in% character_types))
+  ) {
+    return(NULL)
+  }
+  units <- as.character(records$unit)
+  units[is.na(units)] <- ""
+  units <- trimws(units)
+  if (length(unique(units)) != 1L) return(NULL)
+
+  tokens <- as.character(records$value_key)
+  if (anyNA(tokens) || any(!nzchar(trimws(tokens)))) return(NULL)
+  numeric_values <- suppressWarnings(as.numeric(trimws(tokens)))
+  if (any(!is.finite(numeric_values))) return(NULL)
+
+  token_map <- unique(data.frame(
+    original_token = tokens,
+    numeric_value = numeric_values,
+    unit = units,
+    stringsAsFactors = FALSE
+  ))
+  if (
+    length(unique(token_map$original_token)) !=
+      length(unique(token_map$numeric_value))
+  ) {
+    return(NULL)
+  }
+  token_map[
+    order(token_map$numeric_value, token_map$original_token, method = "radix"),
+    ,
+    drop = FALSE
+  ]
+}
+
 glc_characteristic_filter_spec <- function(catalogue, name) {
   name <- glc_nonempty_unique(name)
   if (nrow(catalogue) == 0L || length(name) != 1L) {
@@ -1311,6 +1718,7 @@ glc_characteristic_filter_spec <- function(catalogue, name) {
       name = "",
       label = "",
       records = catalogue[0L, , drop = FALSE],
+      numeric_projection = NULL,
       slider = NULL
     ))
   }
@@ -1321,6 +1729,7 @@ glc_characteristic_filter_spec <- function(catalogue, name) {
       name = "",
       label = "",
       records = records,
+      numeric_projection = NULL,
       slider = NULL
     ))
   }
@@ -1330,21 +1739,14 @@ glc_characteristic_filter_spec <- function(catalogue, name) {
   } else {
     name[[1L]]
   }
-  numeric <- all(
-    records$value_type %in%
-      c(
-        "double",
-        "integer",
-        "number",
-        "numeric"
-      )
-  ) &&
-    all(is.finite(records$numeric_value))
+  numeric_projection <- glc_numeric_characteristic_projection(records)
+  numeric <- !is.null(numeric_projection)
   list(
     type = if (numeric) "numeric" else "categorical",
     name = name[[1L]],
     label = label,
     records = records,
+    numeric_projection = numeric_projection,
     slider = if (numeric) glc_numeric_filter_limits(records$numeric_value) else
       NULL
   )
@@ -1369,6 +1771,45 @@ glc_metadata_filter_input_id <- function(id, revision = NULL) {
   paste0(id, "_r", as.integer(revision))
 }
 
+glc_scope_input_id <- function(id, revision = 0L) {
+  assert_scalar_string(id, "variable scope input id")
+  if (
+    length(revision) != 1L ||
+      is.na(revision) ||
+      !is.numeric(revision) ||
+      !is.finite(revision) ||
+      revision < 0 ||
+      revision != floor(revision)
+  ) {
+    abort_llw(
+      "The variable scope input revision is invalid.",
+      type = "validation"
+    )
+  }
+  paste0(id, "_r", as.integer(revision))
+}
+
+glc_characteristic_value_input_id <- function(
+  characteristic_name,
+  revision = NULL
+) {
+  id <- glc_metadata_filter_input_id(
+    "filter_characteristic_values",
+    revision
+  )
+  if (is.null(revision)) return(id)
+  characteristic_name <- glc_nonempty_unique(characteristic_name)
+  if (length(characteristic_name) != 1L) return(paste0(id, "_none"))
+  encoded_name <- paste0(
+    sprintf(
+      "%02x",
+      as.integer(charToRaw(enc2utf8(characteristic_name[[1L]])))
+    ),
+    collapse = ""
+  )
+  paste0(id, "_c", encoded_name)
+}
+
 glc_numeric_filter_limits <- function(values) {
   values <- suppressWarnings(as.numeric(values))
   values <- values[is.finite(values)]
@@ -1382,6 +1823,29 @@ glc_numeric_filter_limits <- function(values) {
     signif(diff(limits) / 100, 2L)
   }
   list(min = limits[[1L]], max = limits[[2L]], step = step)
+}
+
+glc_numeric_range_is_full <- function(values, limits) {
+  values <- suppressWarnings(as.numeric(values))
+  if (
+    is.null(limits) ||
+      length(values) != 2L ||
+      any(!is.finite(values)) ||
+      !all(c("min", "max", "step") %in% names(limits))
+  ) {
+    return(FALSE)
+  }
+  endpoints <- suppressWarnings(as.numeric(c(limits$min, limits$max)))
+  step <- suppressWarnings(as.numeric(limits$step))
+  if (length(endpoints) != 2L || any(!is.finite(endpoints))) return(FALSE)
+  if (length(step) != 1L || !is.finite(step) || step < 0) step <- 0
+  tolerance <- max(
+    sqrt(.Machine$double.eps) * max(1, abs(endpoints)),
+    step / 2
+  )
+  selected <- range(values)
+  abs(selected[[1L]] - endpoints[[1L]]) <= tolerance &&
+    abs(selected[[2L]] - endpoints[[2L]]) <= tolerance
 }
 
 glc_device_model_catalogue <- function(devices) {
@@ -1831,8 +2295,8 @@ glc_characteristic_value_input <- function(
     characteristic_name
   )
   if (!nzchar(spec$name)) return(NULL)
-  input_id <- ns(glc_metadata_filter_input_id(
-    "filter_characteristic_values",
+  input_id <- ns(glc_characteristic_value_input_id(
+    spec$name,
     revision
   ))
   if (identical(spec$type, "numeric")) {
@@ -1897,13 +2361,7 @@ glc_metadata_filters_from_input <- function(input, catalogue, revision = NULL) {
   age_range <- input_value("filter_age_range", numeric())
   age_limits <- glc_numeric_filter_limits(catalogue$age_values)
   if (
-    !is.null(age_limits) &&
-      length(age_range) == 2L &&
-      isTRUE(all.equal(
-        as.numeric(age_range),
-        c(age_limits$min, age_limits$max),
-        check.attributes = FALSE
-      ))
+    glc_numeric_range_is_full(age_range, age_limits)
   ) {
     age_range <- numeric()
   }
@@ -1925,10 +2383,10 @@ glc_metadata_filters_from_input <- function(input, catalogue, revision = NULL) {
   characteristic_values <- character()
   characteristic_range <- numeric()
   if (nzchar(characteristic_spec$name)) {
-    raw_characteristic_value <- input_value(
-      "filter_characteristic_values",
-      character()
-    )
+    raw_characteristic_value <- input[[glc_characteristic_value_input_id(
+      characteristic_spec$name,
+      revision
+    )]] %||% character()
     if (identical(characteristic_spec$type, "numeric")) {
       characteristic_range <- suppressWarnings(as.numeric(
         raw_characteristic_value
@@ -1938,13 +2396,7 @@ glc_metadata_filters_from_input <- function(input, catalogue, revision = NULL) {
       ]
       limits <- characteristic_spec$slider
       if (
-        !is.null(limits) &&
-          length(characteristic_range) == 2L &&
-          isTRUE(all.equal(
-            characteristic_range,
-            c(limits$min, limits$max),
-            check.attributes = FALSE
-          ))
+        glc_numeric_range_is_full(characteristic_range, limits)
       ) {
         characteristic_range <- numeric()
       }
@@ -1977,6 +2429,13 @@ glc_metadata_filters_from_input <- function(input, catalogue, revision = NULL) {
     characteristic_name = characteristic_name,
     characteristic_values = characteristic_values,
     characteristic_range = characteristic_range,
+    characteristic_numeric_tokens = if (
+      identical(characteristic_spec$type, "numeric")
+    ) {
+      characteristic_spec$numeric_projection
+    } else {
+      NULL
+    },
     device_models = if (isTRUE(catalogue$has_device)) {
       selected_allowed("filter_device_model", catalogue$device_models$key)
     } else character()
@@ -2122,8 +2581,14 @@ glcPreviewUI <- function(id, source_ui = NULL) {
       ".llw-glc-wizard .llw-glc-metrics .llw-wizard-metric__label,",
       ".llw-glc-wizard .llw-glc-metrics .llw-wizard-metric__detail {",
       "overflow-wrap: normal; word-break: normal; hyphens: none;}",
+      ".llw-glc-wizard .llw-glc-scope-metrics > .bslib-grid {",
+      "align-items: stretch;}",
+      ".llw-glc-wizard .llw-glc-scope-metrics .bslib-grid-item {",
+      "display: flex; min-width: 0;}",
+      ".llw-glc-wizard .llw-glc-scope-metrics .llw-wizard-metric {",
+      "flex: 1 1 auto;}",
       ".llw-glc-wizard .llw-import-stepper {grid-template-columns:",
-      "repeat(5, minmax(0, 1fr));}",
+      "repeat(6, minmax(0, 1fr));}",
       ".llw-glc-wizard .llw-glc-discovery-card,",
       ".llw-glc-wizard .llw-glc-discovery-card > .card-body,",
       ".llw-glc-wizard .llw-glc-metadata-card,",
@@ -2232,14 +2697,14 @@ glcPreviewUI <- function(id, source_ui = NULL) {
           paste(
             "Choose one live registry source, inspect its validated package",
             "information, collect structurally compatible file groups, then",
-            "narrow them with participant and device metadata."
+            "narrow them with metadata and choose the variables to retain."
           )
         )
       ),
       tags$span(
         class = "llw-import-wizard__engine-note",
         bsicons::bs_icon("shield-check"),
-        " Metadata-only through Slice 2A"
+        " Metadata-only through Slice 2B"
       )
     ),
     uiOutput(ns("wizard_stepper")),
@@ -2345,9 +2810,10 @@ glcPreviewUI <- function(id, source_ui = NULL) {
             "Choose the data concept",
             "Collect structurally compatible file groups",
             paste(
-              "Start with a modality, a canonical data term, or both.",
-              "glcdp then compares the selected columns, types, factor contract,",
-              "time handling, modality, role, and data state."
+              "A modality, canonical data term, or both identifies candidate",
+              "file groups. glcdp then validates their complete file schemas",
+              "to establish groups that can be read and collected together.",
+              "Output variables are chosen later in Step 6."
             )
           ),
           card(
@@ -2414,9 +2880,9 @@ glcPreviewUI <- function(id, source_ui = NULL) {
             "Choose one compatible structure",
             "Review the groups that can be read and collected together",
             paste(
-              "Each option comes directly from glcdp's public compatibility",
-              "planner. Compare the instrument, variable contract, and",
-              "aggregated scientific context before continuing."
+              "Each option comes directly from glcdp's public planner after",
+              "validating candidate groups against their complete file",
+              "schemas. Step 6 later chooses the output variables."
             )
           ),
           tags$section(
@@ -2475,14 +2941,64 @@ glcPreviewUI <- function(id, source_ui = NULL) {
           tags$p(
             class = "small llw-secondary mt-3",
             paste(
-              "Measurement reading, variable-scope decisions, byte and row",
-              "review, collection, and dataset-library promotion remain closed."
+              "Measurement reading, row review, collection, and dataset-library",
+              "promotion remain closed."
             )
           ),
           import_wizard_navigation(
             actionButton(
               ns("back_structure"),
               "Back to structure selection",
+              icon = icon("arrow-left"),
+              class = "btn-outline-secondary btn-lg"
+            ),
+            uiOutput(ns("continue_variables_button"), inline = TRUE),
+            split = TRUE
+          )
+        )
+      ),
+      nav_panel(
+        "Choose variables",
+        value = "variables",
+        tags$div(
+          class = "llw-wizard-step-content",
+          import_wizard_step_heading(
+            "columns-gap",
+            "Project the output columns",
+            "Choose which variables the later result should retain",
+            paste(
+              "The compatible structure, final units, and file groups were",
+              "already fixed in Slice 2A. This step only chooses output columns",
+              "and never reruns compatibility planning."
+            )
+          ),
+          card(
+            class = "llw-glc-scope-card",
+            card_header("Variable scope", container = h3),
+            uiOutput(ns("scope_mode_selector")),
+            uiOutput(ns("custom_variable_selector")),
+            uiOutput(ns("scope_feedback"))
+          ),
+          tags$div(
+            class = "llw-action-row llw-import-actions",
+            uiOutput(ns("scope_apply_button"), inline = TRUE)
+          ),
+          uiOutput(
+            ns("scope_review"),
+            class = "llw-glc-scope-review-output"
+          ),
+          tags$p(
+            class = "small llw-secondary mt-3",
+            paste(
+              "This review is serializable and metadata-only. No package handle,",
+              "temporary path, credential, measurement preview, read, or collect",
+              "result is retained."
+            )
+          ),
+          import_wizard_navigation(
+            actionButton(
+              ns("back_scope"),
+              "Back to metadata narrowing",
               icon = icon("arrow-left"),
               class = "btn-outline-secondary btn-lg"
             ),
@@ -2572,7 +3088,8 @@ glcPreviewServer <- function(
   auto_inspect = NULL,
   inspection_worker = glcdp_inspection_task_worker,
   planning_worker = glcdp_planning_task_worker,
-  refine_collection = glcdp_refine_collection
+  refine_collection = glcdp_refine_collection,
+  task_start_timeout_seconds = 15
 ) {
   if (!shiny::is.reactive(source_selection)) {
     abort_llw("source_selection must be reactive.", type = "validation")
@@ -2596,7 +3113,22 @@ glcPreviewServer <- function(
       !is.function(planning_worker) ||
       !is.function(refine_collection)
   ) {
-    abort_llw("GLC Slice 2A workers must be functions.", type = "validation")
+    abort_llw(
+      "GLC inspection, planning, and refinement workers must be functions.",
+      type = "validation"
+    )
+  }
+  if (
+    !is.numeric(task_start_timeout_seconds) ||
+      length(task_start_timeout_seconds) != 1L ||
+      is.na(task_start_timeout_seconds) ||
+      !is.finite(task_start_timeout_seconds) ||
+      task_start_timeout_seconds <= 0
+  ) {
+    abort_llw(
+      "`task_start_timeout_seconds` must be one positive finite number.",
+      type = "validation"
+    )
   }
 
   moduleServer(id, function(input, output, session) {
@@ -2610,10 +3142,14 @@ glcPreviewServer <- function(
     submitted_planning_request <- reactiveVal(NULL)
     inspection_attempted <- reactiveVal(FALSE)
     pending_inspection_attempt <- reactiveVal(NULL)
+    active_inspection_attempt <- reactiveVal(NULL)
     inspection_pending_error <- reactiveVal(NULL)
+    inspection_terminal_override <- reactiveVal(NULL)
+    inspection_controller_reset_required <- reactiveVal(FALSE)
     inspection_controller_revision <- reactiveVal(0L)
     planning_attempted <- reactiveVal(FALSE)
     pending_planning_attempt <- reactiveVal(NULL)
+    active_planning_attempt <- reactiveVal(NULL)
     planning_pending_error <- reactiveVal(NULL)
     planning_terminal_override <- reactiveVal(NULL)
     planning_controller_reset_required <- reactiveVal(FALSE)
@@ -2624,14 +3160,28 @@ glcPreviewServer <- function(
     refinement_value <- reactiveVal(NULL)
     refinement_error <- reactiveVal(NULL)
     metadata_filter_revision <- reactiveVal(0L)
+    scope_input_revision <- reactiveVal(0L)
+    scope_review_value <- reactiveVal(NULL)
+    scope_review_error <- reactiveVal(NULL)
     wizard_step <- reactiveVal("source")
 
     revision_lookup <- function(context_id) context_revision()
+
+    clear_scope_state <- function(reset_inputs = FALSE) {
+      assert_flag(reset_inputs, "reset_inputs")
+      if (reset_inputs) {
+        scope_input_revision(isolate(scope_input_revision()) + 1L)
+      }
+      scope_review_value(NULL)
+      scope_review_error(NULL)
+      invisible(NULL)
+    }
 
     reset_metadata_filter_state <- function() {
       metadata_filter_revision(metadata_filter_revision() + 1L)
       refinement_value(NULL)
       refinement_error(NULL)
+      clear_scope_state(reset_inputs = TRUE)
       invisible(NULL)
     }
 
@@ -2643,6 +3193,9 @@ glcPreviewServer <- function(
         revision_lookup = revision_lookup,
         on_result = function(value, spec) {
           validate_glc_inspection(value)
+          active_inspection_attempt(NULL)
+          inspection_terminal_override(NULL)
+          inspection_controller_reset_required(FALSE)
           inspection_value(value)
           plan_value(NULL)
           planning_attempted(FALSE)
@@ -2685,11 +3238,14 @@ glcPreviewServer <- function(
           message = "Waiting for the previous inspection to stop cleanly."
         ))
       }
+      terminal_override <- inspection_terminal_override()
+      if (!is.null(terminal_override)) return(terminal_override)
       inspection_task_status()
     })
     replace_inspection_task <- function() {
       inspection_task <<- create_inspection_task()
       inspection_controller_revision(inspection_controller_revision() + 1L)
+      inspection_controller_reset_required(FALSE)
       inspection_task
     }
     create_planning_task <- function() {
@@ -2704,6 +3260,10 @@ glcPreviewServer <- function(
           source <- glc_inspection_source_spec(inspection, cache_dir)
           request <- validate_glc_planning_request(spec$payload$request)
           validate_glc_collection_plan(value, source, request)
+          active_planning_attempt(NULL)
+          planning_pending_error(NULL)
+          planning_terminal_override(NULL)
+          planning_controller_reset_required(FALSE)
           plan_value(value)
           selected_compatibility_value(glc_plan_compatibility_default(value))
           reset_metadata_filter_state()
@@ -2752,7 +3312,38 @@ glcPreviewServer <- function(
     replace_planning_task <- function() {
       planning_task <<- create_planning_task()
       planning_controller_revision(planning_controller_revision() + 1L)
+      planning_controller_reset_required(FALSE)
       planning_task
+    }
+
+    build_projection_review <- function(source_variables) {
+      inspection <- inspection_value()
+      parent_request <- submitted_planning_request()
+      parent_plan <- plan_value()
+      parent_compatibility_id <- selected_compatibility_id()
+      parent_refinement <- refinement_value()
+      if (
+        is.null(inspection) ||
+          is.null(parent_request) ||
+          is.null(parent_plan) ||
+          is.null(parent_compatibility_id) ||
+          is.null(parent_refinement)
+      ) {
+        abort_llw(
+          "Complete and confirm the refined selection before choosing variables.",
+          type = "validation"
+        )
+      }
+      source <- glc_inspection_source_spec(inspection, cache_dir)
+      new_glc_projection_review(
+        source = source,
+        source_variables = source_variables,
+        parent_request = parent_request,
+        parent_plan = parent_plan,
+        parent_compatibility_id = parent_compatibility_id,
+        parent_refinement = parent_refinement,
+        metadata_filters = current_metadata_filters()
+      )
     }
 
     select_wizard_step <- function(value) {
@@ -2774,9 +3365,13 @@ glcPreviewServer <- function(
         return(invisible(FALSE))
       }
 
-      if (glc_inspection_attempt_expired(attempt)) {
+      if (glc_inspection_attempt_expired(
+        attempt,
+        timeout_seconds = task_start_timeout_seconds
+      )) {
         pending_inspection_attempt(NULL)
-        isolate(current_inspection_task())$cancel()
+        inspection_controller_reset_required(TRUE)
+        replace_inspection_task()
         inspection_pending_error(new_llw_error(
           message = paste(
             "The previous inspection controller did not release before the",
@@ -2799,7 +3394,10 @@ glcPreviewServer <- function(
       )
       if (!released) return(invisible(FALSE))
 
-      if (!identical(isolate(task$state()), "idle")) {
+      if (
+        !identical(isolate(task$state()), "idle") ||
+          isTRUE(isolate(inspection_controller_reset_required()))
+      ) {
         task <- replace_inspection_task()
       }
       task_id <- task$invoke(
@@ -2808,13 +3406,19 @@ glcPreviewServer <- function(
       )
       if (isFALSE(task_id)) return(invisible(FALSE))
       inspection_progress_path(attempt$progress_path)
+      attempt$invoked_at <- Sys.time()
+      active_inspection_attempt(attempt)
       pending_inspection_attempt(NULL)
+      inspection_terminal_override(NULL)
+      inspection_controller_reset_required(FALSE)
       invisible(task_id)
     }
 
     start_inspection <- function() {
       inspection_attempted(TRUE)
       inspection_pending_error(NULL)
+      inspection_terminal_override(NULL)
+      inspection_progress_path(NULL)
       selection <- isolate(source_selection())
       attempted <- tryCatch(
         {
@@ -2841,10 +3445,69 @@ glcPreviewServer <- function(
       invisible(attempted)
     }
 
+    inspection_attempt_poll <- reactiveTimer(100, session)
     observe({
-      req(!is.null(pending_inspection_attempt()))
-      invalidateLater(100, session)
-      isolate(submit_pending_inspection())
+      inspection_attempt_poll()
+      if (!is.null(pending_inspection_attempt())) {
+        result <- isolate(tryCatch(
+          submit_pending_inspection(),
+          error = identity
+        ))
+        if (inherits(result, "error")) {
+          pending_inspection_attempt(NULL)
+          inspection_controller_reset_required(TRUE)
+          inspection_pending_error(normalize_task_error(
+            result,
+            "glc_discovery"
+          ))
+        }
+      }
+
+      attempt <- isolate(active_inspection_attempt())
+      if (is.null(attempt)) return(invisible(NULL))
+      if (
+        !glc_inspection_attempt_is_current(
+          attempt,
+          isolate(context_revision()),
+          glc_source_selection_key(isolate(source_selection()))
+        )
+      ) {
+        active_inspection_attempt(NULL)
+        return(invisible(NULL))
+      }
+      task <- isolate(current_inspection_task())
+      task_state <- isolate(task$state())
+      progress <- read_glc_task_progress(attempt$progress_path)
+      if (!task_state %in% c("queued", "running", "finalizing")) {
+        active_inspection_attempt(NULL)
+        return(invisible(NULL))
+      }
+      if (!is.null(progress) && nrow(progress) > 0L) {
+        return(invisible(NULL))
+      }
+      startup_attempt <- attempt
+      startup_attempt$requested_at <- attempt$invoked_at
+      if (glc_inspection_attempt_expired(
+        startup_attempt,
+        timeout_seconds = task_start_timeout_seconds
+      )) {
+        active_inspection_attempt(NULL)
+        inspection_controller_reset_required(TRUE)
+        context_revision(isolate(context_revision()) + 1L)
+        replace_inspection_task()
+        inspection_pending_error(new_llw_error(
+          message = paste(
+            "The inspection worker did not begin before the invocation",
+            "deadline."
+          ),
+          type = "resource",
+          public_message = paste(
+            "Package inspection could not start in time.",
+            "Retry when background capacity is available."
+          )
+        ))
+      }
+      invisible(NULL)
     })
 
     observe({
@@ -2856,17 +3519,29 @@ glcPreviewServer <- function(
         !identical(key, previous) ||
           !identical(arrival_mode, active_arrival_mode())
       ) {
+        inspection_needs_reset <-
+          !is.null(isolate(pending_inspection_attempt())) ||
+          !is.null(isolate(active_inspection_attempt())) ||
+          !identical(isolate(inspection_task_state()), "idle")
+        planning_needs_reset <-
+          !is.null(isolate(pending_planning_attempt())) ||
+          !is.null(isolate(active_planning_attempt())) ||
+          !identical(isolate(planning_task_state()), "idle")
         pending_inspection_attempt(NULL)
+        active_inspection_attempt(NULL)
         inspection_pending_error(NULL)
-        isolate(current_inspection_task())$cancel()
+        inspection_terminal_override(new_task_status("glc_discovery"))
+        inspection_controller_reset_required(inspection_needs_reset)
         pending_planning_attempt(NULL)
+        active_planning_attempt(NULL)
         planning_pending_error(NULL)
-        planning_terminal_override(NULL)
-        planning_controller_reset_required(FALSE)
-        isolate(current_planning_task())$cancel()
+        planning_terminal_override(new_task_status("glc_discovery"))
+        planning_controller_reset_required(planning_needs_reset)
         active_source_key(key)
         active_arrival_mode(arrival_mode)
         context_revision(context_revision() + 1L)
+        if (inspection_needs_reset) replace_inspection_task()
+        if (planning_needs_reset) replace_planning_task()
         inspection_value(NULL)
         plan_value(NULL)
         selected_term_value(NULL)
@@ -2898,19 +3573,40 @@ glcPreviewServer <- function(
     observeEvent(
       input$cancel_inspection,
       {
+        had_attempt <-
+          !is.null(isolate(pending_inspection_attempt())) ||
+          !is.null(isolate(active_inspection_attempt()))
         pending_inspection_attempt(NULL)
+        active_inspection_attempt(NULL)
         inspection_pending_error(NULL)
-        isolate(current_inspection_task())$cancel()
+        if (had_attempt) {
+          # Do not hard-stop the mirai job here. new_long_task() releases the
+          # session runtime slot from its completion observer. Invalidating the
+          # context makes the old result stale while allowing that release to
+          # happen before a queued retry starts on its fresh controller.
+          context_revision(isolate(context_revision()) + 1L)
+          inspection_controller_reset_required(TRUE)
+          replace_inspection_task()
+          inspection_terminal_override(new_task_status(
+            "glc_discovery",
+            state = "cancelled",
+            message = "Cancellation was requested."
+          ))
+        }
       },
       ignoreInit = TRUE
     )
 
     reset_planning_selection <- function() {
+      planning_needs_reset <-
+        !is.null(isolate(pending_planning_attempt())) ||
+        !is.null(isolate(active_planning_attempt())) ||
+        !identical(isolate(planning_task_state()), "idle")
       pending_planning_attempt(NULL)
+      active_planning_attempt(NULL)
       planning_pending_error(NULL)
-      planning_terminal_override(NULL)
-      planning_controller_reset_required(FALSE)
-      isolate(current_planning_task())$cancel()
+      planning_terminal_override(new_task_status("glc_discovery"))
+      planning_controller_reset_required(planning_needs_reset)
       plan_value(NULL)
       submitted_planning_request(NULL)
       planning_attempted(FALSE)
@@ -2918,6 +3614,7 @@ glcPreviewServer <- function(
       selected_compatibility_value(NULL)
       reset_metadata_filter_state()
       context_revision(context_revision() + 1L)
+      if (planning_needs_reset) replace_planning_task()
     }
 
     observeEvent(
@@ -3032,9 +3729,13 @@ glcPreviewServer <- function(
         return(invisible(FALSE))
       }
 
-      if (glc_inspection_attempt_expired(attempt)) {
+      if (glc_inspection_attempt_expired(
+        attempt,
+        timeout_seconds = task_start_timeout_seconds
+      )) {
         pending_planning_attempt(NULL)
-        isolate(current_planning_task())$cancel()
+        planning_controller_reset_required(TRUE)
+        replace_planning_task()
         planning_pending_error(new_llw_error(
           message = paste(
             "The previous planning controller did not release before the",
@@ -3070,6 +3771,8 @@ glcPreviewServer <- function(
       if (isFALSE(task_id)) return(invisible(FALSE))
       submitted_planning_request(attempt$request)
       plan_progress_path(attempt$progress_path)
+      attempt$invoked_at <- Sys.time()
+      active_planning_attempt(attempt)
       pending_planning_attempt(NULL)
       planning_terminal_override(NULL)
       planning_controller_reset_required(FALSE)
@@ -3079,6 +3782,7 @@ glcPreviewServer <- function(
     start_planning <- function() {
       planning_attempted(TRUE)
       planning_pending_error(NULL)
+      planning_terminal_override(NULL)
       plan_value(NULL)
       submitted_planning_request(NULL)
       plan_progress_path(NULL)
@@ -3123,7 +3827,8 @@ glcPreviewServer <- function(
           request <- new_glc_planning_request(
             term = term,
             modality = modality,
-            file_group_ids = modality_groups
+            file_group_ids = modality_groups,
+            variable_scope = "all"
           )
           source <- glc_inspection_source_spec(inspection, cache_dir)
           progress_path <- file.path(
@@ -3150,10 +3855,71 @@ glcPreviewServer <- function(
       invisible(attempted)
     }
 
+    planning_attempt_poll <- reactiveTimer(100, session)
     observe({
-      req(!is.null(pending_planning_attempt()))
-      invalidateLater(100, session)
-      isolate(submit_pending_planning())
+      planning_attempt_poll()
+      if (!is.null(pending_planning_attempt())) {
+        result <- isolate(tryCatch(
+          submit_pending_planning(),
+          error = identity
+        ))
+        if (inherits(result, "error")) {
+          pending_planning_attempt(NULL)
+          planning_controller_reset_required(TRUE)
+          planning_pending_error(normalize_task_error(
+            result,
+            "glc_discovery"
+          ))
+        }
+      }
+
+      attempt <- isolate(active_planning_attempt())
+      if (is.null(attempt)) return(invisible(NULL))
+      if (
+        !glc_planning_attempt_is_current(
+          attempt,
+          isolate(context_revision()),
+          glc_source_selection_key(isolate(source_selection())),
+          isolate(selected_term_value()),
+          isolate(selected_modality_value())
+        )
+      ) {
+        active_planning_attempt(NULL)
+        return(invisible(NULL))
+      }
+      task <- isolate(current_planning_task())
+      task_state <- isolate(task$state())
+      progress <- read_glc_task_progress(attempt$progress_path)
+      if (!task_state %in% c("queued", "running", "finalizing")) {
+        active_planning_attempt(NULL)
+        return(invisible(NULL))
+      }
+      if (!is.null(progress) && nrow(progress) > 0L) {
+        return(invisible(NULL))
+      }
+      startup_attempt <- attempt
+      startup_attempt$requested_at <- attempt$invoked_at
+      if (glc_inspection_attempt_expired(
+        startup_attempt,
+        timeout_seconds = task_start_timeout_seconds
+      )) {
+        active_planning_attempt(NULL)
+        planning_controller_reset_required(TRUE)
+        context_revision(isolate(context_revision()) + 1L)
+        replace_planning_task()
+        planning_pending_error(new_llw_error(
+          message = paste(
+            "The planning worker did not begin before the invocation",
+            "deadline."
+          ),
+          type = "resource",
+          public_message = paste(
+            "Compatibility planning could not start in time.",
+            "Retry when background capacity is available."
+          )
+        ))
+      }
+      invisible(NULL)
     })
 
     observeEvent(
@@ -3167,16 +3933,22 @@ glcPreviewServer <- function(
     observeEvent(
       input$cancel_plan,
       {
-        had_pending <- !is.null(isolate(pending_planning_attempt()))
+        had_attempt <-
+          !is.null(isolate(pending_planning_attempt())) ||
+          !is.null(isolate(active_planning_attempt()))
         pending_planning_attempt(NULL)
+        active_planning_attempt(NULL)
         planning_pending_error(NULL)
-        cancelled <- isolate(current_planning_task())$cancel()
-        if (had_pending && isFALSE(cancelled)) {
+        if (had_attempt) {
+          # Planning shares the same session runtime slot and therefore uses
+          # the same logical-cancellation and natural-release invariant.
+          context_revision(isolate(context_revision()) + 1L)
           planning_controller_reset_required(TRUE)
+          replace_planning_task()
           planning_terminal_override(new_task_status(
             "glc_discovery",
             state = "cancelled",
-            message = "The queued compatibility planning request was cancelled."
+            message = "Cancellation was requested."
           ))
         }
       },
@@ -3246,16 +4018,92 @@ glcPreviewServer <- function(
       )
     })
 
+    refined_file_group_ids <- reactive({
+      refinement <- refinement_value()
+      if (is.null(refinement)) return(character())
+      glc_nonempty_unique(refinement$request$file_group)
+    })
+
+    scope_variable_catalogue <- reactive({
+      inspection <- inspection_value()
+      group_ids <- refined_file_group_ids()
+      if (is.null(inspection) || length(group_ids) == 0L) {
+        return(data.frame(
+          name = character(),
+          display = character(),
+          group_count = integer(),
+          stringsAsFactors = FALSE
+        ))
+      }
+      catalogue <- glc_scope_variable_catalogue(inspection, group_ids)
+      catalogue[
+        catalogue$group_count == length(group_ids),
+        ,
+        drop = FALSE
+      ]
+    })
+
+    selected_scope_mode <- reactive({
+      parent_request <- submitted_planning_request()
+      if (is.null(parent_request)) return("all")
+      allowed <- c(if (!is.null(parent_request$term)) "discovery", "all", "custom")
+      default <- if (!is.null(parent_request$term)) "discovery" else "all"
+      value <- input[[glc_scope_input_id(
+        "scope_mode",
+        scope_input_revision()
+      )]] %||% default
+      if (!value %in% allowed) default else value
+    })
+
+    selected_custom_variables <- reactive({
+      catalogue <- scope_variable_catalogue()
+      selected <- glc_nonempty_unique(input[[glc_scope_input_id(
+        "scope_custom_variables",
+        scope_input_revision()
+      )]])
+      selected[selected %in% catalogue$name]
+    })
+
+    scope_projection_variables <- reactive({
+      parent_request <- submitted_planning_request()
+      parent_plan <- plan_value()
+      refinement <- refinement_value()
+      group_ids <- refined_file_group_ids()
+      if (
+        is.null(parent_request) ||
+          is.null(parent_plan) ||
+          is.null(refinement) ||
+          length(group_ids) == 0L
+      ) {
+        return(character())
+      }
+      mode <- selected_scope_mode()
+      if (identical(mode, "custom")) return(selected_custom_variables())
+      catalogue_names <- scope_variable_catalogue()$name
+      if (identical(mode, "all")) return(catalogue_names)
+      inspection <- inspection_value()
+      term <- parent_request$term
+      term_row <- inspection$terms[inspection$terms$term == term, , drop = FALSE]
+      names <- if (nrow(term_row) == 1L) {
+        glc_nonempty_unique(term_row$source_names[[1L]])
+      } else {
+        character()
+      }
+      names[names %in% catalogue_names]
+    })
+
     observe({
       selected_compatibility_id()
       current_metadata_filters()
       refinement_value(NULL)
       refinement_error(NULL)
+      clear_scope_state(reset_inputs = TRUE)
     })
 
     observeEvent(
       input$refine,
       {
+        clear_scope_state()
         result <- tryCatch(
           {
             plan <- plan_value()
@@ -3297,6 +4145,50 @@ glcPreviewServer <- function(
       ignoreInit = TRUE
     )
 
+    observe({
+      revision <- scope_input_revision()
+      value <- input[[glc_scope_input_id("scope_mode", revision)]]
+      req(!is.null(value))
+      clear_scope_state()
+    })
+
+    observe({
+      revision <- scope_input_revision()
+      value <- input[[glc_scope_input_id(
+        "scope_custom_variables",
+        revision
+      )]]
+      req(!is.null(value))
+      clear_scope_state()
+    })
+
+    observeEvent(
+      input$scope_apply,
+      {
+        scope_review_value(NULL)
+        scope_review_error(NULL)
+        result <- tryCatch(
+          {
+            variables <- isolate(scope_projection_variables())
+            if (length(variables) == 0L) {
+              abort_llw(
+                "Choose at least one exact source variable for the output.",
+                type = "validation"
+              )
+            }
+            build_projection_review(variables)
+          },
+          error = identity
+        )
+        if (inherits(result, "error")) {
+          scope_review_error(result)
+        } else {
+          scope_review_value(result)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
     output$wizard_stepper <- renderUI({
       selection <- source_selection()
       glc_wizard_stepper(
@@ -3305,7 +4197,8 @@ glcPreviewServer <- function(
         source_ready = !is.null(selection) && isTRUE(selection$has_latest_pass),
         inspection_ready = !is.null(inspection_value()),
         plan_ready = !is.null(plan_value()),
-        structure_ready = !is.null(selected_compatibility_id())
+        structure_ready = !is.null(selected_compatibility_id()),
+        refinement_ready = !is.null(refinement_value())
       )
     })
 
@@ -3325,7 +4218,7 @@ glcPreviewServer <- function(
         if (
           is.null(inspection_value()) &&
             is.null(pending_inspection_attempt()) &&
-            !inspection_task_state() %in% c("queued", "running", "finalizing")
+            is.null(active_inspection_attempt())
         ) {
           start_inspection()
         }
@@ -3375,11 +4268,24 @@ glcPreviewServer <- function(
       bindEvent(input$wizard_step_narrow, ignoreInit = TRUE)
 
     observe({
+      if (is.null(refinement_value())) {
+        showNotification(
+          "Confirm the metadata-filtered groups before choosing variables.",
+          type = "warning",
+          duration = 5
+        )
+      } else {
+        select_wizard_step("variables")
+      }
+    }) |>
+      bindEvent(input$wizard_step_variables, ignoreInit = TRUE)
+
+    observe({
       select_wizard_step("inspect")
       if (
         is.null(inspection_value()) &&
           is.null(pending_inspection_attempt()) &&
-          !inspection_task_state() %in% c("queued", "running", "finalizing")
+          is.null(active_inspection_attempt())
       ) {
         start_inspection()
       }
@@ -3399,6 +4305,10 @@ glcPreviewServer <- function(
       bindEvent(input$back_discovery, ignoreInit = TRUE)
     observe(select_wizard_step("structure")) |>
       bindEvent(input$back_structure, ignoreInit = TRUE)
+    observe(select_wizard_step("variables")) |>
+      bindEvent(input$continue_variables, ignoreInit = TRUE)
+    observe(select_wizard_step("narrow")) |>
+      bindEvent(input$back_scope, ignoreInit = TRUE)
 
     output$continue_inspect_button <- renderUI({
       selection <- source_selection()
@@ -3434,7 +4344,7 @@ glcPreviewServer <- function(
         session$ns,
         "cancel_inspection",
         !is.null(pending_inspection_attempt()) ||
-          inspection_task_state() %in% c("queued", "running", "finalizing"),
+          !is.null(active_inspection_attempt()),
         "Cancel inspection"
       )
     })
@@ -3443,7 +4353,7 @@ glcPreviewServer <- function(
       status <- inspection_display_status()
       state <- status$state
       pending <- !is.null(pending_inspection_attempt())
-      active <- pending || state %in% c("queued", "running", "finalizing")
+      active <- pending || !is.null(active_inspection_attempt())
       if (active) {
         invalidateLater(250, session)
       }
@@ -3596,18 +4506,24 @@ glcPreviewServer <- function(
       package_count <- nrow(inspection$terms)
       message <- if (!is.null(term) && !is.null(modality)) {
         paste(
-          "Collection will retain variables matching the selected canonical term",
-          "within file groups using the selected modality."
+          "The selected canonical term and modality identify candidate file",
+          "groups. glcdp then validates each candidate's complete file schema",
+          "to establish groups that can be read and collected together.",
+          "Output variables are chosen later in Step 6."
         )
       } else if (!is.null(term)) {
         paste(
-          "Collection will include all file groups using the selected",
-          "canonical term."
+          "The selected canonical term identifies candidate file groups.",
+          "glcdp then validates each candidate's complete file schema to",
+          "establish groups that can be read and collected together.",
+          "Output variables are chosen later in Step 6."
         )
       } else if (!is.null(modality)) {
         paste(
-          "Collection will compare all variables in stable file groups",
-          "using the selected modality."
+          "The selected modality identifies candidate file groups. glcdp",
+          "then validates each candidate's complete file schema to establish",
+          "groups that can be read and collected together. Output variables",
+          "are chosen later in Step 6."
         )
       } else {
         "Choose at least one canonical term or modality before planning."
@@ -3693,7 +4609,7 @@ glcPreviewServer <- function(
         session$ns,
         "cancel_plan",
         !is.null(pending_planning_attempt()) ||
-          planning_task_state() %in% c("queued", "running", "finalizing"),
+          !is.null(active_planning_attempt()),
         "Cancel planning"
       )
     })
@@ -3702,12 +4618,14 @@ glcPreviewServer <- function(
       status <- planning_display_status()
       state <- status$state
       pending <- !is.null(pending_planning_attempt())
-      active <- pending || state %in% c("queued", "running", "finalizing")
+      active <- pending || !is.null(active_planning_attempt())
       if (active) {
         invalidateLater(250, session)
       }
       progress <- glc_task_progress_ui(
-        read_glc_task_progress(plan_progress_path()),
+        glc_planning_progress_for_display(
+          read_glc_task_progress(plan_progress_path())
+        ),
         total_phases = 3L,
         heading = "Structural compatibility planning",
         idle_message = paste(
@@ -3717,8 +4635,8 @@ glcPreviewServer <- function(
         active = active,
         active_label = "Preparing structural planning",
         active_detail = paste(
-          "Starting the background worker and validating the selected term",
-          "and modality scope."
+          "Starting the background worker. The discovery request identifies",
+          "candidate file groups; glcdp validates their complete file schemas."
         ),
         terminal_state = if (pending) "queued" else state,
         terminal_message = if (pending) {
@@ -3785,6 +4703,29 @@ glcPreviewServer <- function(
           "Narrow the selected structure with participant and device metadata"
         } else {
           "Choose one compatible structure first"
+        }
+      )
+      if (!ready) {
+        button <- htmltools::tagAppendAttributes(
+          button,
+          disabled = "disabled",
+          "aria-disabled" = "true"
+        )
+      }
+      button
+    })
+
+    output$continue_variables_button <- renderUI({
+      ready <- !is.null(refinement_value())
+      button <- actionButton(
+        session$ns("continue_variables"),
+        "Continue to variable scope",
+        icon = icon("arrow-right"),
+        class = "btn-primary btn-lg",
+        title = if (ready) {
+          "Review the output-variable contract for the refined groups"
+        } else {
+          "Confirm the filtered groups first"
         }
       )
       if (!ready) {
@@ -3878,14 +4819,15 @@ glcPreviewServer <- function(
       catalogue <- current_metadata_catalogue()
       if (is.null(catalogue)) return(NULL)
       revision <- metadata_filter_revision()
-      selected <- isolate(input[[glc_metadata_filter_input_id(
-        "filter_characteristic_values",
+      characteristic_name <- current_characteristic_name()
+      selected <- isolate(input[[glc_characteristic_value_input_id(
+        characteristic_name,
         revision
       )]])
       glc_characteristic_value_input(
         session$ns,
         catalogue,
-        current_characteristic_name(),
+        characteristic_name,
         revision,
         selected = selected
       )
@@ -3966,6 +4908,133 @@ glcPreviewServer <- function(
       glc_refinement_summary_ui(refinement, plan_value())
     })
 
+    output$scope_mode_selector <- renderUI({
+      parent_request <- submitted_planning_request()
+      refinement <- refinement_value()
+      if (is.null(parent_request) || is.null(refinement)) {
+        return(llw_status_callout(
+          "idle",
+          paste(
+            "Confirm the metadata-filtered file groups before reviewing the",
+            "variable contract."
+          ),
+          heading = "Variable scope is not available yet",
+          compact = TRUE
+        ))
+      }
+      choices <- glc_scope_mode_choices(parent_request)
+      default <- if (!is.null(parent_request$term)) "discovery" else "all"
+      revision <- scope_input_revision()
+      input_id <- glc_scope_input_id("scope_mode", revision)
+      current <- isolate(input[[input_id]] %||% default)
+      if (!current %in% choices$values) current <- default
+      tags$div(
+        class = "llw-glc-scope-mode-selector",
+        radioButtons(
+          session$ns(input_id),
+          "Variables to retain",
+          choiceNames = choices$names,
+          choiceValues = choices$values,
+          selected = current,
+          width = "100%"
+        )
+      )
+    })
+
+    output$custom_variable_selector <- renderUI({
+      if (!identical(selected_scope_mode(), "custom")) return(NULL)
+      catalogue <- scope_variable_catalogue()
+      if (nrow(catalogue) == 0L) {
+        return(llw_status_callout(
+          "warning",
+          "The refined file groups provide no selectable source variables.",
+          heading = "No custom variables available",
+          compact = TRUE
+        ))
+      }
+      labels <- stats::setNames(catalogue$name, catalogue$display)
+      input_id <- glc_scope_input_id(
+        "scope_custom_variables",
+        scope_input_revision()
+      )
+      selectizeInput(
+        session$ns(input_id),
+        "Exact source variables",
+        choices = labels,
+        selected = selected_custom_variables(),
+        multiple = TRUE,
+        width = "100%",
+        options = list(
+          placeholder = "Choose one or more exact source variables",
+          closeAfterSelect = TRUE,
+          maxOptions = 500L
+        )
+      )
+    })
+
+    output$scope_feedback <- renderUI({
+      parent_request <- submitted_planning_request()
+      refinement <- refinement_value()
+      if (is.null(parent_request) || is.null(refinement)) return(NULL)
+      mode <- selected_scope_mode()
+      group_count <- length(refined_file_group_ids())
+      selected <- scope_projection_variables()
+      if (identical(mode, "custom") && length(selected) == 0L) {
+        return(llw_status_callout(
+          "warning",
+          "Choose at least one exact source variable for the output.",
+          heading = "Custom variable selection is empty",
+          compact = TRUE
+        ))
+      }
+      llw_status_callout(
+        "idle",
+        paste(
+          glc_pluralized_count(length(selected), "output variable"),
+          "will be projected from",
+          glc_pluralized_count(group_count, "fixed file group"),
+          "in the selected collectable unit. Identity, time, and key columns",
+          "required by glcdp are shown separately in the review."
+        ),
+        heading = "Compatibility stays fixed",
+        compact = TRUE
+      )
+    })
+
+    output$scope_apply_button <- renderUI({
+      enabled <- length(scope_projection_variables()) > 0L
+      button <- actionButton(
+        session$ns("scope_apply"),
+        "Review output variables",
+        icon = icon("table-columns"),
+        class = "btn-primary btn-lg"
+      )
+      if (enabled) return(button)
+      tagAppendAttributes(
+        button,
+        disabled = "disabled",
+        `aria-disabled` = "true",
+        title = "Choose at least one exact source variable first."
+      )
+    })
+
+    output$scope_review <- renderUI({
+      error <- scope_review_error()
+      if (!is.null(error)) {
+        return(glc_scope_review_result_ui(
+          llw_status_callout(
+            "danger",
+            error,
+            heading = "Output-variable review could not be prepared",
+            compact = TRUE
+          )
+        ))
+      }
+      review <- scope_review_value()
+      if (is.null(review)) return(NULL)
+      glc_scope_review_result_ui(glc_scope_review_ui(review))
+    })
+
     observe({
       status <- inspection_display_status()
       req(identical(status$state, "error"))
@@ -4000,6 +5069,7 @@ glcPreviewServer <- function(
         inspection_controller_revision()
       ),
       inspection_pending = reactive(!is.null(pending_inspection_attempt())),
+      inspection_active = reactive(!is.null(active_inspection_attempt())),
       selected_term = reactive(selected_term_value()),
       selected_modality = reactive(selected_modality_value()),
       planning_request = reactive(submitted_planning_request()),
@@ -4015,14 +5085,21 @@ glcPreviewServer <- function(
         planning_controller_revision()
       ),
       planning_pending = reactive(!is.null(pending_planning_attempt())),
+      planning_active = reactive(!is.null(active_planning_attempt())),
       selected_compatibility_id = selected_compatibility_id,
       metadata_filter_revision = reactive(metadata_filter_revision()),
+      scope_input_revision = reactive(scope_input_revision()),
       metadata_filters = current_metadata_filters,
       active_metadata_filter_count = reactive(
         glc_active_metadata_filter_count(current_metadata_filters())
       ),
       filtered_file_group_ids = filtered_group_ids,
-      refinement = reactive(refinement_value())
+      refinement = reactive(refinement_value()),
+      scope_variable_catalogue = scope_variable_catalogue,
+      scope_mode = selected_scope_mode,
+      scope_projection_variables = scope_projection_variables,
+      scope_review_error = reactive(scope_review_error()),
+      scope_review = reactive(scope_review_value())
     )
   })
 }

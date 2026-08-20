@@ -42,13 +42,14 @@ glc_source_showcase_app <- function() {
       class = "llw-main-shell",
       tabindex = "-1",
       llw_view_header(
-        "Milestone 6 · Slice 2A",
-        "Inspect package information and narrow compatible groups",
-        paste(
-          "This standalone review app reads the current public GLC registry",
-          "through the pinned glcdp planner revision. A source choice starts",
-          "metadata-only inspection before compatibility planning. Measurement",
-          "files cannot be read here."
+        "Milestone 6 · Slice 2B",
+        "Review the output-variable contract for compatible groups",
+          paste(
+            "This standalone review app reads the current public GLC registry",
+            "through the pinned glcdp planner revision. After metadata-only",
+            "inspection, full-schema structural planning, and narrowing, the",
+            "user can project exact output variables without changing the",
+            "validated collectable unit. Measurement files cannot be read here."
         )
       ),
       glcPreviewUI(
@@ -105,7 +106,7 @@ glc_source_showcase_app <- function() {
         )
       ),
       card(
-        card_header("Slice 2A safety boundary"),
+        card_header("Slice 2B safety boundary"),
         tags$p(
           class = "mb-1",
           tags$strong("Pinned public API: "),
@@ -127,8 +128,17 @@ glc_source_showcase_app <- function() {
           class = "mb-0",
           tags$strong("Measurement transfer: "),
           paste(
-            "unavailable in Slice 2A. This app exposes no read, preview,",
+            "unavailable in Slice 2B. This app exposes no read, preview,",
             "collect, import, or download action."
+          )
+        ),
+        tags$p(
+          class = "mb-0 mt-1",
+          tags$strong("Variable scope: "),
+          paste(
+            "the exact refined unit remains fixed. Discovery, all, or custom",
+            "output variables only change the projected columns and never rerun",
+            "compatibility planning."
           )
         )
       )
@@ -241,14 +251,16 @@ glc_source_showcase_app <- function() {
             },
             message = if (isTRUE(matched)) {
               paste(
-                "Preselected", deep_link$repository,
+                "Preselected",
+                deep_link$repository,
                 "from the strict repository query and started metadata-only inspection."
               )
             } else {
-              deep_link$message %||% paste(
-                "The simulated query could not be applied.",
-                "Switch to Fresh or select another package."
-              )
+              deep_link$message %||%
+                paste(
+                  "The simulated query could not be applied.",
+                  "Switch to Fresh or select another package."
+                )
             }
           ))
         } else {

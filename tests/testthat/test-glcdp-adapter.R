@@ -663,6 +663,8 @@ glc_adapter_plan_fixture <- function(
       request = list(
         terms = request$term %||% character(),
         variable_scope = request$variable_scope,
+        requested_variables = request$source_variables,
+        resolved_variables = request$source_variables,
         file_group = request$file_group_ids,
         standardize = "lightlogr"
       ),
@@ -852,7 +854,7 @@ test_that("public collection planning preserves exact assurance and no transfer"
   expect_s3_class(plan, "glc_collection_plan")
   expect_identical(fake$calls$opened_ref, strrep("b", 40L))
   expect_identical(fake$calls$plan$terms, "melanopic_edi")
-  expect_identical(fake$calls$plan$variable_scope, "matched")
+  expect_identical(fake$calls$plan$variable_scope, "all")
   expect_identical(fake$calls$plan$standardize, "lightlogr")
   expect_identical(
     progress$phase,
@@ -935,11 +937,205 @@ test_that("modality planning uses stable public file-group restrictions", {
     modality = "light",
     file_group_ids = c("dataset-a:1", "dataset-b:1")
   )
-  expect_identical(combined$variable_scope, "matched")
+  expect_identical(combined$variable_scope, "all")
   expect_error(
     new_glc_planning_request(modality = "light"),
     class = "llw_validation_error",
     regexp = "stable file-group"
+  )
+
+  selected <- new_glc_planning_request(
+    term = "melanopic_edi",
+    file_group_ids = c("dataset-a:1", "dataset-b:1"),
+    variable_scope = "selected",
+    source_variables = c("melEDI", "MEDI")
+  )
+  expect_identical(selected$source_variables, c("MEDI", "melEDI"))
+  expect_error(
+    new_glc_planning_request(
+      term = "melanopic_edi",
+      variable_scope = "selected",
+      source_variables = c("MEDI", "MEDI")
+    ),
+    class = "llw_validation_error",
+    regexp = "unique exact source names"
+  )
+  expect_error(
+    new_glc_planning_request(
+      modality = "light",
+      file_group_ids = "dataset-a:1",
+      variable_scope = "matched"
+    ),
+    class = "llw_validation_error",
+    regexp = "requires a canonical term"
+  )
+})
+
+test_that("variable projection preserves the exact Slice 2A structure", {
+  source <- new_glc_source_spec(
+    registry_url = "https://example.org/registry.json",
+    repository = "owner/repository",
+    requested_revision = "exact",
+    resolved_revision = strrep("e", 40L),
+    validation_state = "passed",
+    attestation_verified = TRUE,
+    schema_version = "3.0.2",
+    glcdp_version = "1.0.0.9000",
+    cache_dir = tempfile("glc-plan-cache-"),
+    registry_generated_at = "2026-08-01T00:00:00Z"
+  )
+  parent_request <- new_glc_planning_request(term = "melanopic_edi")
+  parent_plan <- glc_adapter_plan_fixture(source, parent_request)
+  parent_id <- parent_plan$compatibility_sets$compatibility_id[[1L]]
+  refined_ids <- parent_plan$compatibility_sets$file_group_ids[[1L]]
+
+  parent_plan$variables <- parent_plan$variables[rep(1L, 2L), , drop = FALSE]
+  parent_plan$variables$dataset_id <- c("dataset-a", "dataset-b")
+  parent_plan$variables$file_group_id <- refined_ids
+  parent_plan$variables$name <- "MEDI"
+  parent_plan$variables$selection_origin <- "all"
+
+  read_columns <- glc_adapter_empty_table(
+    glc_collection_plan_required_tables()$read_columns,
+    4L
+  )
+  read_columns$unit_id <- parent_plan$units$unit_id[[1L]]
+  read_columns$dataset_id <- rep(c("dataset-a", "dataset-b"), each = 2L)
+  read_columns$file_group_id <- rep(refined_ids, each = 2L)
+  read_columns$position <- rep(1:2, 2L)
+  read_columns$name <- rep(c("MEDI", "Datetime"), 2L)
+  read_columns$declared_type <- rep(c("number", "datetime"), 2L)
+  read_columns$origin <- rep(c("selected", "required"), 2L)
+  read_columns$selected_for_output <- rep(c(TRUE, FALSE), 2L)
+  read_columns$automatic <- rep(c(FALSE, TRUE), 2L)
+  read_columns$message <- rep(
+    c("Selected output.", "Required time input."),
+    2L
+  )
+  parent_plan$read_columns <- read_columns
+
+  output_columns <- glc_adapter_empty_table(
+    glc_collection_plan_required_tables()$output_columns,
+    2L
+  )
+  output_columns$unit_id <- parent_plan$units$unit_id[[1L]]
+  output_columns$position <- 1:2
+  output_columns$name <- c("MEDI", "Datetime")
+  output_columns$source_declared_type <- c("number", "datetime")
+  output_columns$expected_type <- c("numeric", "POSIXct")
+  output_columns$origin <- c("selected", "required")
+  output_columns$automatic <- c(FALSE, TRUE)
+  output_columns$runtime_validation_required <- TRUE
+  output_columns$collision_validation_required <- TRUE
+  output_columns$message <- c("Selected output.", "Automatic time column.")
+  parent_plan$output_columns <- output_columns
+
+  refinement <- glc_adapter_refinement_fixture(
+    parent_plan,
+    parent_id,
+    refined_ids
+  )
+
+  token_map <- data.frame(
+    original_token = c("14", "22"),
+    numeric_value = c(14, 22),
+    unit = c("points", "points"),
+    stringsAsFactors = FALSE
+  )
+  review <- new_glc_projection_review(
+    source = source,
+    source_variables = "MEDI",
+    parent_request = parent_request,
+    parent_plan = parent_plan,
+    parent_compatibility_id = parent_id,
+    parent_refinement = refinement,
+    metadata_filters = list(characteristic_numeric_tokens = token_map)
+  )
+  expect_s3_class(review, "llw_glc_projection_review")
+  expect_identical(review$review_version, "1.0.0")
+  expect_identical(review$refined_file_group_ids, refined_ids)
+  expect_identical(review$parent$plan_fingerprint, strrep("f", 64L))
+  expect_identical(review$selected_compatibility_id, parent_id)
+  expect_identical(
+    review$selected_unit_ids,
+    parent_plan$units$unit_id[[1L]]
+  )
+  expect_identical(review$selected_source_variables, "MEDI")
+  expect_identical(review$read_columns$name, c("MEDI", "Datetime", "MEDI", "Datetime"))
+  expect_identical(review$output_columns$name, c("MEDI", "Datetime"))
+  expect_identical(
+    review$metadata_filters$characteristic_numeric_tokens,
+    token_map
+  )
+  expect_true(review$assurance$projection_only)
+  expect_false(review$assurance$compatibility_replanned)
+  expect_false(review$assurance$compatibility_identity_changed)
+  expect_false(review$assurance$measurement_contents_transferred)
+  expect_null(nonserializable_path(review))
+  expect_type(serialize(review, NULL), "raw")
+
+  expect_error(
+    new_glc_projection_review(
+      source = source,
+      source_variables = c("MEDI", "MEDI"),
+      parent_request = parent_request,
+      parent_plan = parent_plan,
+      parent_compatibility_id = parent_id,
+      parent_refinement = refinement
+    ),
+    class = "llw_validation_error",
+    regexp = "unique exact source names"
+  )
+  expect_error(
+    new_glc_projection_review(
+      source = source,
+      source_variables = "not_present",
+      parent_request = parent_request,
+      parent_plan = parent_plan,
+      parent_compatibility_id = parent_id,
+      parent_refinement = refinement
+    ),
+    class = "llw_validation_error",
+    regexp = "not available in every retained file group"
+  )
+
+  stale_refinement <- refinement
+  stale_refinement$parent$fingerprint <- strrep("0", 64L)
+  expect_error(
+    new_glc_projection_review(
+      source = source,
+      source_variables = "MEDI",
+      parent_request = parent_request,
+      parent_plan = parent_plan,
+      parent_compatibility_id = parent_id,
+      parent_refinement = stale_refinement
+    ),
+    class = "llw_validation_error",
+    regexp = "retained parent plan"
+  )
+
+  matched_request <- new_glc_planning_request(
+    term = "melanopic_edi",
+    variable_scope = "matched"
+  )
+  matched_plan <- glc_adapter_plan_fixture(source, matched_request)
+  matched_id <- matched_plan$compatibility_sets$compatibility_id[[1L]]
+  matched_refinement <- glc_adapter_refinement_fixture(
+    matched_plan,
+    matched_id,
+    matched_plan$compatibility_sets$file_group_ids[[1L]]
+  )
+  expect_error(
+    new_glc_projection_review(
+      source = source,
+      source_variables = "MEDI",
+      parent_request = matched_request,
+      parent_plan = matched_plan,
+      parent_compatibility_id = matched_id,
+      parent_refinement = matched_refinement
+    ),
+    class = "llw_validation_error",
+    regexp = "complete file schema"
   )
 })
 
