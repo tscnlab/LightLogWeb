@@ -25,6 +25,67 @@ glc_source_showcase_deep_link_query <- function(packages, raw_query = "") {
   paste0("?repo=", utils::URLencode(repository, reserved = TRUE))
 }
 
+glc_source_showcase_preview_worker <- function(payload, spec) {
+  review <- payload$transfer_review
+  LightLogWeb:::validate_glc_transfer_review(review)
+  allocated <- review$allocated_files
+  rows_per_file <- as.integer(review$allocation$per_file_n_max)
+  output_names <- unique(as.character(review$projection$output_columns$name))
+
+  fixture_column <- function(name, count, file_index) {
+    lower <- tolower(name)
+    if (grepl("date|time", lower)) {
+      return(as.POSIXct(
+        "2026-08-01 12:00:00",
+        tz = "UTC"
+      ) + seq_len(count) + (file_index - 1L) * 60L)
+    }
+    if (grepl("(^|_)id$|participant|file_group|file\\.name", lower)) {
+      return(paste0("fixture-", file_index, "-", seq_len(count)))
+    }
+    as.numeric(seq_len(count) + (file_index - 1L) * count)
+  }
+
+  file_data <- lapply(seq_len(nrow(allocated)), function(index) {
+    values <- stats::setNames(
+      lapply(output_names, fixture_column, count = rows_per_file,
+        file_index = index),
+      output_names
+    )
+    as.data.frame(values, check.names = FALSE, stringsAsFactors = FALSE)
+  })
+  collected <- do.call(rbind, file_data)
+  rownames(collected) <- NULL
+  collection <- data.frame(
+    dataset_id = as.character(allocated$dataset_id),
+    file_group_id = as.character(allocated$file_group_id),
+    files = I(lapply(
+      allocated$declared_path,
+      function(path) file.path("deterministic-fixture", path)
+    )),
+    runtime_input_ids = I(lapply(
+      seq_len(nrow(allocated)),
+      function(index) sprintf("fixture://preview-input/%03d", index)
+    )),
+    data = I(file_data),
+    stringsAsFactors = FALSE
+  )
+
+  exports <- LightLogWeb:::glcdp_export_contract()
+  api <- stats::setNames(
+    lapply(exports, function(name) function(...) NULL),
+    exports
+  )
+  api$glc_open <- function(...) list(fixture = TRUE)
+  api$glc_read <- function(...) collection
+  api$glc_collect <- function(x, standardize) collected
+  LightLogWeb:::glcdp_transfer_preview_execute(
+    payload,
+    api = api,
+    execution_mode = "fixture"
+  )
+}
+
 glc_source_showcase_app <- function() {
   registry_url <- glc_source_showcase_registry_url()
   glcdp_provenance <- glcdp_runtime_provenance()
@@ -42,14 +103,14 @@ glc_source_showcase_app <- function() {
       class = "llw-main-shell",
       tabindex = "-1",
       llw_view_header(
-        "Milestone 6 · Slice 2B",
-        "Review the output-variable contract for compatible groups",
+        "Milestone 6 · Slice 2C-A",
+        "Review and exercise one bounded typed preview",
           paste(
             "This standalone review app reads the current public GLC registry",
             "through the pinned glcdp planner revision. After metadata-only",
             "inspection, full-schema structural planning, and narrowing, the",
-            "user can project exact output variables without changing the",
-            "validated collectable unit. Measurement files cannot be read here."
+            "user can review a bounded transfer contract. The showcase uses",
+            "injected local preview records and never accesses live measurements."
         )
       ),
       glcPreviewUI(
@@ -106,7 +167,7 @@ glc_source_showcase_app <- function() {
         )
       ),
       card(
-        card_header("Slice 2B safety boundary"),
+        card_header("Slice 2C-A safety boundary"),
         tags$p(
           class = "mb-1",
           tags$strong("Pinned public API: "),
@@ -125,20 +186,20 @@ glc_source_showcase_app <- function() {
           )
         ),
         tags$p(
-          class = "mb-0",
-          tags$strong("Measurement transfer: "),
+          class = "mb-1",
+          tags$strong("Showcase preview: "),
           paste(
-            "unavailable in Slice 2B. This app exposes no read, preview,",
-            "collect, import, or download action."
+            "the explicit preview action uses deterministic injected local",
+            "records. It exercises the public read-and-collect contract without",
+            "opening a live package or measurement file."
           )
         ),
         tags$p(
-          class = "mb-0 mt-1",
-          tags$strong("Variable scope: "),
+          class = "mb-0",
+          tags$strong("Closed actions: "),
           paste(
-            "the exact refined unit remains fixed. Discovery, all, or custom",
-            "output variables only change the projected columns and never rerun",
-            "compatibility planning."
+            "no full read, import, dataset creation, persistence, download,",
+            "promotion, or later-slice action is available."
           )
         )
       )
@@ -290,6 +351,7 @@ glc_source_showcase_app <- function() {
       source_selection = source_state$selection,
       runtime = runtime,
       cache_dir = runtime$paths$cache,
+      preview_worker = glc_source_showcase_preview_worker,
       auto_inspect = reactive({
         identical(
           input$arrival_mode %||% arrival_mode_default(),

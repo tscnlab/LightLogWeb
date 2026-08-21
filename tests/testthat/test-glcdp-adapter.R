@@ -656,7 +656,7 @@ glc_adapter_plan_fixture <- function(
         repository = source$repository,
         source_revision = source$resolved_revision,
         verification = "registry_latest_pass",
-        metadata_fingerprint = "fixture-fingerprint",
+        metadata_fingerprint = strrep("e", 64L),
         planner_schema = "glc-collection-plan",
         planner_version = "1.2.0"
       ),
@@ -745,6 +745,87 @@ glc_adapter_refinement_fixture <- function(
       )
     ),
     class = c("glc_collection_refinement", "list")
+  )
+}
+
+glc_adapter_projection_fixture <- function() {
+  source <- new_glc_source_spec(
+    registry_url = "https://example.org/registry.json",
+    repository = "owner/repository",
+    requested_revision = "exact",
+    resolved_revision = strrep("e", 40L),
+    validation_state = "passed",
+    attestation_verified = TRUE,
+    schema_version = "3.0.2",
+    glcdp_version = "1.0.0.9000",
+    cache_dir = tempfile("glc-preview-cache-"),
+    registry_generated_at = "2026-08-01T00:00:00Z"
+  )
+  request <- new_glc_planning_request(term = "melanopic_edi")
+  plan <- glc_adapter_plan_fixture(source, request)
+  compatibility_id <- plan$compatibility_sets$compatibility_id[[1L]]
+  group_ids <- plan$compatibility_sets$file_group_ids[[1L]]
+
+  plan$variables <- plan$variables[rep(1L, 2L), , drop = FALSE]
+  plan$variables$dataset_id <- c("dataset-a", "dataset-b")
+  plan$variables$file_group_id <- group_ids
+  plan$variables$name <- "MEDI"
+  plan$variables$selection_origin <- "all"
+
+  read_columns <- glc_adapter_empty_table(
+    glc_collection_plan_required_tables()$read_columns,
+    4L
+  )
+  read_columns$unit_id <- plan$units$unit_id[[1L]]
+  read_columns$dataset_id <- rep(c("dataset-a", "dataset-b"), each = 2L)
+  read_columns$file_group_id <- rep(group_ids, each = 2L)
+  read_columns$position <- rep(1:2, 2L)
+  read_columns$name <- rep(c("MEDI", "Datetime"), 2L)
+  read_columns$declared_type <- rep(c("number", "datetime"), 2L)
+  read_columns$origin <- rep(c("selected", "required"), 2L)
+  read_columns$selected_for_output <- rep(c(TRUE, FALSE), 2L)
+  read_columns$automatic <- rep(c(FALSE, TRUE), 2L)
+  read_columns$message <- rep(
+    c("Selected output.", "Required time input."),
+    2L
+  )
+  plan$read_columns <- read_columns
+
+  output_columns <- glc_adapter_empty_table(
+    glc_collection_plan_required_tables()$output_columns,
+    2L
+  )
+  output_columns$unit_id <- plan$units$unit_id[[1L]]
+  output_columns$position <- 1:2
+  output_columns$name <- c("MEDI", "Datetime")
+  output_columns$source_declared_type <- c("number", "datetime")
+  output_columns$expected_type <- c("numeric", "POSIXct")
+  output_columns$origin <- c("selected", "required")
+  output_columns$automatic <- c(FALSE, TRUE)
+  output_columns$runtime_validation_required <- TRUE
+  output_columns$collision_validation_required <- TRUE
+  output_columns$message <- c("Selected output.", "Automatic time column.")
+  plan$output_columns <- output_columns
+
+  refinement <- glc_adapter_refinement_fixture(
+    plan,
+    compatibility_id,
+    group_ids
+  )
+  projection <- new_glc_projection_review(
+    source = source,
+    source_variables = "MEDI",
+    parent_request = request,
+    parent_plan = plan,
+    parent_compatibility_id = compatibility_id,
+    parent_refinement = refinement
+  )
+  list(
+    source = source,
+    request = request,
+    plan = plan,
+    refinement = refinement,
+    projection = projection
   )
 }
 
@@ -1061,7 +1142,10 @@ test_that("variable projection preserves the exact Slice 2A structure", {
     parent_plan$units$unit_id[[1L]]
   )
   expect_identical(review$selected_source_variables, "MEDI")
-  expect_identical(review$read_columns$name, c("MEDI", "Datetime", "MEDI", "Datetime"))
+  expect_identical(
+    review$read_columns$name,
+    c("MEDI", "Datetime", "MEDI", "Datetime")
+  )
   expect_identical(review$output_columns$name, c("MEDI", "Datetime"))
   expect_identical(
     review$metadata_filters$characteristic_numeric_tokens,
@@ -1136,6 +1220,435 @@ test_that("variable projection preserves the exact Slice 2A structure", {
     ),
     class = "llw_validation_error",
     regexp = "complete file schema"
+  )
+})
+
+test_that("variable projection remaps contracts to refined public unit IDs", {
+  fixture <- glc_adapter_projection_fixture()
+  refinement <- fixture$refinement
+  retained_id <- refinement$request$file_group[[1L]]
+  refined_unit_id <- paste0("glcu_", strrep("9", 64L))
+
+  refinement$request$file_group <- retained_id
+  refinement$groups <- refinement$groups[
+    refinement$groups$file_group_id == retained_id,
+    ,
+    drop = FALSE
+  ]
+  refinement$groups$unit_id <- refined_unit_id
+  refinement$units <- refinement$units[1L, , drop = FALSE]
+  refinement$units$unit_id <- refined_unit_id
+  refinement$units$file_group_ids <- list(retained_id)
+  refinement$units$file_group_count <- 1L
+  refinement$units$dataset_count <- 1L
+  refinement$units$file_count <- 1L
+  refinement$preferred_unit_id <- refined_unit_id
+  refinement$final_selection_required <- FALSE
+
+  review <- new_glc_projection_review(
+    source = fixture$source,
+    source_variables = "MEDI",
+    parent_request = fixture$request,
+    parent_plan = fixture$plan,
+    parent_compatibility_id = fixture$plan$compatibility_sets$compatibility_id[[
+      1L
+    ]],
+    parent_refinement = refinement
+  )
+
+  expect_identical(review$selected_unit_ids, refined_unit_id)
+  expect_identical(review$refined_file_group_ids, retained_id)
+  expect_true(all(review$selected_groups$unit_id == refined_unit_id))
+  expect_true(all(review$files$unit_id == refined_unit_id))
+  expect_true(all(review$read_columns$unit_id == refined_unit_id))
+  expect_true(all(review$output_columns$unit_id == refined_unit_id))
+  expect_identical(
+    review$selected_compatibility_id,
+    fixture$projection$selected_compatibility_id
+  )
+  expect_true(review$assurance$projection_only)
+  expect_false(review$assurance$compatibility_replanned)
+  expect_null(nonserializable_path(review))
+  expect_type(serialize(review, NULL), "raw")
+
+  contradictory <- refinement
+  contradictory$units$file_group_ids <- list("dataset-b:1")
+  expect_error(
+    new_glc_projection_review(
+      source = fixture$source,
+      source_variables = "MEDI",
+      parent_request = fixture$request,
+      parent_plan = fixture$plan,
+      parent_compatibility_id = fixture$plan$compatibility_sets$compatibility_id[[
+        1L
+      ]],
+      parent_refinement = contradictory
+    ),
+    class = "llw_validation_error",
+    regexp = "contradicts"
+  )
+})
+
+test_that("bounded transfer review fixes provenance and allocates canonically", {
+  fixture <- glc_adapter_projection_fixture()
+  review <- new_glc_transfer_review(
+    fixture$projection,
+    total_preview_rows = 1L,
+    available_session_bytes = 100
+  )
+
+  expect_s3_class(review, "llw_glc_transfer_review")
+  expect_identical(review$review_version, "1.1.0")
+  expect_identical(review$limits$total_preview_rows, 10000L)
+  expect_identical(review$problems_policy, "error")
+  expect_identical(review$allocation$preview_files, "a.csv")
+  expect_identical(review$allocation$omitted_files, "b.csv")
+  expect_identical(review$allocation$per_file_n_max, 1)
+  expect_identical(review$allocation$maximum_rows, 1)
+  expect_identical(
+    review$fixed$compatibility_id,
+    fixture$projection$selected_compatibility_id
+  )
+  expect_identical(
+    review$fixed$unit_id,
+    fixture$projection$selected_unit_ids[[1L]]
+  )
+  expect_identical(
+    review$fixed$metadata_fingerprint,
+    strrep("e", 64L)
+  )
+  expect_identical(
+    review$fixed$refinement_fingerprint,
+    digest::digest(fixture$refinement, algo = "sha256", serialize = TRUE)
+  )
+  expect_identical(review$byte_evidence$allocated_known_declared_bytes, 100)
+  expect_identical(review$byte_evidence$allocated_unknown_file_count, 0L)
+  expect_false(review$resource$blocked)
+  expect_true(review$assurance$explicit_action_required)
+  expect_false(review$assurance$package_reopened)
+  expect_false(review$assurance$measurement_contents_transferred)
+  expect_null(nonserializable_path(review))
+  expect_type(serialize(review, NULL), "raw")
+
+  blocked <- new_glc_transfer_review(
+    fixture$projection,
+    total_preview_rows = 1L,
+    available_session_bytes = 99
+  )
+  expect_true(blocked$resource$blocked)
+
+  tampered <- review
+  tampered$fixed$file_group_ids <- "dataset-z:1"
+  expect_error(
+    validate_glc_transfer_review(tampered),
+    class = "llw_validation_error",
+    regexp = "parent contract"
+  )
+})
+
+test_that("bounded transfer review enforces one authoritative row ceiling", {
+  fixture <- glc_adapter_projection_fixture()
+  expect_identical(glc_transfer_preview_row_limit(), 10000L)
+
+  at_limit <- new_glc_transfer_review(
+    fixture$projection,
+    total_preview_rows = 10000L,
+    available_session_bytes = Inf
+  )
+  expect_identical(at_limit$allocation$total_budget, 10000L)
+  expect_identical(at_limit$allocation$maximum_rows, 10000)
+  expect_identical(at_limit$limits$total_preview_rows, 10000L)
+
+  invalid_values <- list(
+    NULL,
+    numeric(),
+    NA_real_,
+    NaN,
+    Inf,
+    -Inf,
+    0,
+    -1,
+    1.5,
+    "20"
+  )
+  for (value in invalid_values) {
+    error <- tryCatch(
+      new_glc_transfer_review(
+        fixture$projection,
+        total_preview_rows = value,
+        available_session_bytes = Inf
+      ),
+      error = identity
+    )
+    expect_s3_class(error, "llw_validation_error")
+    expect_match(
+      llw_public_message(error),
+      "1 through 10,000",
+      fixed = TRUE
+    )
+  }
+
+  for (value in c(10001, 1e9)) {
+    error <- tryCatch(
+      new_glc_transfer_review(
+        fixture$projection,
+        total_preview_rows = value,
+        available_session_bytes = Inf
+      ),
+      error = identity
+    )
+    expect_s3_class(error, "llw_validation_error")
+    expect_match(llw_public_message(error), "10,000", fixed = TRUE)
+  }
+
+  tampered <- at_limit
+  tampered$allocation$total_budget <- 10001L
+  tampered$allocation$maximum_rows <- 10001
+  tampered$fingerprint <- glc_transfer_value_fingerprint(
+    within(tampered, rm(fingerprint))
+  )
+  fake <- fake_glcdp_api()
+  payload <- list(
+    source = fixture$source,
+    transfer_review = tampered,
+    progress_path = tempfile("glc-preview-limit-", fileext = ".rds")
+  )
+  expect_error(
+    glcdp_transfer_preview_execute(
+      payload,
+      api = fake$api,
+      execution_mode = "fixture"
+    ),
+    class = "llw_validation_error"
+  )
+  expect_null(fake$calls$opened_ref)
+  expect_null(fake$calls$read)
+})
+
+test_that("bounded preview uses only reviewed public read and collect inputs", {
+  fixture <- glc_adapter_projection_fixture()
+  review <- new_glc_transfer_review(
+    fixture$projection,
+    total_preview_rows = 4L,
+    problems = "warn",
+    available_session_bytes = 1000
+  )
+  fake <- fake_glcdp_api()
+  fake$api$glc_read <- function(...) {
+    fake$calls$read <- list(...)
+    allocated <- review$allocated_files
+    data.frame(
+      dataset_id = allocated$dataset_id,
+      file_group_id = allocated$file_group_id,
+      files = I(lapply(
+        allocated$declared_path,
+        function(path) file.path(fixture$source$cache_dir, path)
+      )),
+      runtime_input_ids = I(lapply(
+        seq_len(nrow(allocated)),
+        function(index) sprintf("fixture://adapter-input/%03d", index)
+      )),
+      data = I(list(
+        data.frame(MEDI = c(10, 11), stringsAsFactors = FALSE),
+        data.frame(MEDI = c(12, 13), stringsAsFactors = FALSE)
+      )),
+      stringsAsFactors = FALSE
+    )
+  }
+  fake$api$glc_collect <- function(x, standardize) {
+    fake$calls$collect <- list(x = x, standardize = standardize)
+    data.frame(
+      MEDI = c(10, 11, 12, 13),
+      Datetime = as.POSIXct(
+        "2026-08-01 12:00:00",
+        tz = "UTC"
+      ) +
+        0:3,
+      dataset_id = rep(c("dataset-a", "dataset-b"), each = 2L),
+      file_group_id = rep(c("dataset-a:1", "dataset-b:1"), each = 2L),
+      stringsAsFactors = FALSE
+    )
+  }
+  payload <- new_glc_transfer_task_payload(
+    fixture$source,
+    review,
+    progress_path = tempfile("glc-preview-progress-", fileext = ".rds")
+  )
+  result <- glcdp_transfer_preview_execute(
+    payload,
+    api = fake$api,
+    execution_mode = "fixture"
+  )
+
+  expect_s3_class(result, "llw_glc_transfer_preview_result")
+  expect_identical(fake$calls$opened_ref, fixture$source$resolved_revision)
+  expect_identical(fake$calls$read$dataset_id, c("dataset-a", "dataset-b"))
+  expect_identical(
+    fake$calls$read$file_group,
+    c("dataset-a:1", "dataset-b:1")
+  )
+  expect_identical(fake$calls$read$files, c("a.csv", "b.csv"))
+  expect_identical(fake$calls$read$variables, "MEDI")
+  expect_null(fake$calls$read$terms)
+  expect_false(fake$calls$read$primary_only)
+  expect_identical(fake$calls$read$n_max, 2)
+  expect_identical(fake$calls$read$problems, "warn")
+  expect_false(fake$calls$read$progress)
+  expect_identical(fake$calls$collect$standardize, "lightlogr")
+  expect_identical(result$reviewed$file_ids, c("a.csv", "b.csv"))
+  expect_identical(
+    result$reviewed$file_membership,
+    review$allocated_files[,
+      c(
+        "declared_path",
+        "dataset_id",
+        "file_group_id"
+      ),
+      drop = FALSE
+    ]
+  )
+  expect_identical(
+    result$actual$input_ids,
+    c("fixture://adapter-input/001", "fixture://adapter-input/002")
+  )
+  expect_identical(result$actual$row_count, 4L)
+  expect_identical(result$reviewed$file_count, 2L)
+  expect_identical(result$actual$input_count, 2L)
+  expect_identical(result$actual$file_group_count, 2L)
+  expect_identical(result$disclosure$maximum_possible_rows, 4)
+  expect_true(result$disclosure$preview_is_not_dataset)
+  expect_false(result$disclosure$unread_files_runtime_validated)
+  expect_true(result$assurance$bounded_glc_read)
+  expect_true(result$assurance$bounded_glc_collect)
+  expect_true(result$assurance$deterministic_fixture)
+  expect_false(result$assurance$measurement_contents_accessed)
+  expect_true(result$assurance$no_live_measurement_access)
+  expect_false(result$assurance$selected_package_files_opened)
+  expect_false(result$reviewed$selected_package_paths_opened)
+  expect_false(result$assurance$imported)
+  expect_false(result$assurance$persisted)
+  expect_null(nonserializable_path(result))
+  expect_false(glc_value_contains_path(result, fixture$source$cache_dir))
+  expect_type(serialize(result, NULL), "raw")
+
+  contradictory_inputs <- result
+  contradictory_inputs$actual$input_ids <- result$reviewed$file_ids
+  contradictory_inputs$actual$input_membership$input_id <-
+    result$reviewed$file_ids
+  contradictory_inputs$fingerprint <- NULL
+  contradictory_inputs$fingerprint <- glc_transfer_value_fingerprint(
+    contradictory_inputs
+  )
+  expect_error(
+    validate_glc_transfer_preview_result(
+      contradictory_inputs,
+      review
+    ),
+    class = "llw_validation_error",
+    regexp = "provenance"
+  )
+
+  contradictory_assurance <- result
+  contradictory_assurance$assurance$no_live_measurement_access <- FALSE
+  contradictory_assurance$fingerprint <- NULL
+  contradictory_assurance$fingerprint <- glc_transfer_value_fingerprint(
+    contradictory_assurance
+  )
+  expect_error(
+    validate_glc_transfer_preview_result(
+      contradictory_assurance,
+      review
+    ),
+    class = "llw_validation_error",
+    regexp = "assurance"
+  )
+
+  subclassed_projection <- fixture$projection
+  class(subclassed_projection$files) <- c(
+    "fixture_table",
+    "data.frame"
+  )
+  subclassed_review <- new_glc_transfer_review(
+    subclassed_projection,
+    total_preview_rows = 4L,
+    problems = "warn",
+    available_session_bytes = 1000
+  )
+  expect_identical(class(subclassed_review$files), "data.frame")
+  expect_identical(class(subclassed_review$allocated_files), "data.frame")
+  transported_review <- unserialize(serialize(subclassed_review, NULL))
+  expect_identical(
+    transported_review$fingerprint,
+    subclassed_review$fingerprint
+  )
+  validate_glc_transfer_review(transported_review)
+  subclassed_result <- glcdp_transfer_preview_execute(
+    new_glc_transfer_task_payload(fixture$source, transported_review),
+    api = fake$api,
+    execution_mode = "fixture"
+  )
+  expect_s3_class(subclassed_result, "llw_glc_transfer_preview_result")
+  expect_identical(
+    subclassed_result$transfer_review_fingerprint,
+    subclassed_review$fingerprint
+  )
+
+  expect_error(
+    glcdp_transfer_preview_execute(
+      payload,
+      execution_mode = "fixture"
+    ),
+    class = "llw_validation_error",
+    regexp = "explicitly injected API"
+  )
+
+  mismatched <- fake_glcdp_api()
+  mismatched$api$glc_read <- fake$api$glc_read
+  mismatched$api$glc_collect <- fake$api$glc_collect
+  original_read <- mismatched$api$glc_read
+  mismatched$api$glc_read <- function(...) {
+    value <- original_read(...)
+    value$file_group_id <- rev(value$file_group_id)
+    value
+  }
+  expect_error(
+    glcdp_transfer_preview_execute(
+      payload,
+      api = mismatched$api,
+      execution_mode = "fixture"
+    ),
+    class = "llw_validation_error",
+    regexp = "file-to-dataset and file-group membership"
+  )
+
+  incomplete <- fake_glcdp_api()
+  incomplete$api$glc_read <- fake$api$glc_read
+  incomplete$api$glc_collect <- function(x, standardize) {
+    data.frame(MEDI = c(10, 11, 12, 13))
+  }
+  expect_error(
+    glcdp_transfer_preview_execute(
+      payload,
+      api = incomplete$api,
+      execution_mode = "fixture"
+    ),
+    class = "llw_validation_error",
+    regexp = "missing expected result column"
+  )
+
+  blocked <- new_glc_transfer_review(
+    fixture$projection,
+    total_preview_rows = 1L,
+    available_session_bytes = 99
+  )
+  expect_error(
+    glcdp_transfer_preview_execute(
+      new_glc_transfer_task_payload(fixture$source, blocked),
+      api = fake$api,
+      execution_mode = "fixture"
+    ),
+    class = "llw_resource_error",
+    regexp = "resource budget"
   )
 })
 

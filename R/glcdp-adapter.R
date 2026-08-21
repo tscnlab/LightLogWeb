@@ -2335,6 +2335,102 @@ glc_scope_parent_identity <- function(
   )
 }
 
+glc_projection_refined_unit_map <- function(
+  groups,
+  parent_refinement
+) {
+  required_group_columns <- c("file_group_id", "unit_id")
+  if (
+    !is.data.frame(groups) ||
+      !all(required_group_columns %in% names(groups)) ||
+      !is.data.frame(parent_refinement$groups) ||
+      !all(required_group_columns %in% names(parent_refinement$groups)) ||
+      !is.data.frame(parent_refinement$units) ||
+      !all(c("unit_id", "file_group_ids") %in% names(parent_refinement$units))
+  ) {
+    abort_llw(
+      "The refined unit membership is incomplete.",
+      type = "validation"
+    )
+  }
+
+  group_ids <- as.character(groups$file_group_id)
+  refined_groups <- parent_refinement$groups[
+    match(group_ids, parent_refinement$groups$file_group_id),
+    required_group_columns,
+    drop = FALSE
+  ]
+  selected_unit_ids <- glc_nonempty_unique(parent_refinement$units$unit_id)
+  if (
+    anyNA(refined_groups$file_group_id) ||
+      anyNA(refined_groups$unit_id) ||
+      anyDuplicated(parent_refinement$groups$file_group_id) ||
+      !identical(as.character(refined_groups$file_group_id), group_ids) ||
+      length(selected_unit_ids) == 0L ||
+      any(!grepl("^glcu_[0-9a-f]{64}$", refined_groups$unit_id)) ||
+      any(!refined_groups$unit_id %in% selected_unit_ids)
+  ) {
+    abort_llw(
+      "The refined file groups do not identify stable public units.",
+      type = "validation"
+    )
+  }
+
+  mapping <- data.frame(
+    file_group_id = group_ids,
+    parent_unit_id = as.character(groups$unit_id),
+    refined_unit_id = as.character(refined_groups$unit_id),
+    stringsAsFactors = FALSE
+  )
+  if (
+    anyNA(mapping$parent_unit_id) ||
+      any(!grepl("^glcu_[0-9a-f]{64}$", mapping$parent_unit_id))
+  ) {
+    abort_llw(
+      "The retained parent groups do not identify stable public units.",
+      type = "validation"
+    )
+  }
+
+  for (unit_id in selected_unit_ids) {
+    unit_row <- which(parent_refinement$units$unit_id == unit_id)
+    mapped_group_ids <- mapping$file_group_id[
+      mapping$refined_unit_id == unit_id
+    ]
+    if (
+      length(unit_row) != 1L ||
+        !setequal(
+          glc_nonempty_unique(
+            parent_refinement$units$file_group_ids[[unit_row]]
+          ),
+          mapped_group_ids
+        )
+    ) {
+      abort_llw(
+        "The refined unit table contradicts its public group membership.",
+        type = "validation"
+      )
+    }
+    parent_ids <- glc_nonempty_unique(
+      mapping$parent_unit_id[mapping$refined_unit_id == unit_id]
+    )
+    if (length(parent_ids) != 1L) {
+      abort_llw(
+        paste(
+          "A refined unit does not map to one retained public column",
+          "contract. Reconfirm the metadata selection before continuing."
+        ),
+        type = "validation"
+      )
+    }
+  }
+
+  list(
+    groups = mapping,
+    selected_unit_ids = selected_unit_ids
+  )
+}
+
 new_glc_projection_review <- function(
   source,
   source_variables,
@@ -2404,13 +2500,13 @@ new_glc_projection_review <- function(
       type = "validation"
     )
   }
-  selected_unit_ids <- glc_nonempty_unique(parent_refinement$units$unit_id)
-  if (length(selected_unit_ids) == 0L) {
-    abort_llw(
-      "The retained Slice 2A refinement has no stable unit identity.",
-      type = "validation"
-    )
-  }
+  unit_map <- glc_projection_refined_unit_map(groups, parent_refinement)
+  selected_unit_ids <- unit_map$selected_unit_ids
+  group_unit_rows <- match(
+    groups$file_group_id,
+    unit_map$groups$file_group_id
+  )
+  groups$unit_id <- unit_map$groups$refined_unit_id[group_unit_rows]
 
   variable_rows <- parent_plan$variables$file_group_id %in% group_ids
   available <- parent_plan$variables[variable_rows, , drop = FALSE]
@@ -2442,25 +2538,65 @@ new_glc_projection_review <- function(
     ,
     drop = FALSE
   ]
+  file_unit_rows <- match(files$file_group_id, unit_map$groups$file_group_id)
+  if (
+    anyNA(file_unit_rows) ||
+      any(files$unit_id != unit_map$groups$parent_unit_id[file_unit_rows])
+  ) {
+    abort_llw(
+      "The retained file table contradicts the parent unit membership.",
+      type = "validation"
+    )
+  }
+  files$unit_id <- unit_map$groups$refined_unit_id[file_unit_rows]
   read_columns <- parent_plan$read_columns[
-    parent_plan$read_columns$unit_id %in% selected_unit_ids &
-      parent_plan$read_columns$file_group_id %in% group_ids &
-      (
-        parent_plan$read_columns$name %in% source_variables |
-          parent_plan$read_columns$automatic %in% TRUE
-      ),
+    parent_plan$read_columns$file_group_id %in%
+      group_ids &
+      (parent_plan$read_columns$name %in%
+        source_variables |
+        parent_plan$read_columns$automatic %in% TRUE),
     ,
     drop = FALSE
   ]
-  output_columns <- parent_plan$output_columns[
-    parent_plan$output_columns$unit_id %in% selected_unit_ids &
-      (
-        parent_plan$output_columns$name %in% source_variables |
-          parent_plan$output_columns$automatic %in% TRUE
-      ),
-    ,
-    drop = FALSE
-  ]
+  read_unit_rows <- match(
+    read_columns$file_group_id,
+    unit_map$groups$file_group_id
+  )
+  if (
+    anyNA(read_unit_rows) ||
+      any(
+        read_columns$unit_id != unit_map$groups$parent_unit_id[read_unit_rows]
+      )
+  ) {
+    abort_llw(
+      "The retained read-column contract contradicts its parent units.",
+      type = "validation"
+    )
+  }
+  read_columns$unit_id <-
+    unit_map$groups$refined_unit_id[read_unit_rows]
+
+  output_columns <- do.call(
+    rbind,
+    lapply(selected_unit_ids, function(unit_id) {
+      parent_unit_id <- glc_nonempty_unique(
+        unit_map$groups$parent_unit_id[
+          unit_map$groups$refined_unit_id == unit_id
+        ]
+      )
+      rows <- parent_plan$output_columns[
+        parent_plan$output_columns$unit_id == parent_unit_id &
+          (parent_plan$output_columns$name %in%
+            source_variables |
+            parent_plan$output_columns$automatic %in% TRUE),
+        ,
+        drop = FALSE
+      ]
+      rows$unit_id <- unit_id
+      rows
+    })
+  )
+  rownames(output_columns) <- NULL
   diagnostic_rows <- vapply(
     parent_plan$compatibility_diagnostics$compatibility_ids,
     function(ids) parent_compatibility_id %in% as.character(ids),
@@ -2511,11 +2647,17 @@ new_glc_projection_review <- function(
         plan_schema = parent_plan$plan_schema,
         plan_version = parent_plan$plan_version,
         plan_fingerprint = parent_plan$refinement_input$fingerprint,
+        metadata_fingerprint = parent_plan$provenance$metadata_fingerprint,
         request = parent_request,
         compatibility_id = parent_compatibility_id,
         refinement_schema = parent_refinement$refinement_schema,
         refinement_version = parent_refinement$refinement_version,
         refinement_parent_fingerprint = parent_refinement$parent$fingerprint,
+        refinement_fingerprint = digest::digest(
+          parent_refinement,
+          algo = "sha256",
+          serialize = TRUE
+        ),
         refinement_file_group_ids = refined_file_group_ids
       ),
       selected_source_variables = source_variables,
@@ -2549,6 +2691,7 @@ new_glc_projection_review <- function(
     class = c("llw_glc_projection_review", "list")
   )
   assert_serializable_value(review, "GLC variable projection review")
+  validate_glc_projection_review(review)
   if (glc_value_contains_path(review, source$cache_dir)) {
     abort_llw(
       "The variable projection retained session transport state.",
@@ -2556,6 +2699,1615 @@ new_glc_projection_review <- function(
     )
   }
   review
+}
+
+validate_glc_projection_review <- function(review) {
+  if (!inherits(review, "llw_glc_projection_review") || !is.list(review)) {
+    abort_llw(
+      "The output projection review is invalid.",
+      type = "validation"
+    )
+  }
+  required <- c(
+    "review_schema",
+    "review_version",
+    "source",
+    "refined_file_group_ids",
+    "parent",
+    "selected_source_variables",
+    "metadata_filters",
+    "selected_compatibility_id",
+    "selected_unit_ids",
+    "selected_groups",
+    "diagnostics",
+    "diagnostic_groups",
+    "read_columns",
+    "output_columns",
+    "files",
+    "byte_evidence",
+    "assurance"
+  )
+  missing <- setdiff(required, names(review))
+  if (length(missing) > 0L) {
+    abort_llw(
+      paste0(
+        "The output projection review is missing field(s): ",
+        paste(missing, collapse = ", "),
+        "."
+      ),
+      type = "validation"
+    )
+  }
+  if (
+    !identical(review$review_schema, "llw-glc-variable-projection-review") ||
+      !identical(review$review_version, "1.0.0")
+  ) {
+    abort_llw(
+      "The output projection review schema is not supported.",
+      type = "validation"
+    )
+  }
+  source_required <- c(
+    "registry_url",
+    "registry_generated_at",
+    "repository",
+    "resolved_revision",
+    "validation_state",
+    "attestation_verified",
+    "schema_version",
+    "glcdp_version"
+  )
+  if (
+    !is.list(review$source) ||
+      !all(source_required %in% names(review$source)) ||
+      !is_glc_repository(review$source$repository) ||
+      !is.character(review$source$resolved_revision) ||
+      length(review$source$resolved_revision) != 1L ||
+      is.na(review$source$resolved_revision) ||
+      !grepl("^[0-9a-f]{40}$", review$source$resolved_revision)
+  ) {
+    abort_llw(
+      "The output projection does not identify one exact validated source.",
+      type = "validation"
+    )
+  }
+  parent_required <- c(
+    "plan_schema",
+    "plan_version",
+    "plan_fingerprint",
+    "metadata_fingerprint",
+    "request",
+    "compatibility_id",
+    "refinement_schema",
+    "refinement_version",
+    "refinement_parent_fingerprint",
+    "refinement_fingerprint",
+    "refinement_file_group_ids"
+  )
+  if (
+    !is.list(review$parent) ||
+      !all(parent_required %in% names(review$parent)) ||
+      !identical(review$parent$plan_schema, "glc-collection-plan") ||
+      !identical(review$parent$plan_version, "1.2.0") ||
+      !identical(
+        review$parent$refinement_schema,
+        "glc-collection-refinement"
+      ) ||
+      !identical(review$parent$refinement_version, "1.1.0") ||
+      !all(vapply(
+        review$parent[c(
+          "plan_fingerprint",
+          "metadata_fingerprint",
+          "refinement_parent_fingerprint",
+          "refinement_fingerprint"
+        )],
+        function(value) {
+          is.character(value) &&
+            length(value) == 1L &&
+            !is.na(value) &&
+            grepl("^[0-9a-f]{64}$", value)
+        },
+        logical(1)
+      )) ||
+      !identical(
+        review$parent$plan_fingerprint,
+        review$parent$refinement_parent_fingerprint
+      )
+  ) {
+    abort_llw(
+      "The output projection parent provenance is invalid.",
+      type = "validation"
+    )
+  }
+  group_ids <- glc_nonempty_unique(review$refined_file_group_ids)
+  if (
+    length(group_ids) == 0L ||
+      !identical(
+        group_ids,
+        glc_nonempty_unique(review$parent$refinement_file_group_ids)
+      )
+  ) {
+    abort_llw(
+      "The output projection file-group membership is invalid.",
+      type = "validation"
+    )
+  }
+  variables <- as.character(review$selected_source_variables)
+  if (
+    length(variables) == 0L ||
+      anyNA(variables) ||
+      any(!nzchar(variables)) ||
+      anyDuplicated(variables) ||
+      !identical(variables, sort(variables, method = "radix"))
+  ) {
+    abort_llw(
+      "The output projection must retain unique exact source names.",
+      type = "validation"
+    )
+  }
+  if (
+    !is.character(review$selected_compatibility_id) ||
+      length(review$selected_compatibility_id) != 1L ||
+      is.na(review$selected_compatibility_id) ||
+      !grepl("^glcc_[0-9a-f]{64}$", review$selected_compatibility_id) ||
+      !identical(
+        review$selected_compatibility_id,
+        review$parent$compatibility_id
+      )
+  ) {
+    abort_llw(
+      "The output projection compatibility identity is invalid.",
+      type = "validation"
+    )
+  }
+  unit_ids <- glc_nonempty_unique(review$selected_unit_ids)
+  if (
+    length(unit_ids) == 0L ||
+      any(!grepl("^glcu_[0-9a-f]{64}$", unit_ids))
+  ) {
+    abort_llw(
+      "The output projection unit identity is invalid.",
+      type = "validation"
+    )
+  }
+  table_contract <- list(
+    selected_groups = c(
+      "unit_id",
+      "compatibility_id",
+      "dataset_id",
+      "file_group_id"
+    ),
+    read_columns = c(
+      "unit_id",
+      "dataset_id",
+      "file_group_id",
+      "name",
+      "selected_for_output",
+      "automatic"
+    ),
+    output_columns = c("unit_id", "name", "automatic"),
+    files = c(
+      "unit_id",
+      "dataset_id",
+      "file_group_id",
+      "position",
+      "declared_path",
+      "declared_bytes",
+      "bytes_known"
+    )
+  )
+  for (table_name in names(table_contract)) {
+    table <- review[[table_name]]
+    missing_columns <- setdiff(table_contract[[table_name]], names(table))
+    if (!is.data.frame(table) || length(missing_columns) > 0L) {
+      abort_llw(
+        paste0(
+          "The output projection ",
+          table_name,
+          " table is incomplete."
+        ),
+        type = "validation"
+      )
+    }
+  }
+  if (
+    !setequal(
+      glc_nonempty_unique(review$selected_groups$file_group_id),
+      group_ids
+    ) ||
+      any(
+        review$selected_groups$compatibility_id !=
+          review$selected_compatibility_id
+      ) ||
+      any(!review$selected_groups$unit_id %in% unit_ids) ||
+      !setequal(glc_nonempty_unique(review$files$file_group_id), group_ids) ||
+      any(!review$files$unit_id %in% unit_ids) ||
+      !setequal(
+        glc_nonempty_unique(review$read_columns$file_group_id),
+        group_ids
+      ) ||
+      any(!review$read_columns$unit_id %in% unit_ids) ||
+      any(!review$output_columns$unit_id %in% unit_ids)
+  ) {
+    abort_llw(
+      "The projection tables do not match the fixed Slice 2A membership.",
+      type = "validation"
+    )
+  }
+  read_names <- glc_nonempty_unique(review$read_columns$name)
+  output_names <- glc_nonempty_unique(review$output_columns$name)
+  explicitly_selected_read <-
+    review$read_columns$selected_for_output %in%
+    TRUE |
+    !review$read_columns$automatic %in% TRUE
+  explicitly_selected_output <- !review$output_columns$automatic %in% TRUE
+  each_unit_has_contract <- vapply(
+    unit_ids,
+    function(unit_id) {
+      all(
+        variables %in%
+          review$read_columns$name[
+            review$read_columns$unit_id == unit_id
+          ]
+      ) &&
+        all(
+          variables %in%
+            review$output_columns$name[
+              review$output_columns$unit_id == unit_id
+            ]
+        )
+    },
+    logical(1)
+  )
+  if (
+    !all(variables %in% read_names) ||
+      !all(variables %in% output_names) ||
+      any(!each_unit_has_contract) ||
+      any(!review$read_columns$name[explicitly_selected_read] %in% variables) ||
+      any(
+        !review$output_columns$name[explicitly_selected_output] %in% variables
+      )
+  ) {
+    abort_llw(
+      "The projection column contract does not match the selected variables.",
+      type = "validation"
+    )
+  }
+  if (
+    !is.list(review$assurance) ||
+      !isTRUE(review$assurance$projection_only) ||
+      !identical(review$assurance$compatibility_replanned, FALSE) ||
+      !identical(review$assurance$compatibility_identity_changed, FALSE) ||
+      !isTRUE(review$assurance$metadata_only) ||
+      !identical(review$assurance$measurement_contents_transferred, FALSE) ||
+      !identical(review$assurance$measurement_contents_inspected, FALSE) ||
+      !isTRUE(review$assurance$runtime_validation_required)
+  ) {
+    abort_llw(
+      "The output projection assurance is invalid.",
+      type = "validation"
+    )
+  }
+  bytes <- as.numeric(
+    review$files$declared_bytes[review$files$bytes_known %in% TRUE]
+  )
+  if (anyNA(bytes) || any(!is.finite(bytes)) || any(bytes < 0)) {
+    abort_llw(
+      "The output projection contains invalid known byte evidence.",
+      type = "validation"
+    )
+  }
+  expected_bytes <- list(
+    file_count = nrow(review$files),
+    known_file_count = sum(review$files$bytes_known %in% TRUE),
+    unknown_file_count = sum(!review$files$bytes_known %in% TRUE),
+    known_declared_bytes = sum(bytes),
+    declared_bytes_complete = nrow(review$files) > 0L &&
+      all(review$files$bytes_known %in% TRUE)
+  )
+  if (
+    !is.list(review$byte_evidence) ||
+      !all(names(expected_bytes) %in% names(review$byte_evidence)) ||
+      !identical(
+        as.integer(review$byte_evidence$file_count),
+        as.integer(expected_bytes$file_count)
+      ) ||
+      !identical(
+        as.integer(review$byte_evidence$known_file_count),
+        as.integer(expected_bytes$known_file_count)
+      ) ||
+      !identical(
+        as.integer(review$byte_evidence$unknown_file_count),
+        as.integer(expected_bytes$unknown_file_count)
+      ) ||
+      !isTRUE(all.equal(
+        as.numeric(review$byte_evidence$known_declared_bytes),
+        as.numeric(expected_bytes$known_declared_bytes)
+      )) ||
+      !identical(
+        review$byte_evidence$declared_bytes_complete,
+        expected_bytes$declared_bytes_complete
+      )
+  ) {
+    abort_llw(
+      "The output projection byte evidence is inconsistent.",
+      type = "validation"
+    )
+  }
+  assert_serializable_value(review, "GLC output projection review")
+  invisible(review)
+}
+
+glc_transfer_value_fingerprint <- function(value) {
+  digest::digest(value, algo = "sha256", serialize = TRUE)
+}
+
+glc_transfer_canonical_files <- function(files) {
+  required <- c(
+    "unit_id",
+    "dataset_id",
+    "file_group_id",
+    "position",
+    "declared_path",
+    "declared_bytes",
+    "bytes_known"
+  )
+  if (!is.data.frame(files) || !all(required %in% names(files))) {
+    abort_llw("The preview file contract is incomplete.", type = "validation")
+  }
+  files <- as.data.frame(files, stringsAsFactors = FALSE)
+  paths <- as.character(files$declared_path)
+  if (
+    nrow(files) == 0L ||
+      anyNA(paths) ||
+      any(!nzchar(paths)) ||
+      anyDuplicated(paths)
+  ) {
+    abort_llw(
+      paste(
+        "A bounded preview requires unique declared file paths for the",
+        "selected unit."
+      ),
+      type = "validation"
+    )
+  }
+  order_index <- order(
+    enc2utf8(as.character(files$dataset_id)),
+    enc2utf8(as.character(files$file_group_id)),
+    as.integer(files$position),
+    enc2utf8(paths),
+    method = "radix",
+    na.last = TRUE
+  )
+  files[order_index, , drop = FALSE]
+}
+
+new_glc_transfer_review <- function(
+  projection_review,
+  total_preview_rows = 20L,
+  problems = c("error", "warn"),
+  available_session_bytes = Inf
+) {
+  validate_glc_projection_review(projection_review)
+  problems <- match.arg(problems)
+  total_preview_rows <- validate_glc_transfer_preview_row_budget(
+    total_preview_rows
+  )
+  if (
+    !is.numeric(available_session_bytes) ||
+      length(available_session_bytes) != 1L ||
+      is.na(available_session_bytes) ||
+      available_session_bytes < 0
+  ) {
+    abort_llw(
+      "The available session resource budget is invalid.",
+      type = "validation"
+    )
+  }
+  if (length(projection_review$selected_unit_ids) != 1L) {
+    abort_llw(
+      "Choose one finalized Slice 2A unit before reviewing a transfer.",
+      type = "validation"
+    )
+  }
+  files <- glc_transfer_canonical_files(projection_review$files)
+  allocation <- new_glc_preview_allocation(
+    total_budget = as.integer(total_preview_rows),
+    file_ids = as.character(files$declared_path)
+  )
+  allocated <- files[
+    match(allocation$preview_files, files$declared_path),
+    ,
+    drop = FALSE
+  ]
+  known <- allocated$bytes_known %in% TRUE
+  known_bytes <- as.numeric(allocated$declared_bytes[known])
+  if (
+    anyNA(known_bytes) || any(!is.finite(known_bytes)) || any(known_bytes < 0)
+  ) {
+    abort_llw(
+      "The allocated preview contains invalid known byte evidence.",
+      type = "validation"
+    )
+  }
+  known_total <- sum(known_bytes)
+  resource_blocked <- is.finite(available_session_bytes) &&
+    known_total > available_session_bytes
+  review <- structure(
+    list(
+      review_schema = "llw-glc-transfer-review",
+      review_version = "1.1.0",
+      projection = projection_review,
+      projection_fingerprint = glc_transfer_value_fingerprint(
+        projection_review
+      ),
+      source = projection_review$source,
+      fixed = list(
+        compatibility_id = projection_review$selected_compatibility_id,
+        unit_id = projection_review$selected_unit_ids[[1L]],
+        file_group_ids = projection_review$refined_file_group_ids,
+        plan_fingerprint = projection_review$parent$plan_fingerprint,
+        metadata_fingerprint = projection_review$parent$metadata_fingerprint,
+        refinement_fingerprint = projection_review$parent$refinement_fingerprint
+      ),
+      selected_source_variables = projection_review$selected_source_variables,
+      automatic_read_inputs = projection_review$read_columns[
+        projection_review$read_columns$automatic %in% TRUE,
+        ,
+        drop = FALSE
+      ],
+      automatic_result_columns = projection_review$output_columns[
+        projection_review$output_columns$automatic %in% TRUE,
+        ,
+        drop = FALSE
+      ],
+      selected_groups = projection_review$selected_groups,
+      files = files,
+      allocation = allocation,
+      allocated_files = allocated,
+      problems_policy = problems,
+      limits = list(
+        total_preview_rows = glc_transfer_preview_row_limit()
+      ),
+      byte_evidence = list(
+        selected_file_count = nrow(files),
+        selected_known_file_count = sum(files$bytes_known %in% TRUE),
+        selected_unknown_file_count = sum(!files$bytes_known %in% TRUE),
+        selected_known_declared_bytes = projection_review$byte_evidence$known_declared_bytes,
+        allocated_file_count = nrow(allocated),
+        allocated_known_file_count = sum(known),
+        allocated_unknown_file_count = sum(!known),
+        allocated_known_declared_bytes = known_total,
+        allocated_declared_bytes_complete = nrow(allocated) > 0L && all(known)
+      ),
+      resource = list(
+        available_session_bytes = available_session_bytes,
+        known_allocated_bytes = known_total,
+        blocked = resource_blocked,
+        size_evidence_incomplete = any(!known)
+      ),
+      assurance = list(
+        explicit_action_required = TRUE,
+        default_problems_policy = "error",
+        package_reopened = FALSE,
+        network_accessed = FALSE,
+        measurement_contents_transferred = FALSE,
+        compatibility_replanned = FALSE,
+        fixed_membership = TRUE,
+        preview_only = TRUE,
+        result_ephemeral = TRUE
+      )
+    ),
+    class = c("llw_glc_transfer_review", "list")
+  )
+  review$fingerprint <- glc_transfer_value_fingerprint(review)
+  validate_glc_transfer_review(review)
+  review
+}
+
+glc_transfer_preview_row_limit <- function() {
+  10000L
+}
+
+validate_glc_transfer_preview_row_budget <- function(value) {
+  limit <- glc_transfer_preview_row_limit()
+  invalid <- !is.numeric(value) ||
+    length(value) != 1L ||
+    is.na(value) ||
+    !is.finite(value) ||
+    value < 1 ||
+    value != floor(value)
+  if (invalid) {
+    abort_llw(
+      "The preview row budget must be one finite positive whole number.",
+      type = "validation",
+      public_message = paste(
+        "Enter a whole-number preview-row budget from 1 through",
+        "10,000."
+      )
+    )
+  }
+  if (value > limit) {
+    abort_llw(
+      paste0(
+        "The preview row budget exceeds the Slice 2C-A limit of ",
+        format(limit, big.mark = ","),
+        " rows."
+      ),
+      type = "validation",
+      public_message = paste(
+        "Enter 10,000 preview rows or fewer. Slice 2C-A permits",
+        "1 through 10,000 whole rows."
+      )
+    )
+  }
+  as.integer(value)
+}
+
+validate_glc_transfer_review <- function(review) {
+  if (!inherits(review, "llw_glc_transfer_review") || !is.list(review)) {
+    abort_llw("The bounded transfer review is invalid.", type = "validation")
+  }
+  required <- c(
+    "review_schema",
+    "review_version",
+    "projection",
+    "projection_fingerprint",
+    "source",
+    "fixed",
+    "selected_source_variables",
+    "automatic_read_inputs",
+    "automatic_result_columns",
+    "selected_groups",
+    "files",
+    "allocation",
+    "allocated_files",
+    "problems_policy",
+    "limits",
+    "byte_evidence",
+    "resource",
+    "assurance",
+    "fingerprint"
+  )
+  if (!all(required %in% names(review))) {
+    abort_llw(
+      "The bounded transfer review is incomplete.",
+      type = "validation"
+    )
+  }
+  if (
+    !identical(review$review_schema, "llw-glc-transfer-review") ||
+      !identical(review$review_version, "1.1.0")
+  ) {
+    abort_llw(
+      "The bounded transfer review schema is not supported.",
+      type = "validation"
+    )
+  }
+  validate_glc_projection_review(review$projection)
+  if (
+    !identical(
+      review$projection_fingerprint,
+      glc_transfer_value_fingerprint(review$projection)
+    ) ||
+      !identical(review$source, review$projection$source)
+  ) {
+    abort_llw(
+      "The bounded transfer review projection provenance changed.",
+      type = "validation"
+    )
+  }
+  expected_fixed <- list(
+    compatibility_id = review$projection$selected_compatibility_id,
+    unit_id = review$projection$selected_unit_ids[[1L]],
+    file_group_ids = review$projection$refined_file_group_ids,
+    plan_fingerprint = review$projection$parent$plan_fingerprint,
+    metadata_fingerprint = review$projection$parent$metadata_fingerprint,
+    refinement_fingerprint = review$projection$parent$refinement_fingerprint
+  )
+  if (
+    !identical(review$fixed, expected_fixed) ||
+      !identical(
+        review$selected_source_variables,
+        review$projection$selected_source_variables
+      ) ||
+      !review$problems_policy %in% c("error", "warn")
+  ) {
+    abort_llw(
+      "The bounded transfer review changed the accepted parent contract.",
+      type = "validation"
+    )
+  }
+  files <- glc_transfer_canonical_files(review$projection$files)
+  if (!identical(review$files, files)) {
+    abort_llw(
+      "The bounded transfer file order is not canonical.",
+      type = "validation"
+    )
+  }
+  row_budget <- validate_glc_transfer_preview_row_budget(
+    review$allocation$total_budget
+  )
+  if (
+    !is.list(review$limits) ||
+      !identical(
+        as.integer(review$limits$total_preview_rows),
+        glc_transfer_preview_row_limit()
+      )
+  ) {
+    abort_llw(
+      "The bounded transfer row limit is inconsistent.",
+      type = "validation"
+    )
+  }
+  allocation <- review$allocation
+  expected_allocation <- new_glc_preview_allocation(
+    total_budget = row_budget,
+    file_ids = as.character(files$declared_path)
+  )
+  expected_allocated_files <- files[
+    match(expected_allocation$preview_files, files$declared_path),
+    ,
+    drop = FALSE
+  ]
+  if (
+    !inherits(allocation, "llw_glc_preview_allocation") ||
+      !identical(allocation, expected_allocation) ||
+      !identical(review$allocated_files, expected_allocated_files) ||
+      !identical(
+        allocation$preview_files,
+        as.character(review$allocated_files$declared_path)
+      ) ||
+      !identical(
+        allocation$available_file_count,
+        nrow(review$files)
+      ) ||
+      !identical(
+        allocation$preview_file_count,
+        nrow(review$allocated_files)
+      )
+  ) {
+    abort_llw(
+      "The bounded transfer allocation is inconsistent.",
+      type = "validation"
+    )
+  }
+  known <- review$allocated_files$bytes_known %in% TRUE
+  known_bytes <- as.numeric(review$allocated_files$declared_bytes[known])
+  known_total <- sum(known_bytes)
+  expected_blocked <- is.finite(review$resource$available_session_bytes) &&
+    known_total > review$resource$available_session_bytes
+  if (
+    anyNA(known_bytes) ||
+      any(!is.finite(known_bytes)) ||
+      any(known_bytes < 0) ||
+      !isTRUE(all.equal(
+        as.numeric(review$resource$known_allocated_bytes),
+        known_total
+      )) ||
+      !identical(review$resource$blocked, expected_blocked) ||
+      !identical(
+        review$resource$size_evidence_incomplete,
+        any(!known)
+      )
+  ) {
+    abort_llw(
+      "The bounded transfer resource evidence is inconsistent.",
+      type = "validation"
+    )
+  }
+  if (
+    !is.list(review$assurance) ||
+      !isTRUE(review$assurance$explicit_action_required) ||
+      !identical(review$assurance$default_problems_policy, "error") ||
+      !identical(review$assurance$package_reopened, FALSE) ||
+      !identical(review$assurance$network_accessed, FALSE) ||
+      !identical(review$assurance$measurement_contents_transferred, FALSE) ||
+      !identical(review$assurance$compatibility_replanned, FALSE) ||
+      !isTRUE(review$assurance$fixed_membership) ||
+      !isTRUE(review$assurance$preview_only) ||
+      !isTRUE(review$assurance$result_ephemeral)
+  ) {
+    abort_llw(
+      "The bounded transfer review assurance is invalid.",
+      type = "validation"
+    )
+  }
+  fingerprint_value <- review
+  fingerprint_value$fingerprint <- NULL
+  if (
+    !is.character(review$fingerprint) ||
+      length(review$fingerprint) != 1L ||
+      is.na(review$fingerprint) ||
+      !identical(
+        review$fingerprint,
+        glc_transfer_value_fingerprint(fingerprint_value)
+      )
+  ) {
+    abort_llw(
+      "The bounded transfer review fingerprint is invalid.",
+      type = "validation"
+    )
+  }
+  assert_serializable_value(review, "GLC bounded transfer review")
+  invisible(review)
+}
+
+new_glc_transfer_task_payload <- function(
+  source,
+  transfer_review,
+  progress_path = NULL
+) {
+  source <- validate_glc_source_spec(source)
+  validate_glc_transfer_review(transfer_review)
+  if (!is.null(progress_path)) {
+    assert_scalar_string(progress_path, "progress_path")
+  }
+  expected_source <- transfer_review$source
+  if (
+    !identical(source$registry_url, expected_source$registry_url) ||
+      !identical(source$repository, expected_source$repository) ||
+      !identical(source$resolved_revision, expected_source$resolved_revision) ||
+      !identical(source$schema_version, expected_source$schema_version) ||
+      !identical(source$glcdp_version, expected_source$glcdp_version)
+  ) {
+    abort_llw(
+      "The preview source no longer matches the accepted exact revision.",
+      type = "validation"
+    )
+  }
+  payload <- list(
+    source = source,
+    transfer_review = transfer_review,
+    progress_path = progress_path
+  )
+  assert_serializable_value(payload, "GLC bounded preview task payload")
+  payload
+}
+
+glc_transfer_resolve_declared_path <- function(path, declared_paths) {
+  normalized <- gsub("\\\\", "/", path)
+  exact <- declared_paths == path
+  suffix <- endsWith(normalized, paste0("/", declared_paths))
+  candidates <- which(exact | suffix)
+  if (length(candidates) == 0L) {
+    basename_matches <- which(basename(declared_paths) == basename(path))
+    if (length(basename_matches) == 1L) {
+      candidates <- basename_matches
+    }
+  }
+  if (length(candidates) != 1L) {
+    abort_llw(
+      "A returned preview file could not be mapped to one declared path.",
+      type = "validation"
+    )
+  }
+  declared_paths[[candidates[[1L]]]]
+}
+
+glc_transfer_resolved_file_membership <- function(
+  collection,
+  allocated_files
+) {
+  required <- c("dataset_id", "file_group_id", "files")
+  if (
+    !is.data.frame(collection) ||
+      !all(required %in% names(collection)) ||
+      !is.data.frame(allocated_files) ||
+      !all(
+        c("dataset_id", "file_group_id", "declared_path") %in%
+          names(allocated_files)
+      )
+  ) {
+    abort_llw(
+      "glcdp did not return public file evidence for the bounded preview.",
+      type = "validation"
+    )
+  }
+  dataset_ids <- as.character(collection$dataset_id)
+  file_group_ids <- as.character(collection$file_group_id)
+  declared_paths <- as.character(allocated_files$declared_path)
+  if (
+    nrow(collection) == 0L ||
+      anyNA(dataset_ids) ||
+      any(!nzchar(dataset_ids)) ||
+      anyNA(file_group_ids) ||
+      any(!nzchar(file_group_ids))
+  ) {
+    abort_llw(
+      "glcdp returned incomplete membership for the bounded preview.",
+      type = "validation"
+    )
+  }
+  rows <- lapply(seq_len(nrow(collection)), function(index) {
+    paths <- as.character(collection$files[[index]])
+    if (length(paths) == 0L || anyNA(paths) || any(!nzchar(paths))) {
+      abort_llw(
+        "glcdp returned incomplete file evidence for the bounded preview.",
+        type = "validation"
+      )
+    }
+    data.frame(
+      declared_path = vapply(
+        paths,
+        glc_transfer_resolve_declared_path,
+        character(1),
+        declared_paths = declared_paths
+      ),
+      dataset_id = rep(dataset_ids[[index]], length(paths)),
+      file_group_id = rep(file_group_ids[[index]], length(paths)),
+      stringsAsFactors = FALSE
+    )
+  })
+  actual <- do.call(rbind, rows)
+  rownames(actual) <- NULL
+  if (anyDuplicated(actual$declared_path)) {
+    abort_llw(
+      "glcdp returned duplicate file evidence for the bounded preview.",
+      type = "validation"
+    )
+  }
+  expected <- allocated_files[,
+    c(
+      "declared_path",
+      "dataset_id",
+      "file_group_id"
+    ),
+    drop = FALSE
+  ]
+  expected <- as.data.frame(expected, stringsAsFactors = FALSE)
+  expected[] <- lapply(expected, as.character)
+  rownames(expected) <- NULL
+  actual <- actual[match(declared_paths, actual$declared_path), , drop = FALSE]
+  rownames(actual) <- NULL
+  if (anyNA(actual$declared_path) || !identical(actual, expected)) {
+    abort_llw(
+      paste(
+        "The returned preview file-to-dataset and file-group membership",
+        "differs from the canonical allocation."
+      ),
+      type = "validation"
+    )
+  }
+  actual
+}
+
+glc_transfer_resolved_file_ids <- function(collection, declared_paths) {
+  if (!is.data.frame(collection) || !"files" %in% names(collection)) {
+    abort_llw(
+      "glcdp did not return public file evidence for the bounded preview.",
+      type = "validation"
+    )
+  }
+  resolved <- unlist(collection$files, use.names = FALSE)
+  resolved <- as.character(resolved)
+  if (length(resolved) == 0L || anyNA(resolved) || any(!nzchar(resolved))) {
+    abort_llw(
+      "glcdp returned incomplete file evidence for the bounded preview.",
+      type = "validation"
+    )
+  }
+  unique(vapply(
+    resolved,
+    glc_transfer_resolve_declared_path,
+    character(1),
+    declared_paths = declared_paths
+  ))
+}
+
+glc_transfer_actual_input_membership <- function(
+  collection,
+  allocated_files,
+  execution_mode = c("runtime", "fixture")
+) {
+  execution_mode <- match.arg(execution_mode)
+  reviewed <- glc_transfer_resolved_file_membership(
+    collection,
+    allocated_files
+  )
+  if (
+    identical(execution_mode, "fixture") &&
+      !"runtime_input_ids" %in% names(collection)
+  ) {
+    abort_llw(
+      paste(
+        "The deterministic preview fixture did not report its actual",
+        "runtime input identifiers."
+      ),
+      type = "validation"
+    )
+  }
+  rows <- lapply(seq_len(nrow(collection)), function(index) {
+    paths <- as.character(collection$files[[index]])
+    declared_paths <- vapply(
+      paths,
+      glc_transfer_resolve_declared_path,
+      character(1),
+      declared_paths = as.character(allocated_files$declared_path)
+    )
+    input_ids <- if (identical(execution_mode, "fixture")) {
+      as.character(collection$runtime_input_ids[[index]])
+    } else {
+      declared_paths
+    }
+    if (
+      length(input_ids) != length(declared_paths) ||
+        anyNA(input_ids) ||
+        any(!nzchar(input_ids))
+    ) {
+      abort_llw(
+        "The bounded preview reported incomplete runtime input evidence.",
+        type = "validation"
+      )
+    }
+    data.frame(
+      declared_path = declared_paths,
+      input_id = input_ids,
+      dataset_id = rep(
+        as.character(collection$dataset_id[[index]]),
+        length(input_ids)
+      ),
+      file_group_id = rep(
+        as.character(collection$file_group_id[[index]]),
+        length(input_ids)
+      ),
+      stringsAsFactors = FALSE
+    )
+  })
+  evidence <- do.call(rbind, rows)
+  evidence <- evidence[
+    match(as.character(allocated_files$declared_path), evidence$declared_path),
+    ,
+    drop = FALSE
+  ]
+  rownames(evidence) <- NULL
+  if (
+    anyNA(evidence$declared_path) ||
+      anyDuplicated(evidence$declared_path) ||
+      anyDuplicated(evidence$input_id) ||
+      !identical(
+        evidence[, c("declared_path", "dataset_id", "file_group_id")],
+        reviewed
+      )
+  ) {
+    abort_llw(
+      "The bounded preview runtime inputs do not match the reviewed allocation.",
+      type = "validation"
+    )
+  }
+  if (
+    identical(execution_mode, "fixture") &&
+      any(evidence$input_id %in% as.character(allocated_files$declared_path))
+  ) {
+    abort_llw(
+      paste(
+        "Fixture runtime identifiers must remain distinct from reviewed",
+        "live-package paths."
+      ),
+      type = "validation"
+    )
+  }
+  evidence[, c("input_id", "dataset_id", "file_group_id"), drop = FALSE]
+}
+
+new_glc_transfer_preview_result <- function(
+  transfer_review,
+  collection,
+  collected,
+  warnings = character(),
+  execution_mode = c("runtime", "fixture")
+) {
+  execution_mode <- match.arg(execution_mode)
+  validate_glc_transfer_review(transfer_review)
+  if (!is.data.frame(collection)) {
+    abort_llw(
+      "glcdp did not return a bounded preview collection.",
+      type = "validation"
+    )
+  }
+  required <- c("dataset_id", "file_group_id", "files", "data")
+  if (!all(required %in% names(collection))) {
+    abort_llw(
+      "The bounded preview collection is missing public provenance.",
+      type = "validation"
+    )
+  }
+  if (!is.data.frame(collected)) {
+    abort_llw(
+      "glcdp did not return a collected preview table.",
+      type = "validation"
+    )
+  }
+  reviewed_file_membership <- glc_transfer_resolved_file_membership(
+    collection,
+    transfer_review$allocated_files
+  )
+  reviewed_file_ids <- reviewed_file_membership$declared_path
+  if (!setequal(reviewed_file_ids, transfer_review$allocation$preview_files)) {
+    abort_llw(
+      "The returned preview files do not match the canonical allocation.",
+      type = "validation"
+    )
+  }
+  actual_input_membership <- glc_transfer_actual_input_membership(
+    collection,
+    transfer_review$allocated_files,
+    execution_mode = execution_mode
+  )
+  actual_input_ids <- as.character(actual_input_membership$input_id)
+  actual_groups <- glc_nonempty_unique(actual_input_membership$file_group_id)
+  allowed_groups <- glc_nonempty_unique(
+    transfer_review$allocated_files$file_group_id
+  )
+  if (
+    length(actual_groups) == 0L ||
+      any(!actual_groups %in% allowed_groups) ||
+      any(
+        !glc_nonempty_unique(collection$dataset_id) %in%
+          glc_nonempty_unique(transfer_review$allocated_files$dataset_id)
+      )
+  ) {
+    abort_llw(
+      "The returned preview membership differs from the canonical allocation.",
+      type = "validation"
+    )
+  }
+  maximum_rows <- transfer_review$allocation$maximum_rows
+  if (is.finite(maximum_rows) && nrow(collected) > maximum_rows) {
+    abort_llw(
+      "The returned preview exceeds its reviewed row bound.",
+      type = "validation"
+    )
+  }
+  expected_output_names <- glc_nonempty_unique(
+    transfer_review$projection$output_columns$name
+  )
+  missing_output_names <- setdiff(expected_output_names, names(collected))
+  if (length(missing_output_names) > 0L) {
+    abort_llw(
+      paste0(
+        "The bounded preview is missing expected result column(s): ",
+        paste(missing_output_names, collapse = ", "),
+        "."
+      ),
+      type = "validation"
+    )
+  }
+  warnings <- unique(as.character(warnings))
+  warnings <- warnings[!is.na(warnings) & nzchar(warnings)]
+  column_types <- data.frame(
+    name = names(collected),
+    class = vapply(
+      collected,
+      function(column) paste(class(column), collapse = "/"),
+      character(1)
+    ),
+    stringsAsFactors = FALSE
+  )
+  result <- structure(
+    list(
+      result_schema = "llw-glc-bounded-preview-result",
+      result_version = "1.1.0",
+      transfer_review_fingerprint = transfer_review$fingerprint,
+      source = transfer_review$source,
+      fixed = transfer_review$fixed,
+      selected_source_variables = transfer_review$selected_source_variables,
+      allocation = transfer_review$allocation,
+      problems_policy = transfer_review$problems_policy,
+      reviewed = list(
+        file_ids = reviewed_file_ids,
+        file_count = length(reviewed_file_ids),
+        file_membership = reviewed_file_membership,
+        selected_package_paths_opened = identical(execution_mode, "runtime")
+      ),
+      actual = list(
+        input_ids = actual_input_ids,
+        input_count = length(actual_input_ids),
+        input_membership = actual_input_membership,
+        file_group_ids = actual_groups,
+        file_group_count = length(actual_groups),
+        dataset_ids = glc_nonempty_unique(collection$dataset_id),
+        dataset_count = length(glc_nonempty_unique(collection$dataset_id)),
+        row_count = nrow(collected),
+        column_count = ncol(collected),
+        column_types = column_types
+      ),
+      warnings = warnings,
+      problems = warnings,
+      execution_mode = execution_mode,
+      disclosure = list(
+        per_file_n_max = transfer_review$allocation$per_file_n_max,
+        maximum_possible_rows = maximum_rows,
+        omitted_file_count = length(transfer_review$allocation$omitted_files),
+        omitted_file_ids = transfer_review$allocation$omitted_files,
+        per_file_limit_applied = is.finite(
+          transfer_review$allocation$per_file_n_max
+        ),
+        network_transfer_may_exceed_parsed_rows = TRUE,
+        unread_files_runtime_validated = FALSE,
+        preview_is_not_dataset = TRUE
+      ),
+      data = collected,
+      assurance = list(
+        package_reopened_at_exact_revision = identical(
+          execution_mode,
+          "runtime"
+        ),
+        measurement_contents_accessed = identical(execution_mode, "runtime"),
+        selected_package_files_opened = identical(execution_mode, "runtime"),
+        network_accessed = identical(execution_mode, "runtime"),
+        no_live_measurement_access = identical(execution_mode, "fixture"),
+        deterministic_fixture = identical(execution_mode, "fixture"),
+        public_api_contract_exercised = TRUE,
+        compatibility_replanned = FALSE,
+        bounded_glc_read = TRUE,
+        bounded_glc_collect = TRUE,
+        standardize = "lightlogr",
+        preview_only = TRUE,
+        ephemeral = TRUE,
+        imported = FALSE,
+        persisted = FALSE,
+        promoted = FALSE
+      )
+    ),
+    class = c("llw_glc_transfer_preview_result", "list")
+  )
+  result$fingerprint <- glc_transfer_value_fingerprint(result)
+  validate_glc_transfer_preview_result(result, transfer_review)
+  result
+}
+
+validate_glc_transfer_preview_result <- function(
+  result,
+  transfer_review = NULL
+) {
+  if (
+    !inherits(result, "llw_glc_transfer_preview_result") ||
+      !is.list(result)
+  ) {
+    abort_llw("The bounded preview result is invalid.", type = "validation")
+  }
+  required <- c(
+    "result_schema",
+    "result_version",
+    "transfer_review_fingerprint",
+    "source",
+    "fixed",
+    "selected_source_variables",
+    "allocation",
+    "problems_policy",
+    "reviewed",
+    "actual",
+    "warnings",
+    "problems",
+    "execution_mode",
+    "disclosure",
+    "data",
+    "assurance",
+    "fingerprint"
+  )
+  if (!all(required %in% names(result))) {
+    abort_llw("The bounded preview result is incomplete.", type = "validation")
+  }
+  if (
+    !identical(result$result_schema, "llw-glc-bounded-preview-result") ||
+      !identical(result$result_version, "1.1.0") ||
+      !is.data.frame(result$data) ||
+      !is.list(result$reviewed) ||
+      !is.data.frame(result$reviewed$file_membership) ||
+      !all(
+        c("declared_path", "dataset_id", "file_group_id") %in%
+          names(result$reviewed$file_membership)
+      ) ||
+      !identical(
+        as.character(result$reviewed$file_ids),
+        as.character(result$reviewed$file_membership$declared_path)
+      ) ||
+      !identical(
+        as.integer(result$reviewed$file_count),
+        nrow(result$reviewed$file_membership)
+      ) ||
+      !is.list(result$actual) ||
+      !is.data.frame(result$actual$input_membership) ||
+      !all(
+        c("input_id", "dataset_id", "file_group_id") %in%
+          names(result$actual$input_membership)
+      ) ||
+      !identical(
+        as.character(result$actual$input_ids),
+        as.character(result$actual$input_membership$input_id)
+      ) ||
+      !identical(
+        as.integer(result$actual$input_count),
+        nrow(result$actual$input_membership)
+      ) ||
+      !identical(
+        result$actual$input_membership[, c("dataset_id", "file_group_id")],
+        result$reviewed$file_membership[, c("dataset_id", "file_group_id")]
+      ) ||
+      !is.data.frame(result$actual$column_types) ||
+      !identical(nrow(result$data), as.integer(result$actual$row_count)) ||
+      !identical(ncol(result$data), as.integer(result$actual$column_count)) ||
+      !identical(
+        names(result$data),
+        as.character(result$actual$column_types$name)
+      )
+  ) {
+    abort_llw(
+      "The bounded preview result content is inconsistent.",
+      type = "validation"
+    )
+  }
+  if (!is.null(transfer_review)) {
+    validate_glc_transfer_review(transfer_review)
+    if (
+      !identical(
+        result$transfer_review_fingerprint,
+        transfer_review$fingerprint
+      ) ||
+        !identical(result$source, transfer_review$source) ||
+        !identical(result$fixed, transfer_review$fixed) ||
+        !identical(
+          result$selected_source_variables,
+          transfer_review$selected_source_variables
+        ) ||
+        !identical(result$allocation, transfer_review$allocation) ||
+        !identical(result$problems_policy, transfer_review$problems_policy) ||
+        !identical(
+          result$reviewed$file_membership,
+          transfer_review$allocated_files[,
+            c(
+              "declared_path",
+              "dataset_id",
+              "file_group_id"
+            ),
+            drop = FALSE
+          ]
+        )
+    ) {
+      abort_llw(
+        "The bounded preview result no longer matches its reviewed contract.",
+        type = "validation"
+      )
+    }
+  }
+  if (
+    !result$execution_mode %in% c("runtime", "fixture") ||
+      !is.list(result$disclosure) ||
+      !identical(
+        result$disclosure$per_file_n_max,
+        result$allocation$per_file_n_max
+      ) ||
+      !identical(
+        result$disclosure$maximum_possible_rows,
+        result$allocation$maximum_rows
+      ) ||
+      !identical(
+        as.integer(result$disclosure$omitted_file_count),
+        length(result$allocation$omitted_files)
+      ) ||
+      !identical(
+        result$disclosure$omitted_file_ids,
+        result$allocation$omitted_files
+      ) ||
+      !identical(
+        result$disclosure$per_file_limit_applied,
+        is.finite(result$allocation$per_file_n_max)
+      ) ||
+      !isTRUE(result$disclosure$network_transfer_may_exceed_parsed_rows) ||
+      !identical(result$disclosure$unread_files_runtime_validated, FALSE) ||
+      !isTRUE(result$disclosure$preview_is_not_dataset) ||
+      !is.list(result$assurance) ||
+      !identical(
+        result$assurance$package_reopened_at_exact_revision,
+        identical(result$execution_mode, "runtime")
+      ) ||
+      !identical(
+        result$assurance$measurement_contents_accessed,
+        identical(result$execution_mode, "runtime")
+      ) ||
+      !identical(
+        result$assurance$selected_package_files_opened,
+        identical(result$execution_mode, "runtime")
+      ) ||
+      !identical(
+        result$assurance$network_accessed,
+        identical(result$execution_mode, "runtime")
+      ) ||
+      !identical(
+        result$assurance$no_live_measurement_access,
+        identical(result$execution_mode, "fixture")
+      ) ||
+      !identical(
+        result$assurance$deterministic_fixture,
+        identical(result$execution_mode, "fixture")
+      ) ||
+      !isTRUE(result$assurance$public_api_contract_exercised) ||
+      !identical(result$assurance$compatibility_replanned, FALSE) ||
+      !isTRUE(result$assurance$bounded_glc_read) ||
+      !isTRUE(result$assurance$bounded_glc_collect) ||
+      !identical(result$assurance$standardize, "lightlogr") ||
+      !isTRUE(result$assurance$preview_only) ||
+      !isTRUE(result$assurance$ephemeral) ||
+      !identical(result$assurance$imported, FALSE) ||
+      !identical(result$assurance$persisted, FALSE) ||
+      !identical(result$assurance$promoted, FALSE)
+  ) {
+    abort_llw(
+      "The bounded preview result assurance is invalid.",
+      type = "validation"
+    )
+  }
+  if (
+    !identical(
+      result$reviewed$selected_package_paths_opened,
+      identical(result$execution_mode, "runtime")
+    ) ||
+      anyDuplicated(as.character(result$reviewed$file_ids)) > 0L ||
+      anyDuplicated(as.character(result$actual$input_ids)) > 0L ||
+      !identical(
+        result$actual$file_group_ids,
+        glc_nonempty_unique(result$actual$input_membership$file_group_id)
+      ) ||
+      !identical(
+        as.integer(result$actual$file_group_count),
+        length(result$actual$file_group_ids)
+      ) ||
+      !identical(
+        result$actual$dataset_ids,
+        glc_nonempty_unique(result$actual$input_membership$dataset_id)
+      ) ||
+      !identical(
+        as.integer(result$actual$dataset_count),
+        length(result$actual$dataset_ids)
+      ) ||
+      (identical(result$execution_mode, "fixture") &&
+        any(
+          as.character(result$actual$input_ids) %in%
+            as.character(result$reviewed$file_ids)
+        ))
+  ) {
+    abort_llw(
+      "The bounded preview execution provenance is contradictory.",
+      type = "validation"
+    )
+  }
+  maximum_rows <- as.numeric(result$disclosure$maximum_possible_rows)
+  if (
+    length(maximum_rows) != 1L ||
+      is.na(maximum_rows) ||
+      maximum_rows < 0 ||
+      (is.finite(maximum_rows) && nrow(result$data) > maximum_rows)
+  ) {
+    abort_llw(
+      "The bounded preview result exceeds its reviewed row limit.",
+      type = "validation"
+    )
+  }
+  fingerprint_value <- result
+  fingerprint_value$fingerprint <- NULL
+  if (
+    !is.character(result$fingerprint) ||
+      length(result$fingerprint) != 1L ||
+      is.na(result$fingerprint) ||
+      !identical(
+        result$fingerprint,
+        glc_transfer_value_fingerprint(fingerprint_value)
+      )
+  ) {
+    abort_llw(
+      "The bounded preview result fingerprint is invalid.",
+      type = "validation"
+    )
+  }
+  assert_serializable_value(result, "GLC bounded preview result")
+  invisible(result)
+}
+
+glcdp_transfer_preview_execute <- function(
+  payload,
+  api = NULL,
+  execution_mode = c("runtime", "fixture")
+) {
+  execution_mode <- match.arg(execution_mode)
+  if (
+    !is.list(payload) ||
+      !all(
+        c(
+          "source",
+          "transfer_review",
+          "progress_path"
+        ) %in%
+          names(payload)
+      )
+  ) {
+    abort_llw(
+      "The bounded preview task payload is invalid.",
+      type = "validation"
+    )
+  }
+  source <- validate_glc_source_spec(payload$source)
+  review <- payload$transfer_review
+  validate_glc_transfer_review(review)
+  validate_glc_transfer_preview_row_budget(review$allocation$total_budget)
+  if (
+    !is.finite(review$allocation$maximum_rows) ||
+      review$allocation$maximum_rows > glc_transfer_preview_row_limit()
+  ) {
+    abort_llw(
+      "The bounded preview allocation exceeds the Slice 2C-A row limit.",
+      type = "validation",
+      public_message = paste(
+        "The preview allocation must remain within the 10,000-row limit.",
+        "Review the row budget before retrying."
+      )
+    )
+  }
+  new_glc_transfer_task_payload(
+    source,
+    review,
+    progress_path = payload$progress_path
+  )
+  if (isTRUE(review$resource$blocked)) {
+    abort_llw(
+      paste(
+        "Known bytes for the bounded preview exceed the available session",
+        "resource budget."
+      ),
+      type = "resource"
+    )
+  }
+  if (identical(execution_mode, "fixture") && is.null(api)) {
+    abort_llw(
+      "A deterministic preview fixture requires an explicitly injected API.",
+      type = "validation"
+    )
+  }
+  api <- glcdp_api(api)
+  progress <- new_glc_phase_log(payload$progress_path)
+  warnings <- character()
+  tryCatch(
+    withCallingHandlers(
+      {
+        progress$begin(
+          "validate",
+          "Validating the accepted review",
+          paste(
+            "Checking exact revision, fingerprints, fixed membership,",
+            "allocation, and resource evidence before transfer."
+          )
+        )
+        validate_glc_transfer_review(review)
+        progress$complete("The immutable transfer review is valid.")
+
+        progress$begin(
+          "open",
+          if (identical(execution_mode, "fixture")) {
+            "Preparing the deterministic preview fixture"
+          } else {
+            "Reopening the exact revision"
+          },
+          if (identical(execution_mode, "fixture")) {
+            paste(
+              "Using injected local records to exercise the public preview",
+              "contract. No package or measurement file is opened."
+            )
+          } else {
+            "Reopening the accepted package revision in the session cache."
+          }
+        )
+        handle <- glcdp_reopen_source(source, api = api)
+        progress$complete(
+          if (identical(execution_mode, "fixture")) {
+            "The deterministic fixture handle is ready."
+          } else {
+            "The exact accepted revision was reopened."
+          }
+        )
+
+        progress$begin(
+          "read",
+          if (identical(execution_mode, "fixture")) {
+            "Exercising the bounded read contract"
+          } else {
+            "Transferring the bounded preview"
+          },
+          if (identical(execution_mode, "fixture")) {
+            paste(
+              "Applying the reviewed file and row allocation to injected",
+              "local fixture records."
+            )
+          } else {
+            paste(
+              "Reading only the reviewed canonical file subset with the",
+              "per-file parsed-row limit."
+            )
+          }
+        )
+        allocated <- review$allocated_files
+        collection <- api$glc_read(
+          x = handle,
+          dataset_id = unique(as.character(allocated$dataset_id)),
+          file_group = unique(as.character(allocated$file_group_id)),
+          files = as.character(allocated$declared_path),
+          variables = review$selected_source_variables,
+          terms = NULL,
+          primary_only = FALSE,
+          n_max = review$allocation$per_file_n_max,
+          problems = review$problems_policy,
+          progress = FALSE
+        )
+        progress$complete(
+          if (identical(execution_mode, "fixture")) {
+            "The injected fixture subset was parsed."
+          } else {
+            "The bounded file subset was parsed."
+          }
+        )
+
+        progress$begin(
+          "collect",
+          if (identical(execution_mode, "fixture")) {
+            "Validating the fixture collection contract"
+          } else {
+            "Validating the bounded collection"
+          },
+          if (identical(execution_mode, "fixture")) {
+            paste(
+              "Applying the public LightLogR standardization contract to",
+              "the injected fixture subset."
+            )
+          } else {
+            paste(
+              "Collecting only the preview subset with LightLogR",
+              "standardization. Unread files are not runtime-validated."
+            )
+          }
+        )
+        collected <- api$glc_collect(
+          collection,
+          standardize = "lightlogr"
+        )
+        progress$complete("The bounded preview subset was collected.")
+
+        progress$begin(
+          "serialize",
+          "Preparing the ephemeral result",
+          paste(
+            "Removing live transport state and returning bounded preview",
+            "data with public provenance and limitations."
+          )
+        )
+        result <- new_glc_transfer_preview_result(
+          review,
+          collection,
+          collected,
+          warnings = warnings,
+          execution_mode = execution_mode
+        )
+        assert_glc_worker_result_safe(result, source$cache_dir)
+        progress$complete("The serializable bounded preview is ready.")
+        result
+      },
+      warning = function(cnd) {
+        warnings <<- c(warnings, conditionMessage(cnd))
+        invokeRestart("muffleWarning")
+      }
+    ),
+    error = function(cnd) {
+      progress$fail(
+        "This phase did not complete. Review the task error and retry."
+      )
+      if (inherits(cnd, "llw_error")) {
+        stop(cnd)
+      }
+      stop(map_glcdp_condition(cnd))
+    }
+  )
+}
+
+glcdp_transfer_preview_task_worker <- function(payload, spec) {
+  glcdp_transfer_preview_execute(payload)
 }
 
 glc_collection_refinement_required_tables <- function() {
