@@ -3122,21 +3122,31 @@ new_glc_transfer_review <- function(
   ]
   known <- allocated$bytes_known %in% TRUE
   known_bytes <- as.numeric(allocated$declared_bytes[known])
+  selected_known <- files$bytes_known %in% TRUE
+  selected_known_bytes <- as.numeric(files$declared_bytes[selected_known])
   if (
-    anyNA(known_bytes) || any(!is.finite(known_bytes)) || any(known_bytes < 0)
+    anyNA(known_bytes) ||
+      any(!is.finite(known_bytes)) ||
+      any(known_bytes < 0) ||
+      anyNA(selected_known_bytes) ||
+      any(!is.finite(selected_known_bytes)) ||
+      any(selected_known_bytes < 0)
   ) {
     abort_llw(
-      "The allocated preview contains invalid known byte evidence.",
+      "The selected transfer contains invalid known byte evidence.",
       type = "validation"
     )
   }
   known_total <- sum(known_bytes)
+  selected_known_total <- sum(selected_known_bytes)
   resource_blocked <- is.finite(available_session_bytes) &&
     known_total > available_session_bytes
+  full_import_blocked <- is.finite(available_session_bytes) &&
+    selected_known_total > available_session_bytes
   review <- structure(
     list(
       review_schema = "llw-glc-transfer-review",
-      review_version = "1.1.0",
+      review_version = "1.2.0",
       projection = projection_review,
       projection_fingerprint = glc_transfer_value_fingerprint(
         projection_review
@@ -3184,7 +3194,10 @@ new_glc_transfer_review <- function(
         available_session_bytes = available_session_bytes,
         known_allocated_bytes = known_total,
         blocked = resource_blocked,
-        size_evidence_incomplete = any(!known)
+        size_evidence_incomplete = any(!known),
+        known_selected_bytes = selected_known_total,
+        full_import_blocked = full_import_blocked,
+        full_import_size_evidence_incomplete = any(!selected_known)
       ),
       assurance = list(
         explicit_action_required = TRUE,
@@ -3194,7 +3207,8 @@ new_glc_transfer_review <- function(
         measurement_contents_transferred = FALSE,
         compatibility_replanned = FALSE,
         fixed_membership = TRUE,
-        preview_only = TRUE,
+        bounded_preview_available = TRUE,
+        full_import_available = TRUE,
         result_ephemeral = TRUE
       )
     ),
@@ -3230,14 +3244,14 @@ validate_glc_transfer_preview_row_budget <- function(value) {
   if (value > limit) {
     abort_llw(
       paste0(
-        "The preview row budget exceeds the Slice 2C-A limit of ",
+        "The preview row budget exceeds the product limit of ",
         format(limit, big.mark = ","),
         " rows."
       ),
       type = "validation",
       public_message = paste(
-        "Enter 10,000 preview rows or fewer. Slice 2C-A permits",
-        "1 through 10,000 whole rows."
+        "Enter a whole-number preview-row budget from 1 through",
+        "10,000."
       )
     )
   }
@@ -3277,7 +3291,7 @@ validate_glc_transfer_review <- function(review) {
   }
   if (
     !identical(review$review_schema, "llw-glc-transfer-review") ||
-      !identical(review$review_version, "1.1.0")
+      !identical(review$review_version, "1.2.0")
   ) {
     abort_llw(
       "The bounded transfer review schema is not supported.",
@@ -3377,10 +3391,21 @@ validate_glc_transfer_review <- function(review) {
   known_total <- sum(known_bytes)
   expected_blocked <- is.finite(review$resource$available_session_bytes) &&
     known_total > review$resource$available_session_bytes
+  selected_known <- review$files$bytes_known %in% TRUE
+  selected_known_bytes <- as.numeric(
+    review$files$declared_bytes[selected_known]
+  )
+  selected_known_total <- sum(selected_known_bytes)
+  expected_full_import_blocked <-
+    is.finite(review$resource$available_session_bytes) &&
+    selected_known_total > review$resource$available_session_bytes
   if (
     anyNA(known_bytes) ||
       any(!is.finite(known_bytes)) ||
       any(known_bytes < 0) ||
+      anyNA(selected_known_bytes) ||
+      any(!is.finite(selected_known_bytes)) ||
+      any(selected_known_bytes < 0) ||
       !isTRUE(all.equal(
         as.numeric(review$resource$known_allocated_bytes),
         known_total
@@ -3389,6 +3414,18 @@ validate_glc_transfer_review <- function(review) {
       !identical(
         review$resource$size_evidence_incomplete,
         any(!known)
+      ) ||
+      !isTRUE(all.equal(
+        as.numeric(review$resource$known_selected_bytes),
+        selected_known_total
+      )) ||
+      !identical(
+        review$resource$full_import_blocked,
+        expected_full_import_blocked
+      ) ||
+      !identical(
+        review$resource$full_import_size_evidence_incomplete,
+        any(!selected_known)
       )
   ) {
     abort_llw(
@@ -3405,7 +3442,8 @@ validate_glc_transfer_review <- function(review) {
       !identical(review$assurance$measurement_contents_transferred, FALSE) ||
       !identical(review$assurance$compatibility_replanned, FALSE) ||
       !isTRUE(review$assurance$fixed_membership) ||
-      !isTRUE(review$assurance$preview_only) ||
+      !isTRUE(review$assurance$bounded_preview_available) ||
+      !isTRUE(review$assurance$full_import_available) ||
       !isTRUE(review$assurance$result_ephemeral)
   ) {
     abort_llw(
@@ -4135,7 +4173,7 @@ glcdp_transfer_preview_execute <- function(
       review$allocation$maximum_rows > glc_transfer_preview_row_limit()
   ) {
     abort_llw(
-      "The bounded preview allocation exceeds the Slice 2C-A row limit.",
+      "The bounded preview allocation exceeds the product row limit.",
       type = "validation",
       public_message = paste(
         "The preview allocation must remain within the 10,000-row limit.",
@@ -4308,6 +4346,604 @@ glcdp_transfer_preview_execute <- function(
 
 glcdp_transfer_preview_task_worker <- function(payload, spec) {
   glcdp_transfer_preview_execute(payload)
+}
+
+new_glc_full_import_task_payload <- function(
+  source,
+  transfer_review,
+  progress_path = NULL
+) {
+  source <- validate_glc_source_spec(source)
+  validate_glc_transfer_review(transfer_review)
+  if (!is.null(progress_path)) {
+    assert_scalar_string(progress_path, "progress_path")
+  }
+  expected_source <- transfer_review$source
+  if (
+    !identical(source$registry_url, expected_source$registry_url) ||
+      !identical(source$repository, expected_source$repository) ||
+      !identical(source$resolved_revision, expected_source$resolved_revision) ||
+      !identical(source$schema_version, expected_source$schema_version) ||
+      !identical(source$glcdp_version, expected_source$glcdp_version)
+  ) {
+    abort_llw(
+      "The full import source no longer matches the accepted exact revision.",
+      type = "validation"
+    )
+  }
+  payload <- list(
+    operation = "full_import",
+    source = source,
+    transfer_review = transfer_review,
+    progress_path = progress_path
+  )
+  assert_serializable_value(payload, "GLC full import task payload")
+  payload
+}
+
+validate_glc_full_import_task_payload <- function(payload) {
+  required <- c(
+    "operation",
+    "source",
+    "transfer_review",
+    "progress_path"
+  )
+  if (
+    !is.list(payload) ||
+      !setequal(names(payload), required) ||
+      !identical(payload$operation, "full_import")
+  ) {
+    abort_llw(
+      paste(
+        "The full import task accepts only immutable source, review, and",
+        "progress inputs. Preview results cannot be supplied."
+      ),
+      type = "validation"
+    )
+  }
+  new_glc_full_import_task_payload(
+    payload$source,
+    payload$transfer_review,
+    payload$progress_path
+  )
+  invisible(payload)
+}
+
+glc_full_import_factor_evidence <- function(data) {
+  if (!is.data.frame(data)) {
+    abort_llw("The full import table is invalid.", type = "validation")
+  }
+  factor_names <- names(data)[vapply(data, is.factor, logical(1))]
+  if (length(factor_names) == 0L) {
+    return(data.frame(
+      name = character(),
+      level_count = integer(),
+      levels = I(list()),
+      stringsAsFactors = FALSE
+    ))
+  }
+  data.frame(
+    name = factor_names,
+    level_count = as.integer(vapply(
+      data[factor_names],
+      function(column) length(levels(column)),
+      integer(1)
+    )),
+    levels = I(lapply(data[factor_names], levels)),
+    stringsAsFactors = FALSE
+  )
+}
+
+new_glc_full_import_result <- function(
+  transfer_review,
+  collection,
+  collected,
+  warnings = character(),
+  elapsed_seconds = 0,
+  execution_mode = c("runtime", "fixture")
+) {
+  execution_mode <- match.arg(execution_mode)
+  validate_glc_transfer_review(transfer_review)
+  if (
+    !is.data.frame(collection) ||
+      !all(
+        c("dataset_id", "file_group_id", "files", "data") %in%
+          names(collection)
+      )
+  ) {
+    abort_llw(
+      "glcdp did not return complete public provenance for the full import.",
+      type = "validation"
+    )
+  }
+  if (!is.data.frame(collected)) {
+    abort_llw(
+      "glcdp did not return a complete collected import table.",
+      type = "validation"
+    )
+  }
+  if (
+    !is.numeric(elapsed_seconds) ||
+      length(elapsed_seconds) != 1L ||
+      is.na(elapsed_seconds) ||
+      !is.finite(elapsed_seconds) ||
+      elapsed_seconds < 0
+  ) {
+    abort_llw("The full import elapsed time is invalid.", type = "validation")
+  }
+  reviewed_file_membership <- glc_transfer_resolved_file_membership(
+    collection,
+    transfer_review$files
+  )
+  actual_input_membership <- glc_transfer_actual_input_membership(
+    collection,
+    transfer_review$files,
+    execution_mode = execution_mode
+  )
+  expected_groups <- glc_nonempty_unique(
+    transfer_review$files$file_group_id
+  )
+  actual_groups <- glc_nonempty_unique(
+    actual_input_membership$file_group_id
+  )
+  expected_datasets <- glc_nonempty_unique(transfer_review$files$dataset_id)
+  actual_datasets <- glc_nonempty_unique(actual_input_membership$dataset_id)
+  if (
+    !identical(
+      as.character(reviewed_file_membership$declared_path),
+      as.character(transfer_review$files$declared_path)
+    ) ||
+      !setequal(actual_groups, expected_groups) ||
+      !setequal(actual_datasets, expected_datasets)
+  ) {
+    abort_llw(
+      "The full import runtime membership differs from the reviewed unit.",
+      type = "validation"
+    )
+  }
+  expected_output_names <- glc_nonempty_unique(
+    transfer_review$projection$output_columns$name
+  )
+  missing_output_names <- setdiff(expected_output_names, names(collected))
+  if (length(missing_output_names) > 0L) {
+    abort_llw(
+      paste0(
+        "The full import is missing expected result column(s): ",
+        paste(missing_output_names, collapse = ", "),
+        "."
+      ),
+      type = "validation"
+    )
+  }
+  warnings <- unique(as.character(warnings))
+  warnings <- warnings[!is.na(warnings) & nzchar(warnings)]
+  column_types <- data.frame(
+    name = names(collected),
+    class = vapply(
+      collected,
+      function(column) paste(class(column), collapse = "/"),
+      character(1)
+    ),
+    stringsAsFactors = FALSE
+  )
+  result <- structure(
+    list(
+      result_schema = "llw-glc-full-import-handoff",
+      result_version = "1.0.0",
+      transfer_review_fingerprint = transfer_review$fingerprint,
+      projection_fingerprint = transfer_review$projection_fingerprint,
+      source = transfer_review$source,
+      fixed = transfer_review$fixed,
+      selected_source_variables = transfer_review$selected_source_variables,
+      read_columns = transfer_review$projection$read_columns,
+      output_columns = transfer_review$projection$output_columns,
+      problems_policy = transfer_review$problems_policy,
+      reviewed = list(
+        file_ids = as.character(reviewed_file_membership$declared_path),
+        file_count = nrow(reviewed_file_membership),
+        file_membership = reviewed_file_membership,
+        selected_package_paths_opened = identical(execution_mode, "runtime")
+      ),
+      actual = list(
+        input_ids = as.character(actual_input_membership$input_id),
+        input_count = nrow(actual_input_membership),
+        input_membership = actual_input_membership,
+        file_group_ids = actual_groups,
+        file_group_count = length(actual_groups),
+        dataset_ids = actual_datasets,
+        dataset_count = length(actual_datasets),
+        row_count = nrow(collected),
+        column_count = ncol(collected),
+        column_types = column_types,
+        factor_evidence = glc_full_import_factor_evidence(collected)
+      ),
+      warnings = warnings,
+      problems = warnings,
+      execution_mode = execution_mode,
+      runtime = list(
+        n_max = Inf,
+        terms_applied = FALSE,
+        primary_only = FALSE,
+        progress = FALSE,
+        standardize = "lightlogr",
+        elapsed_seconds = as.numeric(elapsed_seconds)
+      ),
+      resource = list(
+        available_session_bytes = transfer_review$resource$available_session_bytes,
+        known_declared_bytes = transfer_review$resource$known_selected_bytes,
+        unknown_file_count = transfer_review$byte_evidence$selected_unknown_file_count,
+        known_bytes_within_budget = !isTRUE(
+          transfer_review$resource$full_import_blocked
+        ),
+        size_evidence_incomplete = transfer_review$resource$full_import_size_evidence_incomplete
+      ),
+      data = collected,
+      assurance = list(
+        fresh_full_read = TRUE,
+        preview_result_used = FALSE,
+        full_selected_membership_requested = TRUE,
+        package_reopened_at_exact_revision = identical(
+          execution_mode,
+          "runtime"
+        ),
+        measurement_contents_accessed = identical(execution_mode, "runtime"),
+        selected_package_files_opened = identical(execution_mode, "runtime"),
+        network_accessed = identical(execution_mode, "runtime"),
+        no_live_measurement_access = identical(execution_mode, "fixture"),
+        deterministic_fixture = identical(execution_mode, "fixture"),
+        public_api_contract_exercised = TRUE,
+        compatibility_replanned = FALSE,
+        full_glc_read = TRUE,
+        full_glc_collect = TRUE,
+        complete_collected_handoff = TRUE,
+        ephemeral = TRUE,
+        persisted = FALSE,
+        promoted = FALSE,
+        integrated = FALSE,
+        downloaded = FALSE
+      )
+    ),
+    class = c("llw_glc_full_import_result", "list")
+  )
+  result$fingerprint <- glc_transfer_value_fingerprint(result)
+  validate_glc_full_import_result(result, transfer_review)
+  result
+}
+
+validate_glc_full_import_result <- function(
+  result,
+  transfer_review = NULL
+) {
+  if (!inherits(result, "llw_glc_full_import_result") || !is.list(result)) {
+    abort_llw("The full import handoff is invalid.", type = "validation")
+  }
+  required <- c(
+    "result_schema",
+    "result_version",
+    "transfer_review_fingerprint",
+    "projection_fingerprint",
+    "source",
+    "fixed",
+    "selected_source_variables",
+    "read_columns",
+    "output_columns",
+    "problems_policy",
+    "reviewed",
+    "actual",
+    "warnings",
+    "problems",
+    "execution_mode",
+    "runtime",
+    "resource",
+    "data",
+    "assurance",
+    "fingerprint"
+  )
+  if (!all(required %in% names(result))) {
+    abort_llw("The full import handoff is incomplete.", type = "validation")
+  }
+  if (
+    !identical(result$result_schema, "llw-glc-full-import-handoff") ||
+      !identical(result$result_version, "1.0.0") ||
+      !result$execution_mode %in% c("runtime", "fixture") ||
+      !is.data.frame(result$data) ||
+      !is.data.frame(result$reviewed$file_membership) ||
+      !is.data.frame(result$actual$input_membership) ||
+      !is.data.frame(result$actual$column_types) ||
+      !is.data.frame(result$actual$factor_evidence) ||
+      !identical(nrow(result$data), as.integer(result$actual$row_count)) ||
+      !identical(ncol(result$data), as.integer(result$actual$column_count)) ||
+      !identical(
+        names(result$data),
+        as.character(result$actual$column_types$name)
+      ) ||
+      !identical(
+        result$actual$input_membership[, c("dataset_id", "file_group_id")],
+        result$reviewed$file_membership[, c("dataset_id", "file_group_id")]
+      )
+  ) {
+    abort_llw(
+      "The full import handoff content is inconsistent.",
+      type = "validation"
+    )
+  }
+  if (!is.null(transfer_review)) {
+    validate_glc_transfer_review(transfer_review)
+    expected_membership <- transfer_review$files[,
+      c("declared_path", "dataset_id", "file_group_id"),
+      drop = FALSE
+    ]
+    if (
+      !identical(
+        result$transfer_review_fingerprint,
+        transfer_review$fingerprint
+      ) ||
+        !identical(
+          result$projection_fingerprint,
+          transfer_review$projection_fingerprint
+        ) ||
+        !identical(result$source, transfer_review$source) ||
+        !identical(result$fixed, transfer_review$fixed) ||
+        !identical(
+          result$selected_source_variables,
+          transfer_review$selected_source_variables
+        ) ||
+        !identical(
+          result$read_columns,
+          transfer_review$projection$read_columns
+        ) ||
+        !identical(
+          result$output_columns,
+          transfer_review$projection$output_columns
+        ) ||
+        !identical(result$problems_policy, transfer_review$problems_policy) ||
+        !identical(result$reviewed$file_membership, expected_membership)
+    ) {
+      abort_llw(
+        "The full import handoff no longer matches its reviewed contract.",
+        type = "validation"
+      )
+    }
+  }
+  if (
+    !is.list(result$runtime) ||
+      !identical(result$runtime$n_max, Inf) ||
+      !identical(result$runtime$terms_applied, FALSE) ||
+      !identical(result$runtime$primary_only, FALSE) ||
+      !identical(result$runtime$progress, FALSE) ||
+      !identical(result$runtime$standardize, "lightlogr") ||
+      !is.numeric(result$runtime$elapsed_seconds) ||
+      length(result$runtime$elapsed_seconds) != 1L ||
+      is.na(result$runtime$elapsed_seconds) ||
+      !is.finite(result$runtime$elapsed_seconds) ||
+      result$runtime$elapsed_seconds < 0 ||
+      !is.list(result$resource) ||
+      !isTRUE(result$resource$known_bytes_within_budget) ||
+      !is.list(result$assurance) ||
+      !isTRUE(result$assurance$fresh_full_read) ||
+      !identical(result$assurance$preview_result_used, FALSE) ||
+      !isTRUE(result$assurance$full_selected_membership_requested) ||
+      !isTRUE(result$assurance$public_api_contract_exercised) ||
+      !identical(result$assurance$compatibility_replanned, FALSE) ||
+      !isTRUE(result$assurance$full_glc_read) ||
+      !isTRUE(result$assurance$full_glc_collect) ||
+      !isTRUE(result$assurance$complete_collected_handoff) ||
+      !isTRUE(result$assurance$ephemeral) ||
+      !identical(result$assurance$persisted, FALSE) ||
+      !identical(result$assurance$promoted, FALSE) ||
+      !identical(result$assurance$integrated, FALSE) ||
+      !identical(result$assurance$downloaded, FALSE)
+  ) {
+    abort_llw(
+      "The full import handoff assurance is invalid.",
+      type = "validation"
+    )
+  }
+  runtime_mode <- identical(result$execution_mode, "runtime")
+  if (
+    !identical(result$reviewed$selected_package_paths_opened, runtime_mode) ||
+      !identical(
+        result$assurance$package_reopened_at_exact_revision,
+        runtime_mode
+      ) ||
+      !identical(
+        result$assurance$measurement_contents_accessed,
+        runtime_mode
+      ) ||
+      !identical(
+        result$assurance$selected_package_files_opened,
+        runtime_mode
+      ) ||
+      !identical(result$assurance$network_accessed, runtime_mode) ||
+      !identical(result$assurance$no_live_measurement_access, !runtime_mode) ||
+      !identical(result$assurance$deterministic_fixture, !runtime_mode) ||
+      (identical(result$execution_mode, "fixture") &&
+        any(
+          as.character(result$actual$input_ids) %in%
+            as.character(result$reviewed$file_ids)
+        ))
+  ) {
+    abort_llw(
+      "The full import execution provenance is contradictory.",
+      type = "validation"
+    )
+  }
+  fingerprint_value <- result
+  fingerprint_value$fingerprint <- NULL
+  if (
+    !is.character(result$fingerprint) ||
+      length(result$fingerprint) != 1L ||
+      is.na(result$fingerprint) ||
+      !identical(
+        result$fingerprint,
+        glc_transfer_value_fingerprint(fingerprint_value)
+      )
+  ) {
+    abort_llw(
+      "The full import handoff fingerprint is invalid.",
+      type = "validation"
+    )
+  }
+  assert_serializable_value(result, "GLC full import handoff")
+  invisible(result)
+}
+
+glcdp_full_import_execute <- function(
+  payload,
+  api = NULL,
+  execution_mode = c("runtime", "fixture")
+) {
+  execution_mode <- match.arg(execution_mode)
+  validate_glc_full_import_task_payload(payload)
+  source <- validate_glc_source_spec(payload$source)
+  review <- payload$transfer_review
+  validate_glc_transfer_review(review)
+  if (isTRUE(review$resource$full_import_blocked)) {
+    abort_llw(
+      paste(
+        "Known bytes for the full selected file set exceed the available",
+        "session resource budget."
+      ),
+      type = "resource",
+      public_message = paste(
+        "Apply is blocked because the known selected bytes exceed the",
+        "active session resource limit. Narrow the selection before retrying."
+      )
+    )
+  }
+  if (identical(execution_mode, "fixture") && is.null(api)) {
+    abort_llw(
+      "A deterministic full import fixture requires an injected public API.",
+      type = "validation"
+    )
+  }
+  api <- glcdp_api(api)
+  progress <- new_glc_phase_log(payload$progress_path)
+  warnings <- character()
+  started <- proc.time()[["elapsed"]]
+  tryCatch(
+    withCallingHandlers(
+      {
+        progress$begin(
+          "validate",
+          "Validating the full import contract",
+          paste(
+            "Checking exact revision, parent fingerprints, fixed membership,",
+            "variables, and full-set resource evidence before Apply."
+          )
+        )
+        validate_glc_transfer_review(review)
+        if (isTRUE(review$resource$full_import_blocked)) {
+          abort_llw(
+            "The full selected file set exceeds the session resource limit.",
+            type = "resource"
+          )
+        }
+        progress$complete("The immutable full import contract is valid.")
+
+        progress$begin(
+          "open",
+          if (identical(execution_mode, "fixture")) {
+            "Preparing the deterministic full import fixture"
+          } else {
+            "Reopening the exact revision"
+          },
+          if (identical(execution_mode, "fixture")) {
+            paste(
+              "Using injected local records to exercise a fresh full read.",
+              "No selected package or measurement file is opened."
+            )
+          } else {
+            "Reopening the accepted package revision in the session cache."
+          }
+        )
+        handle <- glcdp_reopen_source(source, api = api)
+        progress$complete(
+          if (identical(execution_mode, "fixture")) {
+            "The deterministic full import fixture is ready."
+          } else {
+            "The exact accepted revision was reopened."
+          }
+        )
+
+        progress$begin(
+          "read",
+          if (identical(execution_mode, "fixture")) {
+            "Exercising the fresh full read contract"
+          } else {
+            "Transferring all selected files"
+          },
+          paste(
+            "Reading the complete fixed file set with no parsed-row limit.",
+            "Bounded preview rows are not used as input."
+          )
+        )
+        files <- review$files
+        collection <- api$glc_read(
+          x = handle,
+          dataset_id = unique(as.character(files$dataset_id)),
+          file_group = unique(as.character(files$file_group_id)),
+          files = as.character(files$declared_path),
+          variables = review$selected_source_variables,
+          terms = NULL,
+          primary_only = FALSE,
+          n_max = Inf,
+          problems = review$problems_policy,
+          progress = FALSE
+        )
+        progress$complete("The complete fixed file set was parsed.")
+
+        progress$begin(
+          "collect",
+          "Collecting the complete import handoff",
+          paste(
+            "Applying the public LightLogR standardization contract to the",
+            "fresh full collection."
+          )
+        )
+        collected <- api$glc_collect(collection, standardize = "lightlogr")
+        progress$complete("The complete selected collection was standardized.")
+
+        progress$begin(
+          "serialize",
+          "Preparing the ephemeral full handoff",
+          paste(
+            "Removing live transport state and returning the complete",
+            "collected table with exact public provenance."
+          )
+        )
+        elapsed <- max(0, proc.time()[["elapsed"]] - started)
+        result <- new_glc_full_import_result(
+          review,
+          collection,
+          collected,
+          warnings = warnings,
+          elapsed_seconds = elapsed,
+          execution_mode = execution_mode
+        )
+        assert_glc_worker_result_safe(result, source$cache_dir)
+        progress$complete("The serializable full import handoff is ready.")
+        result
+      },
+      warning = function(cnd) {
+        warnings <<- c(warnings, conditionMessage(cnd))
+        invokeRestart("muffleWarning")
+      }
+    ),
+    error = function(cnd) {
+      progress$fail(
+        "This phase did not complete. Review the task error and retry."
+      )
+      if (inherits(cnd, "llw_error")) {
+        stop(cnd)
+      }
+      stop(map_glcdp_condition(cnd))
+    }
+  )
+}
+
+glcdp_full_import_task_worker <- function(payload, spec) {
+  glcdp_full_import_execute(payload)
 }
 
 glc_collection_refinement_required_tables <- function() {

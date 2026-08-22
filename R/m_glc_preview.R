@@ -10,7 +10,7 @@ glc_source_selection_key <- function(selection) {
   paste(selection$repository, tolower(selection$resolved_revision), sep = "@")
 }
 
-glc_format_bytes <- function(bytes, unknown = "Unknown") {
+glc_format_bytes <- function(bytes, unknown = "---") {
   if (length(bytes) != 1L || is.na(bytes) || !is.finite(bytes) || bytes < 0) {
     return(unknown)
   }
@@ -35,11 +35,123 @@ glc_compact_display_value <- function(value) {
   } else if (is.list(value)) {
     value <- unlist(value, recursive = TRUE, use.names = FALSE)
   }
-  if (length(value) == 0L || all(is.na(value))) return("Unknown")
+  if (length(value) == 0L || all(is.na(value))) return("---")
   value <- as.character(value[!is.na(value)])
   value <- value[nzchar(value)]
-  if (length(value) == 0L) return("Unknown")
+  if (length(value) == 0L) return("---")
+  value[tolower(trimws(value)) == "unknown"] <- "---"
   paste(unique(value), collapse = ", ")
+}
+
+glc_transfer_display_row_limit <- function() 6L
+
+glc_format_phase_elapsed <- function(seconds) {
+  seconds <- suppressWarnings(as.numeric(seconds))
+  if (length(seconds) != 1L || !is.finite(seconds) || seconds < 0) {
+    return(NULL)
+  }
+  if (seconds < 60) {
+    return(paste0(format(round(seconds, 2), nsmall = 2), " s"))
+  }
+  minutes <- floor(seconds / 60)
+  remaining <- round(seconds - minutes * 60)
+  paste0(minutes, " min ", remaining, " s")
+}
+
+glc_full_import_progress_for_display <- function(
+  progress,
+  review,
+  progress_path,
+  now = Sys.time()
+) {
+  if (
+    is.null(progress) ||
+      !is.data.frame(progress) ||
+      nrow(progress) == 0L ||
+      !all(c("phase", "status", "detail") %in% names(progress)) ||
+      is.null(review) ||
+      !inherits(review, "llw_glc_transfer_review")
+  ) {
+    return(progress)
+  }
+  running_read <- progress$phase == "read" & progress$status == "running"
+  if (!any(running_read)) return(progress)
+  modified <- tryCatch(
+    file.info(progress_path)$mtime[[1L]],
+    error = function(cnd) as.POSIXct(NA)
+  )
+  elapsed <- if (length(modified) == 1L && !is.na(modified)) {
+    as.numeric(difftime(now, modified, units = "secs"))
+  } else {
+    NA_real_
+  }
+  elapsed_label <- glc_format_phase_elapsed(elapsed)
+  attr(progress, "llw_elapsed_label") <- elapsed_label
+  progress$detail[running_read] <- paste(
+    "Processing",
+    glc_pluralized_count(nrow(review$files), "selected file"),
+    "as one validated batch.",
+    paste(
+      "The public read interface reports this batch at completion rather",
+      "than exposing a reliable per-file count while it runs."
+    )
+  )
+  progress
+}
+
+glc_full_import_elapsed_ui <- function(elapsed_label) {
+  if (
+    is.null(elapsed_label) ||
+      length(elapsed_label) != 1L ||
+      is.na(elapsed_label) ||
+      !nzchar(elapsed_label)
+  ) {
+    return(NULL)
+  }
+  tags$div(
+    class = "llw-glc-import-elapsed",
+    role = "timer",
+    `aria-label` = paste("Elapsed transfer time", elapsed_label),
+    tags$span(
+      class = "llw-glc-import-elapsed__label",
+      "Elapsed transfer time"
+    ),
+    tags$strong(
+      class = "llw-glc-import-elapsed__value",
+      elapsed_label
+    )
+  )
+}
+
+glc_task_timing_ui <- function(progress) {
+  if (
+    is.null(progress) ||
+      !is.data.frame(progress) ||
+      nrow(progress) == 0L ||
+      !all(c("label", "status", "elapsed_seconds") %in% names(progress))
+  ) {
+    return(NULL)
+  }
+  complete <- progress[
+    progress$status == "complete" & is.finite(progress$elapsed_seconds),
+    ,
+    drop = FALSE
+  ]
+  if (nrow(complete) == 0L) return(NULL)
+  tags$details(
+    class = "llw-glc-card-disclosure mt-3",
+    tags$summary("Process timing"),
+    tags$ul(
+      class = "mt-2 mb-0",
+      lapply(seq_len(nrow(complete)), function(index) {
+        tags$li(
+          tags$strong(complete$label[[index]]),
+          ": ",
+          glc_format_phase_elapsed(complete$elapsed_seconds[[index]])
+        )
+      })
+    )
+  )
 }
 
 glc_wizard_steps <- function() {
@@ -60,7 +172,7 @@ glc_wizard_steps <- function() {
       "Selection",
       "Filtering",
       "Variables",
-      "Review"
+      "Import"
     ),
     icon = c(
       "cloud-arrow-down",
@@ -358,7 +470,10 @@ glc_task_progress_ui <- function(
             class = "badge text-bg-light",
             switch(
               row$status,
-              complete = "Complete",
+              complete = {
+                elapsed <- glc_format_phase_elapsed(row$elapsed_seconds[[1L]])
+                if (is.null(elapsed)) "Complete" else paste("Complete", elapsed)
+              },
               running = "Running",
               error = "Failed",
               cancelled = "Cancelled",
@@ -1146,22 +1261,25 @@ glc_transfer_review_ui <- function(review) {
   } else {
     paste0(bytes$allocated_unknown_file_count, " unknown")
   }
-  status <- if (isTRUE(review$resource$blocked)) "error" else "idle"
-  heading <- if (isTRUE(review$resource$blocked)) {
-    "Transfer blocked by the session resource limit"
+  preview_blocked <- isTRUE(review$resource$blocked)
+  apply_blocked <- isTRUE(review$resource$full_import_blocked)
+  status <- if (preview_blocked && apply_blocked) "error" else "idle"
+  heading <- if (preview_blocked && apply_blocked) {
+    "Measurement access is blocked by the session resource limit"
   } else {
     "No measurement transfer has started"
   }
-  message <- if (isTRUE(review$resource$blocked)) {
+  message <- if (preview_blocked && apply_blocked) {
     paste(
-      "The known size of the canonical preview subset exceeds the active",
-      "session resource budget. Reduce the reviewed preview before transfer."
+      "The known sizes of both the bounded preview subset and complete",
+      "selected file set exceed the active session resource budget.",
+      "Narrow the reviewed selection before measurement access."
     )
   } else {
     paste(
       "This review fixes the exact revision, unit, file membership, output",
-      "projection, and bounded row allocation. Only the explicit Transfer",
-      "bounded preview action may reopen the package and access measurements."
+      "projection, and bounded preview allocation. Only the explicit Preview",
+      "or Apply actions below may reopen the package and access measurements."
     )
   }
   tagList(
@@ -1243,18 +1361,51 @@ glc_transfer_review_ui <- function(review) {
         )
       )
     ),
-    if (isTRUE(review$resource$size_evidence_incomplete)) {
+    if (
+      isTRUE(review$resource$size_evidence_incomplete) ||
+        isTRUE(review$resource$full_import_size_evidence_incomplete)
+    ) {
       tags$div(
         class = "mt-3",
         llw_status_callout(
           "warning",
           paste(
-            "At least one allocated file has no package-listed size.",
-            "The exact transfer size remains uncertain. Continuing requires",
-            "the explicit transfer action, and runtime resource errors remain",
-            "recoverable. The 10,000-row ceiling does not cap network bytes."
+            "At least one selected file has no package-listed size, so exact",
+            "transfer bytes remain uncertain. Preview opens only its canonical",
+            "subset. Apply may transfer every selected file. Continuing",
+            "requires the corresponding explicit action, and runtime resource",
+            "errors remain recoverable. The 10,000-row preview ceiling does",
+            "not cap network bytes and does not apply to the full import."
           ),
-          heading = "Preview transfer size is incomplete",
+          heading = "Transfer size evidence is incomplete",
+          compact = TRUE
+        )
+      )
+    },
+    if (preview_blocked || apply_blocked) {
+      tags$div(
+        class = "mt-3",
+        llw_status_callout(
+          "error",
+          paste(
+            if (preview_blocked) {
+              paste(
+                "The bounded preview subset exceeds the active known-byte",
+                "resource budget."
+              )
+            } else {
+              "The bounded preview remains within its known-byte resource budget."
+            },
+            if (apply_blocked) {
+              paste(
+                "The complete selected file set exceeds the active known-byte",
+                "resource budget, so Apply is disabled."
+              )
+            } else {
+              "The complete selected set remains within its known-byte budget."
+            }
+          ),
+          heading = "Resource gate for measurement access",
           compact = TRUE
         )
       )
@@ -1315,6 +1466,13 @@ glc_transfer_review_ui <- function(review) {
           ),
           tags$dt(class = "col-sm-4", "Allocated listed size"),
           tags$dd(class = "col-sm-8", allocated_size),
+          tags$dt(class = "col-sm-4", "Complete selected files"),
+          tags$dd(
+            class = "col-sm-8",
+            paste(review$files$declared_path, collapse = ", ")
+          ),
+          tags$dt(class = "col-sm-4", "Complete listed size"),
+          tags$dd(class = "col-sm-8", selected_size),
           tags$dt(class = "col-sm-4", "Problems policy"),
           tags$dd(
             class = "col-sm-8",
@@ -1330,24 +1488,528 @@ glc_transfer_review_ui <- function(review) {
   )
 }
 
-glc_transfer_preview_table <- function(data) {
+glc_transfer_review_size_labels <- function(review) {
+  validate_glc_transfer_review(review)
+  bytes <- review$byte_evidence
+  selected_known <- as.integer(bytes$selected_known_file_count)
+  selected_unknown <- as.integer(bytes$selected_unknown_file_count)
+  selected_size <- if (selected_known > 0L) {
+    paste0(
+      glc_format_bytes(bytes$selected_known_declared_bytes),
+      " known; ",
+      selected_unknown,
+      " unknown"
+    )
+  } else {
+    paste0(selected_unknown, " unknown")
+  }
+  allocated_size <- if (bytes$allocated_known_file_count > 0L) {
+    paste0(
+      glc_format_bytes(bytes$allocated_known_declared_bytes),
+      " known; ",
+      bytes$allocated_unknown_file_count,
+      " unknown"
+    )
+  } else {
+    paste0(bytes$allocated_unknown_file_count, " unknown")
+  }
+  list(
+    selected_unknown = selected_unknown,
+    selected_size = selected_size,
+    allocated_size = allocated_size
+  )
+}
+
+glc_import_review_ui <- function(review) {
+  validate_glc_transfer_review(review)
+  sizes <- glc_transfer_review_size_labels(review)
+  apply_blocked <- isTRUE(review$resource$full_import_blocked)
+  file_group_count <- length(review$fixed$file_group_ids)
+  dataset_count <- length(glc_nonempty_unique(
+    review$selected_groups$dataset_id
+  ))
+  file_count <- nrow(review$files)
+  known_size_count <- file_count - sizes$selected_unknown
+  tagList(
+    tags$div(
+      class = "llw-glc-import-summary",
+      tags$p(
+        class = "mb-1",
+        tags$strong(
+          if (apply_blocked) "Import is blocked" else "Ready to import"
+        ),
+        ": ",
+        paste(
+          glc_pluralized_count(file_count, "selected file"),
+          "from",
+          glc_pluralized_count(dataset_count, "dataset"),
+          "in",
+          glc_pluralized_count(file_group_count, "file group"),
+          "will be read only after you choose Apply."
+        )
+      ),
+      if (known_size_count > 0L) {
+        tags$p(
+          class = "small llw-secondary mb-0",
+          paste("Package-listed size:", sizes$selected_size)
+        )
+      } else {
+        tags$p(
+          class = "small llw-secondary mb-0",
+          paste(
+            "Transfer time depends on the actual size of all selected files;",
+            "the package does not list their size."
+          )
+        )
+      }
+    ),
+    if (apply_blocked) {
+      llw_status_callout(
+        "error",
+        paste(
+          "The known sizes of the complete selected file set exceed the",
+          "active session resource budget. Narrow the selection before",
+          "importing."
+        ),
+        heading = "Full import is blocked by the session resource limit",
+        compact = TRUE
+      )
+    },
+    tags$details(
+      class = "llw-glc-card-disclosure llw-glc-import-details",
+      tags$summary("Import columns and exact selection"),
+      tags$div(
+        class = "llw-glc-import-details__body",
+        tags$h4("Selected output variables"),
+        glc_full_variable_list_tag(
+          review$selected_source_variables,
+          summary_items = 12L
+        ),
+        tags$h4("Automatic read inputs"),
+        glc_transfer_column_list(
+          review$automatic_read_inputs,
+          "No additional identity, time, or key columns are required."
+        ),
+        tags$h4("Automatic result columns"),
+        glc_transfer_column_list(
+          review$automatic_result_columns,
+          "No automatic result columns are required."
+        ),
+        tags$dl(
+          class = "row mb-0",
+          tags$dt(class = "col-sm-4", "Exact source"),
+          tags$dd(
+            class = "col-sm-8",
+            paste0(
+              review$source$repository,
+              "@",
+              review$source$resolved_revision
+            )
+          ),
+          tags$dt(class = "col-sm-4", "Compatibility ID"),
+          tags$dd(class = "col-sm-8", review$fixed$compatibility_id),
+          tags$dt(class = "col-sm-4", "Final unit ID"),
+          tags$dd(class = "col-sm-8", review$fixed$unit_id),
+          tags$dt(class = "col-sm-4", "Complete selected files"),
+          tags$dd(
+            class = "col-sm-8",
+            paste(review$files$declared_path, collapse = ", ")
+          ),
+          tags$dt(class = "col-sm-4", "Complete listed size"),
+          tags$dd(class = "col-sm-8", sizes$selected_size)
+        )
+      )
+    )
+  )
+}
+
+glc_preview_review_ui <- function(review) {
+  validate_glc_transfer_review(review)
+  allocation <- review$allocation
+  sizes <- glc_transfer_review_size_labels(review)
+  preview_blocked <- isTRUE(review$resource$blocked)
+  tags$div(
+    class = "llw-glc-preview-review",
+    tags$div(
+      class = "llw-glc-metrics llw-glc-transfer-metrics",
+      layout_column_wrap(
+        width = 1 / 4,
+        heights_equal = "row",
+        fillable = FALSE,
+        glc_metric_with_help(
+          "list-ol",
+          "Preview-row budget",
+          format(allocation$total_budget, big.mark = ","),
+          "Across the subset",
+          "Total maximum parsed rows allocated across preview files."
+        ),
+        glc_metric_with_help(
+          "files",
+          "Preview-file subset",
+          paste0(
+            allocation$preview_file_count,
+            " of ",
+            allocation$available_file_count
+          ),
+          paste0(length(allocation$omitted_files), " omitted"),
+          paste(
+            "The canonical subset is ordered by dataset, stable file group,",
+            "file position, and package path."
+          )
+        ),
+        glc_metric_with_help(
+          "sort-numeric-down",
+          "Rows per file",
+          format(allocation$per_file_n_max, big.mark = ","),
+          "Parsed-row limit",
+          "The public glc_read n_max value applied to each preview file."
+        ),
+        glc_metric_with_help(
+          "table",
+          "Maximum rows",
+          format(allocation$maximum_rows, big.mark = ","),
+          paste("Problems:", review$problems_policy),
+          "The maximum possible returned rows for this preview."
+        )
+      )
+    ),
+    if (isTRUE(review$resource$size_evidence_incomplete)) {
+      llw_status_callout(
+        "warning",
+        paste(
+          "At least one preview file has no package-listed size, so exact",
+          "transfer bytes remain uncertain. The row ceiling limits parsed",
+          "rows, but does not cap network bytes for monolithic files or",
+          "Git-LFS objects."
+        ),
+        heading = "Preview transfer size is uncertain",
+        compact = TRUE
+      )
+    },
+    if (preview_blocked) {
+      llw_status_callout(
+        "error",
+        paste(
+          "The preview subset exceeds the active known-byte resource budget,",
+          "so Preview is disabled."
+        ),
+        heading = "Resource gate for preview",
+        compact = TRUE
+      )
+    },
+    tags$details(
+      class = "llw-glc-card-disclosure",
+      tags$summary("Canonical preview allocation and provenance"),
+      tags$dl(
+        class = "row mt-2 mb-0",
+        tags$dt(class = "col-sm-4", "Exact source"),
+        tags$dd(
+          class = "col-sm-8",
+          paste0(
+            review$source$repository,
+            "@",
+            review$source$resolved_revision
+          )
+        ),
+        tags$dt(class = "col-sm-4", "Allocated files"),
+        tags$dd(
+          class = "col-sm-8",
+          paste(review$allocation$preview_files, collapse = ", ")
+        ),
+        tags$dt(class = "col-sm-4", "Allocated listed size"),
+        tags$dd(class = "col-sm-8", sizes$allocated_size),
+        tags$dt(class = "col-sm-4", "Problems policy"),
+        tags$dd(
+          class = "col-sm-8",
+          if (identical(review$problems_policy, "error")) {
+            "Error on parsing problems"
+          } else {
+            "Return warnings for parsing problems"
+          }
+        )
+      )
+    )
+  )
+}
+
+glc_transfer_preview_table <- function(
+  data,
+  caption = "Bounded preview sample. This is not a complete dataset."
+) {
   if (!is.data.frame(data)) {
     abort_llw("The bounded preview table is invalid.", type = "validation")
   }
+  assert_scalar_string(caption, "caption")
+  display_data <- utils::head(data, glc_transfer_display_row_limit())
   tags$div(
     class = "table-responsive llw-glc-preview-table",
     tags$table(
       class = "table table-striped table-sm align-middle mb-0",
       tags$caption(
         class = "caption-top",
-        "Bounded preview sample. This is not a complete dataset."
+        caption
       ),
-      tags$thead(tags$tr(lapply(names(data), tags$th, scope = "col"))),
-      tags$tbody(lapply(seq_len(nrow(data)), function(row) {
-        tags$tr(lapply(data[row, , drop = FALSE], function(value) {
+      tags$thead(tags$tr(lapply(names(display_data), tags$th, scope = "col"))),
+      tags$tbody(lapply(seq_len(nrow(display_data)), function(row) {
+        tags$tr(lapply(display_data[row, , drop = FALSE], function(value) {
           tags$td(glc_compact_display_value(value))
         }))
       }))
+    )
+  )
+}
+
+glc_full_import_result_ui <- function(
+  result,
+  retained = FALSE,
+  progress = NULL
+) {
+  if (
+    !inherits(result, "llw_glc_full_import_result") ||
+      !is.list(result)
+  ) {
+    abort_llw("The complete import handoff is invalid.", type = "validation")
+  }
+  assert_flag(retained, "retained")
+  fixture <- identical(result$execution_mode, "fixture")
+  warnings <- glc_nonempty_unique(c(result$warnings, result$problems))
+  factor_rows <- result$actual$factor_evidence
+  tags$div(
+    class = paste(
+      "llw-glc-full-import-result",
+      "llw-glc-result-surface"
+    ),
+    if (retained) {
+      tags$p(
+        class = paste(
+          "small llw-secondary d-flex align-items-center gap-2",
+          "llw-glc-last-successful-import"
+        ),
+        icon("clock-rotate-left", `aria-hidden` = "true"),
+        paste(
+          "Last successful full import retained while the replacement",
+          "attempt finishes or is reviewed."
+        )
+      )
+    },
+    llw_status_callout(
+      if (fixture || length(warnings) > 0L) "warning" else "complete",
+      if (fixture) {
+        paste(
+          "Injected local records exercised a fresh full read and collection",
+          "contract. No selected package or measurement file was opened.",
+          "This fixture is not evidence from the selected live package."
+        )
+      } else {
+        paste(
+          "Every selected runtime input was freshly read and collected from",
+          "the exact revision. Preview rows were not used. The complete",
+          "handoff is ephemeral and remains only in this session."
+        )
+      },
+      heading = if (fixture) {
+        "Development fixture full import ready"
+      } else if (length(warnings) > 0L) {
+        "Complete collected import handoff ready with warnings"
+      } else {
+        "Complete collected import handoff ready"
+      },
+      compact = TRUE
+    ),
+    tags$div(
+      class = "llw-glc-metrics llw-glc-transfer-metrics",
+      layout_column_wrap(
+        width = 1 / 4,
+        heights_equal = "row",
+        fillable = FALSE,
+        glc_metric_with_help(
+          "folder-check",
+          "File groups",
+          result$actual$file_group_count,
+          "Complete handoff",
+          "Stable file groups represented by the fresh full read."
+        ),
+        glc_metric_with_help(
+          "database",
+          "Datasets",
+          result$actual$dataset_count,
+          "Complete handoff",
+          "Datasets represented by the complete collected handoff."
+        ),
+        glc_metric_with_help(
+          "files",
+          if (fixture) "Fixture inputs" else "Files read",
+          result$actual$input_count,
+          "Complete selected set",
+          if (fixture) {
+            paste(
+              "Injected fixture inputs exercised the full-read contract.",
+              "No selected live-package path was opened."
+            )
+          } else {
+            "Runtime files actually read for the complete selected import."
+          }
+        ),
+        glc_metric_with_help(
+          "list-ol",
+          "Collected rows",
+          result$actual$row_count,
+          "Full in-session table",
+          "Rows in the complete ephemeral collected handoff."
+        )
+      )
+    ),
+    tags$section(
+      class = paste(
+        "llw-wizard-field-group",
+        "llw-glc-full-import-panel"
+      ),
+      tags$h4("Complete collected handoff, not yet a dataset"),
+      tags$p(
+        class = "llw-secondary",
+        paste(
+          "The in-session handoff contains",
+          glc_pluralized_count(result$actual$row_count, "row"),
+          "and",
+          glc_pluralized_count(result$actual$column_count, "column"),
+          "from a fresh full read. The table below displays at most",
+          glc_transfer_display_row_limit(),
+          "rows",
+          "from that complete handoff. It is not a bounded preview result."
+        )
+      ),
+      glc_transfer_preview_table(
+        result$data,
+        caption = paste(
+          "Display sample from the complete in-session handoff.",
+          "The complete collected table remains in memory and was not",
+          "persisted or promoted."
+        )
+      ),
+      tags$details(
+        class = "llw-glc-card-disclosure mt-3",
+        tags$summary("Column types and factor validation evidence"),
+        tags$ul(
+          class = "mt-2",
+          lapply(seq_len(nrow(result$actual$column_types)), function(index) {
+            tags$li(
+              tags$code(result$actual$column_types$name[[index]]),
+              ": ",
+              result$actual$column_types$class[[index]]
+            )
+          })
+        ),
+        if (nrow(factor_rows) == 0L) {
+          tags$p(
+            class = "mb-0",
+            "No factor columns are present in the collected handoff."
+          )
+        } else {
+          tags$ul(
+            class = "mb-0",
+            lapply(seq_len(nrow(factor_rows)), function(index) {
+              tags$li(
+                tags$code(factor_rows$name[[index]]),
+                ": ",
+                glc_pluralized_count(
+                  factor_rows$level_count[[index]],
+                  "factor level"
+                ),
+                " (",
+                paste(factor_rows$levels[[index]], collapse = ", "),
+                ")"
+              )
+            })
+          )
+        }
+      ),
+      if (length(warnings) > 0L) {
+        tags$details(
+          class = "llw-glc-card-disclosure mt-3",
+          open = "open",
+          tags$summary("Warnings and parsing problems"),
+          tags$ul(class = "mt-2 mb-0", lapply(warnings, tags$li))
+        )
+      },
+      glc_task_timing_ui(progress),
+      tags$details(
+        class = "llw-glc-card-disclosure mt-3",
+        tags$summary("Exact full-import provenance"),
+        tags$dl(
+          class = "row mt-2 mb-0",
+          tags$dt(class = "col-sm-4", "Exact source"),
+          tags$dd(
+            class = "col-sm-8",
+            paste0(
+              result$source$repository,
+              "@",
+              result$source$resolved_revision
+            )
+          ),
+          tags$dt(class = "col-sm-4", "Compatibility ID"),
+          tags$dd(class = "col-sm-8", result$fixed$compatibility_id),
+          tags$dt(class = "col-sm-4", "Final unit ID"),
+          tags$dd(class = "col-sm-8", result$fixed$unit_id),
+          tags$dt(class = "col-sm-4", "Execution mode"),
+          tags$dd(
+            class = "col-sm-8",
+            if (fixture) "Deterministic local fixture" else "Live full import"
+          ),
+          tags$dt(
+            class = "col-sm-4",
+            if (fixture) {
+              "Reviewed live-package paths (not opened)"
+            } else {
+              "Reviewed live-package paths"
+            }
+          ),
+          tags$dd(
+            class = "col-sm-8",
+            paste(result$reviewed$file_ids, collapse = ", ")
+          ),
+          tags$dt(
+            class = "col-sm-4",
+            if (fixture) "Actual fixture inputs" else "Actual runtime inputs"
+          ),
+          tags$dd(
+            class = "col-sm-8",
+            paste(result$actual$input_ids, collapse = ", ")
+          ),
+          tags$dt(class = "col-sm-4", "Read contract"),
+          tags$dd(
+            class = "col-sm-8",
+            paste0(
+              "All selected files; n_max = Inf; problems = ",
+              result$problems_policy,
+              "; no discovery-term filter; standardize = lightlogr"
+            )
+          ),
+          tags$dt(class = "col-sm-4", "Elapsed time"),
+          tags$dd(
+            class = "col-sm-8",
+            paste0(
+              format(round(result$runtime$elapsed_seconds, 2), nsmall = 2),
+              " s"
+            )
+          ),
+          tags$dt(class = "col-sm-4", "Live measurement access"),
+          tags$dd(
+            class = "col-sm-8",
+            if (isTRUE(result$assurance$no_live_measurement_access)) {
+              "None. The reviewed package paths were not opened."
+            } else {
+              "Occurred for the actual runtime inputs shown above."
+            }
+          ),
+          tags$dt(class = "col-sm-4", "Preview rows used"),
+          tags$dd(class = "col-sm-8", "No. Apply performed a fresh full read."),
+          tags$dt(class = "col-sm-4", "Persistence and promotion"),
+          tags$dd(
+            class = "col-sm-8",
+            "None. The complete handoff remains ephemeral in this session."
+          )
+        )
+      )
     )
   )
 }
@@ -2031,7 +2693,7 @@ glc_compatibility_summary_ui <- function(plan, modality = NULL) {
 glc_typed_facet_value <- function(value, unit = NA_character_) {
   if (is.list(value) && length(value) == 1L) value <- value[[1L]]
   text <- if (length(value) == 0L || is.null(value) || all(is.na(value))) {
-    "Unknown"
+    "---"
   } else {
     paste(as.character(value), collapse = ", ")
   }
@@ -3164,8 +3826,90 @@ glcPreviewUI <- function(id, source_ui = NULL) {
       ".llw-glc-transfer-controls {display: grid; grid-template-columns:",
       "repeat(2, minmax(0, 1fr)); gap: .75rem 1rem;}",
       ".llw-glc-transfer-controls .form-group {margin-bottom: 0;}",
-      ".llw-glc-preview-table {max-width: 100%; overflow-x: auto;}",
-      ".llw-glc-preview-table table {min-width: max-content;}",
+      ".llw-glc-scope-card > .card-body {gap: 0 !important;}",
+      ".llw-glc-scope-card .llw-glc-scope-mode-selector .form-group,",
+      ".llw-glc-scope-card .llw-glc-scope-mode-selector .shiny-options-group,",
+      ".llw-glc-scope-card .form-group {margin-bottom: 0;}",
+      ".llw-glc-scope-card > .card-body > .shiny-html-output:not(:empty) {",
+      "margin-top: .65rem;}",
+      ".llw-glc-scope-card > .card-body > .shiny-html-output:first-child {",
+      "margin-top: 0;}",
+      ".llw-glc-scope-feedback-output:not(:empty) {margin-top: 0 !important;}",
+      ".llw-glc-scope-feedback-result {margin-top: .75rem !important;}",
+      ".llw-glc-scope-actions {display: flex; flex-wrap: wrap; gap: .75rem;",
+      "justify-content: flex-end; min-width: 0;}",
+      ".llw-glc-import-step {display: grid; gap: .85rem;}",
+      ".llw-glc-import-step > * {margin-block: 0 !important;}",
+      ".llw-glc-import-stack, .llw-glc-preview-review,",
+      ".llw-glc-preview-disclosure__body, .llw-glc-import-details__body {",
+      "display: grid; gap: 0; min-width: 0; max-width: 100%;}",
+      ".llw-glc-import-stack > *, .llw-glc-preview-review > *,",
+      ".llw-glc-preview-disclosure__body > * {margin-block: 0 !important;",
+      "min-width: 0; max-width: 100%;}",
+      ".llw-glc-full-import-output:not(:empty) {margin-top: 0 !important;}",
+      ".llw-glc-import-stack > *:not(:empty) + *:not(:empty),",
+      ".llw-glc-preview-review > *:not(:empty) + *:not(:empty),",
+      ".llw-glc-preview-disclosure__body > *:not(:empty) + *:not(:empty),",
+      ".llw-glc-import-details__body > *:not(:empty) + *:not(:empty) {",
+      "margin-top: .75rem !important;}",
+      ".llw-glc-import-stack .llw-glc-full-import-result,",
+      ".llw-glc-import-stack .llw-glc-transfer-progress,",
+      ".llw-glc-preview-disclosure__body .llw-glc-transfer-preview-result,",
+      ".llw-glc-preview-disclosure__body .llw-glc-transfer-progress {",
+      "margin-top: 0 !important;}",
+      paste(
+        ".llw-glc-import-stack",
+        ".llw-glc-full-import-result.llw-glc-result-surface"
+      ),
+      "{margin-top: .75rem !important;}",
+      ".llw-glc-import-details__body {padding-top: .75rem;}",
+      ".llw-glc-import-details__body h4 {margin: 0;}",
+      ".llw-glc-import-action-group, .llw-glc-preview-action-group {",
+      "margin: 0 !important;}",
+      ".llw-glc-import-summary {padding: .1rem 0;}",
+      ".llw-glc-preview-disclosure {border: 1px solid var(--bs-border-color);",
+      "border-radius: .65rem; background: var(--bs-body-bg); overflow: clip;}",
+      ".llw-glc-preview-disclosure > summary {cursor: pointer;",
+      "font-size: 1.15rem; font-weight: 700; padding: .85rem 1rem;}",
+      ".llw-glc-preview-disclosure[open] > summary {",
+      "border-bottom: 1px solid var(--bs-border-color);}",
+      ".llw-glc-preview-disclosure__body {padding: 1rem;}",
+      ".llw-glc-import-card {border: 1px solid var(--bs-border-color);",
+      "border-radius: .65rem; background: var(--bs-body-bg); overflow: visible;",
+      "height: auto; min-width: 0; max-width: 100%;}",
+      ".llw-glc-import-card__header {margin: 0; padding: .75rem 1rem;",
+      "border-bottom: 1px solid var(--bs-border-color); font-size: 1rem;}",
+      ".llw-glc-import-card__body {padding: 1rem; overflow: visible;}",
+      ".llw-glc-import-card, .llw-glc-import-card__body,",
+      ".llw-glc-full-import-result, .llw-glc-transfer-preview-result,",
+      ".llw-glc-full-import-result > *,",
+      ".llw-glc-transfer-preview-result > *,",
+      ".llw-glc-full-import-result .llw-wizard-field-group,",
+      ".llw-glc-transfer-preview-result .llw-wizard-field-group {",
+      "min-width: 0; max-width: 100%;}",
+      ".llw-glc-full-import-result {display: grid; gap: .75rem;}",
+      ".llw-glc-full-import-result > * {margin-block: 0 !important;}",
+      ".llw-glc-import-elapsed {display: flex; align-items: baseline;",
+      "justify-content: space-between; gap: 1rem; padding: .65rem .8rem;",
+      "margin-bottom: .75rem; border: 1px solid var(--bs-border-color);",
+      "border-radius: .5rem; background: var(--bs-tertiary-bg);}",
+      ".llw-glc-import-elapsed__label {font-weight: 600;}",
+      ".llw-glc-import-elapsed__value {color: var(--bs-primary);",
+      "font-size: 1.2rem; font-variant-numeric: tabular-nums;",
+      "white-space: nowrap;}",
+      ".llw-glc-full-import-result .llw-wizard-field-group,",
+      ".llw-glc-transfer-preview-result .llw-wizard-field-group {",
+      "height: auto !important;}",
+      ".llw-glc-full-import-panel {display: grid; gap: .75rem;}",
+      ".llw-glc-full-import-panel > * {margin-block: 0 !important;}",
+      ".llw-glc-full-import-panel > h4 {margin: 0 !important;}",
+      ".llw-glc-full-import-result dd,",
+      ".llw-glc-transfer-preview-result dd {overflow-wrap: anywhere;}",
+      ".llw-glc-preview-table {display: block; width: 100%; max-width: 100%;",
+      "min-width: 0; overflow-x: auto; overflow-y: hidden;",
+      "-webkit-overflow-scrolling: touch;}",
+      ".llw-glc-preview-table table {width: max-content; min-width: 100%;",
+      "max-width: none;}",
       "@media (max-width: 56.25rem) {",
       ".llw-glc-wizard .llw-import-stepper {grid-template-columns:",
       "repeat(2, minmax(0, 1fr));}",
@@ -3181,6 +3925,10 @@ glcPreviewUI <- function(id, source_ui = NULL) {
       ".llw-glc-discovery-grid, .llw-glc-facet-grid,",
       ".llw-glc-transfer-controls,",
       ".llw-glc-variable-list {grid-template-columns: minmax(0, 1fr);}",
+      ".llw-glc-scope-actions {align-items: stretch; flex-direction: column;",
+      "width: 100%;}",
+      ".llw-glc-scope-actions > .shiny-html-output,",
+      ".llw-glc-scope-actions .btn {width: 100%;}",
       ".llw-glc-explorer-link {align-items: flex-start; flex-direction: column;}}",
       "@media (max-width: 700px) {",
       ".llw-glc-unit-facts {grid-template-columns: 1fr;}",
@@ -3204,15 +3952,15 @@ glcPreviewUI <- function(id, source_ui = NULL) {
           paste(
             "Choose one live registry source, inspect its validated package",
             "information, collect structurally compatible file groups, then",
-            "narrow them with metadata, choose output variables, and explicitly",
-            "request a bounded typed preview."
+            "narrow them with metadata and choose output variables. An optional",
+            "bounded preview or a fresh full Apply import is always explicit."
           )
         )
       ),
       tags$span(
         class = "llw-import-wizard__engine-note",
         bsicons::bs_icon("shield-check"),
-        " No transfer until explicit preview"
+        " No transfer until Preview or Apply"
       )
     ),
     uiOutput(ns("wizard_stepper")),
@@ -3257,31 +4005,14 @@ glcPreviewUI <- function(id, source_ui = NULL) {
             "Review the selected package",
             "Inspect package information and core metadata",
             paste(
-              "The descriptor and core-metadata transfer size is unavailable.",
-              "Opening this step starts that metadata transfer when needed.",
+              "Opening this step loads the validated package description and",
+              "core metadata when needed.",
               "Measurement files remain unopened."
             )
           ),
           tags$div(
-            class = "mb-3",
-            llw_status_callout(
-              "idle",
-              paste(
-                "The package does not provide a transfer size for its descriptor",
-                "and core metadata. Inspection transfers that metadata only."
-              ),
-              heading = "Metadata transfer size unavailable",
-              compact = TRUE
-            )
-          ),
-          tags$div(
             class = "llw-action-row llw-import-actions",
-            input_task_button(
-              ns("inspect"),
-              span(strong("Inspect package")),
-              icon = icon("magnifying-glass"),
-              class = "btn-primary btn-lg"
-            ),
+            uiOutput(ns("inspect_button"), inline = TRUE),
             uiOutput(ns("cancel_inspection_button"), inline = TRUE),
             uiOutput(ns("inspection_cancellation_drain"), inline = TRUE)
           ),
@@ -3443,17 +4174,13 @@ glcPreviewUI <- function(id, source_ui = NULL) {
             uiOutput(ns("metadata_filters")),
             uiOutput(ns("filter_feedback"))
           ),
-          tags$div(
-            class = "llw-action-row llw-import-actions",
-            uiOutput(ns("refine_button"), inline = TRUE)
-          ),
           uiOutput(ns("refinement_summary")),
           tags$p(
             class = "small llw-secondary mt-3",
             paste(
-              "Measurement access remains closed until the explicit bounded",
-              "preview action in Step 7. Full reading, import, persistence,",
-              "and dataset-library promotion remain closed."
+              "Measurement access remains closed until an explicit preview or",
+              "Apply action in Step 7. Persistence and dataset-library",
+              "promotion remain closed."
             )
           ),
           import_wizard_navigation(
@@ -3488,11 +4215,24 @@ glcPreviewUI <- function(id, source_ui = NULL) {
             card_header("Variable scope", container = h3),
             uiOutput(ns("scope_mode_selector")),
             uiOutput(ns("custom_variable_selector")),
-            uiOutput(ns("scope_feedback"))
+            uiOutput(
+              ns("scope_feedback"),
+              class = "llw-glc-scope-feedback-output"
+            )
           ),
-          tags$div(
-            class = "llw-action-row llw-import-actions",
-            uiOutput(ns("scope_apply_button"), inline = TRUE)
+          import_wizard_navigation(
+            actionButton(
+              ns("back_scope"),
+              "Back to metadata narrowing",
+              icon = icon("arrow-left"),
+              class = "btn-outline-secondary btn-lg"
+            ),
+            tags$div(
+              class = "llw-glc-scope-actions",
+              uiOutput(ns("scope_apply_button"), inline = TRUE),
+              uiOutput(ns("continue_preview_button"), inline = TRUE)
+            ),
+            split = TRUE
           ),
           uiOutput(
             ns("scope_review"),
@@ -3505,83 +4245,113 @@ glcPreviewUI <- function(id, source_ui = NULL) {
               "temporary path, credential, measurement preview, read, or collect",
               "result is retained."
             )
-          ),
-          import_wizard_navigation(
-            actionButton(
-              ns("back_scope"),
-              "Back to metadata narrowing",
-              icon = icon("arrow-left"),
-              class = "btn-outline-secondary btn-lg"
-            ),
-            uiOutput(ns("continue_preview_button"), inline = TRUE),
-            split = TRUE
           )
         )
       ),
       nav_panel(
-        "Review transfer",
+        "Import",
         value = "preview",
         tags$div(
-          class = "llw-wizard-step-content",
+          class = "llw-wizard-step-content llw-glc-import-step",
           import_wizard_step_heading(
             "table",
-            "Review an explicit bounded transfer",
-            "Review and transfer a bounded typed preview",
+            "Import the selected data",
+            "Import the complete selected data",
             paste(
               "The exact revision, finalized unit, file membership, and output",
-              "projection stay fixed. Review the canonical allocation before",
-              "choosing the only action that may access measurement files."
+              "projection stay fixed. Apply starts a fresh read of every",
+              "selected file. Preview remains optional."
             )
           ),
-          card(
-            class = "llw-glc-transfer-card",
-            card_header("Bounded preview contract", container = h3),
+          tags$details(
+            class = "llw-glc-preview-disclosure",
+            tags$summary("Preview"),
             tags$div(
-              class = "llw-glc-transfer-controls",
-              numericInput(
-                ns("transfer_row_budget"),
-                "Total preview-row budget",
-                value = 20L,
-                min = 1L,
-                max = glc_transfer_preview_row_limit(),
-                step = 1L,
-                width = "100%"
+              class = "llw-glc-preview-disclosure__body",
+              tags$p(
+                class = "llw-secondary mb-0",
+                paste(
+                  "Optionally inspect a bounded typed sample before import.",
+                  "Preview rows are never reused by Apply and are not a",
+                  "dataset."
+                )
               ),
-              radioButtons(
-                ns("transfer_problems"),
-                "Parsing problems",
-                choices = c(
-                  "Stop with a recoverable error (recommended)" = "error",
-                  "Return the preview with warnings (advanced)" = "warn"
+              tags$div(
+                class = "llw-glc-transfer-controls",
+                numericInput(
+                  ns("transfer_row_budget"),
+                  "Total preview-row budget",
+                  value = 20L,
+                  min = 1L,
+                  max = glc_transfer_preview_row_limit(),
+                  step = 1L,
+                  width = "100%"
                 ),
-                selected = "error",
-                width = "100%"
-              )
-            ),
-            tags$p(
-              class = "small llw-secondary mb-3",
-              paste(
-                "Choose 1 through 10,000 whole preview rows. This ceiling",
-                "limits parsed rows, but it may not limit network bytes for",
-                "monolithic files or Git-LFS objects."
-              )
-            ),
-            uiOutput(ns("transfer_review"))
+                radioButtons(
+                  ns("transfer_problems"),
+                  "Parsing problems",
+                  choices = c(
+                    "Stop with a recoverable error (recommended)" = "error",
+                    "Return the preview with warnings (advanced)" = "warn"
+                  ),
+                  selected = "error",
+                  width = "100%"
+                )
+              ),
+              tags$p(
+                class = "small llw-secondary mb-0",
+                paste(
+                  "Enter a whole number from 1 through 10,000. This ceiling",
+                  "limits parsed rows, but may not limit network bytes for",
+                  "monolithic files or Git-LFS objects."
+                )
+              ),
+              uiOutput(ns("transfer_review")),
+              tags$div(
+                class = paste(
+                  "llw-action-row llw-import-actions",
+                  "llw-glc-preview-action-group"
+                ),
+                uiOutput(ns("transfer_preview_button"), inline = TRUE),
+                uiOutput(ns("cancel_transfer_button"), inline = TRUE),
+                uiOutput(ns("transfer_cancellation_drain"), inline = TRUE)
+              ),
+              uiOutput(ns("transfer_progress_card")),
+              uiOutput(ns("transfer_preview_result"))
+            )
           ),
-          tags$div(
-            class = "llw-action-row llw-import-actions",
-            uiOutput(ns("transfer_preview_button"), inline = TRUE),
-            uiOutput(ns("cancel_transfer_button"), inline = TRUE),
-            uiOutput(ns("transfer_cancellation_drain"), inline = TRUE)
+          tags$section(
+            class = "llw-glc-import-card",
+            tags$h3(class = "llw-glc-import-card__header", "Import"),
+            tags$div(
+              class = "llw-glc-import-card__body",
+              tags$div(
+                class = "llw-glc-import-stack",
+                uiOutput(ns("import_review")),
+                tags$div(
+                  class = paste(
+                    "llw-action-row llw-import-actions",
+                    "llw-glc-import-action-group"
+                  ),
+                  uiOutput(ns("apply_full_import_button"), inline = TRUE),
+                  uiOutput(ns("cancel_apply_button"), inline = TRUE),
+                  uiOutput(ns("apply_cancellation_drain"), inline = TRUE)
+                ),
+                uiOutput(ns("apply_progress_card")),
+                uiOutput(
+                  ns("full_import_result"),
+                  class = "llw-glc-full-import-output"
+                )
+              )
+            )
           ),
-          uiOutput(ns("transfer_progress_card")),
-          uiOutput(ns("transfer_preview_result")),
           tags$p(
-            class = "small llw-secondary mt-3",
+            class = "small llw-secondary mb-0",
             paste(
-              "Every returned row is a bounded preview sample, never a full",
-              "dataset or committed import. Apply, persistence, promotion, and",
-              "unbounded reading remain closed."
+              "Preview rows remain samples. A successful Apply result is a",
+              "complete collected import handoff held only in this session.",
+              "Neither result is persisted, promoted, downloaded, or added to",
+              "the dataset library."
             )
           ),
           import_wizard_navigation(
@@ -3681,6 +4451,51 @@ glc_transfer_attempt_is_current <- function(
     identical(attempt$review_fingerprint, review_fingerprint)
 }
 
+glc_full_import_attempt_is_current <- function(
+  attempt,
+  apply_revision,
+  source_key,
+  contract_fingerprint
+) {
+  if (!is.list(attempt)) return(FALSE)
+  identical(attempt$apply_revision, as.integer(apply_revision)) &&
+    identical(attempt$source_key, source_key) &&
+    identical(attempt$contract_fingerprint, contract_fingerprint)
+}
+
+glc_full_import_contract_fingerprint <- function(transfer_review) {
+  validate_glc_transfer_review(transfer_review)
+  glc_transfer_value_fingerprint(list(
+    contract_schema = "llw-glc-full-import-contract",
+    contract_version = "1.0.0",
+    projection_fingerprint = transfer_review$projection_fingerprint,
+    source = transfer_review$source,
+    fixed = transfer_review$fixed,
+    selected_source_variables = transfer_review$selected_source_variables,
+    automatic_read_inputs = transfer_review$automatic_read_inputs,
+    automatic_result_columns = transfer_review$automatic_result_columns,
+    selected_groups = transfer_review$selected_groups,
+    files = transfer_review$files,
+    full_read = list(
+      n_max = Inf,
+      problems = "error",
+      progress = FALSE,
+      standardize = "lightlogr"
+    )
+  ))
+}
+
+glc_full_import_contract_review <- function(transfer_review) {
+  validate_glc_transfer_review(transfer_review)
+  new_glc_transfer_review(
+    transfer_review$projection,
+    total_preview_rows = 1L,
+    problems = "error",
+    available_session_bytes =
+      transfer_review$resource$available_session_bytes
+  )
+}
+
 glcPreviewServer <- function(
   id,
   source_selection,
@@ -3690,6 +4505,7 @@ glcPreviewServer <- function(
   inspection_worker = glcdp_inspection_task_worker,
   planning_worker = glcdp_planning_task_worker,
   preview_worker = glcdp_transfer_preview_task_worker,
+  apply_worker = glcdp_full_import_task_worker,
   refine_collection = glcdp_refine_collection,
   task_start_timeout_seconds = 15
 ) {
@@ -3714,12 +4530,13 @@ glcPreviewServer <- function(
     !is.function(inspection_worker) ||
       !is.function(planning_worker) ||
       !is.function(preview_worker) ||
+      !is.function(apply_worker) ||
       !is.function(refine_collection)
   ) {
     abort_llw(
       paste(
-        "GLC inspection, planning, preview, and refinement workers must be",
-        "functions."
+        "GLC inspection, planning, preview, full-import, and refinement",
+        "workers must be functions."
       ),
       type = "validation"
     )
@@ -3783,22 +4600,42 @@ glcPreviewServer <- function(
     transfer_controller_revision <- reactiveVal(0L)
     transfer_progress_path <- reactiveVal(NULL)
     transfer_task <- NULL
+    apply_revision <- reactiveVal(0L)
+    full_import_value <- reactiveVal(NULL)
+    apply_attempted <- reactiveVal(FALSE)
+    pending_apply_attempt <- reactiveVal(NULL)
+    active_apply_attempt <- reactiveVal(NULL)
+    apply_pending_error <- reactiveVal(NULL)
+    apply_terminal_override <- reactiveVal(NULL)
+    apply_controller_reset_required <- reactiveVal(FALSE)
+    apply_controller_revision <- reactiveVal(0L)
+    apply_progress_path <- reactiveVal(NULL)
+    apply_task <- NULL
     wizard_step <- reactiveVal("source")
+    continue_after_planning <- reactiveVal(FALSE)
 
     revision_lookup <- function(context_id) context_revision()
     transfer_revision_lookup <- function(context_id) transfer_revision()
+    apply_revision_lookup <- function(context_id) apply_revision()
 
     clear_transfer_state <- function(
       reset_inputs = FALSE,
-      clear_review = TRUE
+      clear_review = TRUE,
+      clear_apply = TRUE
     ) {
       assert_flag(reset_inputs, "reset_inputs")
       assert_flag(clear_review, "clear_review")
+      assert_flag(clear_apply, "clear_apply")
       needs_reset <-
         !is.null(isolate(pending_transfer_attempt())) ||
         !is.null(isolate(active_transfer_attempt())) ||
         (!is.null(transfer_task) &&
           !identical(isolate(transfer_task$state()), "idle"))
+      apply_needs_reset <-
+        !is.null(isolate(pending_apply_attempt())) ||
+        !is.null(isolate(active_apply_attempt())) ||
+        (!is.null(apply_task) &&
+          !identical(isolate(apply_task$state()), "idle"))
       pending_transfer_attempt(NULL)
       active_transfer_attempt(NULL)
       transfer_pending_error(NULL)
@@ -3813,6 +4650,20 @@ glcPreviewServer <- function(
       transfer_revision(isolate(transfer_revision()) + 1L)
       if (needs_reset && !is.null(transfer_task)) {
         replace_transfer_task()
+      }
+      if (clear_apply) {
+        pending_apply_attempt(NULL)
+        active_apply_attempt(NULL)
+        apply_pending_error(NULL)
+        apply_terminal_override(new_task_status("glc_read"))
+        apply_controller_reset_required(apply_needs_reset)
+        full_import_value(NULL)
+        apply_attempted(FALSE)
+        apply_progress_path(NULL)
+        apply_revision(isolate(apply_revision()) + 1L)
+        if (apply_needs_reset && !is.null(apply_task)) {
+          replace_apply_task()
+        }
       }
       if (reset_inputs) {
         updateNumericInput(
@@ -3930,6 +4781,14 @@ glcPreviewServer <- function(
           plan_value(value)
           selected_compatibility_value(glc_plan_compatibility_default(value))
           reset_metadata_filter_state()
+          continue_requested <- isolate(continue_after_planning())
+          continue_after_planning(FALSE)
+          if (
+            isTRUE(continue_requested) &&
+              nrow(value$compatibility_sets) > 0L
+          ) {
+            select_wizard_step("structure")
+          }
           invisible(NULL)
         }
       )
@@ -4053,6 +4912,84 @@ glcPreviewServer <- function(
       transfer_controller_reset_required(FALSE)
       transfer_task
     }
+    create_apply_task <- function() {
+      task <- new_long_task(
+        worker = apply_worker,
+        task_type = "glc_read",
+        runtime = runtime,
+        revision_lookup = apply_revision_lookup,
+        on_result = function(value, spec) {
+          review <- spec$payload$transfer_review
+          validate_glc_full_import_result(value, review)
+          current_review <- transfer_review_value()
+          if (
+            is.null(current_review) ||
+              !identical(
+                glc_full_import_contract_fingerprint(current_review),
+                glc_full_import_contract_fingerprint(review)
+              )
+          ) {
+            abort_llw(
+              paste(
+                "The full-import result no longer matches the current",
+                "transfer review."
+              ),
+              type = "stale"
+            )
+          }
+          active_apply_attempt(NULL)
+          apply_pending_error(NULL)
+          apply_terminal_override(NULL)
+          apply_controller_reset_required(FALSE)
+          full_import_value(value)
+          invisible(NULL)
+        }
+      )
+      bslib::bind_task_button(
+        task$extended_task,
+        "apply_full_import",
+        session = session
+      )
+      task
+    }
+    apply_task <- create_apply_task()
+    current_apply_task <- function() {
+      apply_controller_revision()
+      apply_task
+    }
+    apply_task_state <- reactive({
+      current_apply_task()$state()
+    })
+    apply_task_status <- reactive({
+      current_apply_task()$status()
+    })
+    apply_display_status <- reactive({
+      pending_error <- apply_pending_error()
+      if (!is.null(pending_error)) {
+        return(new_task_status(
+          "glc_read",
+          state = "error",
+          message = llw_public_message(pending_error),
+          error = pending_error
+        ))
+      }
+      if (!is.null(pending_apply_attempt())) {
+        return(new_task_status(
+          "glc_read",
+          state = "queued",
+          message = "Waiting for the previous full import to stop cleanly."
+        ))
+      }
+      terminal_override <- apply_terminal_override()
+      if (!is.null(terminal_override)) return(terminal_override)
+      apply_task_status()
+    })
+    replace_apply_task <- function() {
+      apply_task <<- create_apply_task()
+      apply_controller_revision(apply_controller_revision() + 1L)
+      apply_controller_reset_required(FALSE)
+      apply_task
+    }
 
     cancellation_drain_for_display <- function(status) {
       active_count <- runtime$active_count()
@@ -4094,6 +5031,30 @@ glcPreviewServer <- function(
         parent_refinement = parent_refinement,
         metadata_filters = current_metadata_filters()
       )
+    }
+
+    prepare_projection_review <- function() {
+      scope_review_value(NULL)
+      scope_review_error(NULL)
+      result <- tryCatch(
+        {
+          variables <- isolate(scope_projection_variables())
+          if (length(variables) == 0L) {
+            abort_llw(
+              "Choose at least one exact source variable for the output.",
+              type = "validation"
+            )
+          }
+          build_projection_review(variables)
+        },
+        error = identity
+      )
+      if (inherits(result, "error")) {
+        scope_review_error(result)
+        return(invisible(FALSE))
+      }
+      scope_review_value(result)
+      invisible(TRUE)
     }
 
     build_transfer_review <- function(
@@ -4312,6 +5273,7 @@ glcPreviewServer <- function(
         planning_pending_error(NULL)
         planning_terminal_override(new_task_status("glc_discovery"))
         planning_controller_reset_required(planning_needs_reset)
+        continue_after_planning(FALSE)
         active_source_key(key)
         active_arrival_mode(arrival_mode)
         context_revision(context_revision() + 1L)
@@ -4382,6 +5344,7 @@ glcPreviewServer <- function(
       planning_pending_error(NULL)
       planning_terminal_override(new_task_status("glc_discovery"))
       planning_controller_reset_required(planning_needs_reset)
+      continue_after_planning(FALSE)
       plan_value(NULL)
       submitted_planning_request(NULL)
       planning_attempted(FALSE)
@@ -4627,6 +5590,7 @@ glcPreviewServer <- function(
       )
       if (inherits(attempted, "error")) {
         pending_planning_attempt(NULL)
+        continue_after_planning(FALSE)
         planning_pending_error(attempted)
       }
       invisible(attempted)
@@ -4642,6 +5606,7 @@ glcPreviewServer <- function(
         ))
         if (inherits(result, "error")) {
           pending_planning_attempt(NULL)
+          continue_after_planning(FALSE)
           planning_controller_reset_required(TRUE)
           planning_pending_error(normalize_task_error(
             result,
@@ -4662,6 +5627,7 @@ glcPreviewServer <- function(
         )
       ) {
         active_planning_attempt(NULL)
+        continue_after_planning(FALSE)
         return(invisible(NULL))
       }
       task <- isolate(current_planning_task())
@@ -4669,6 +5635,9 @@ glcPreviewServer <- function(
       progress <- read_glc_task_progress(attempt$progress_path)
       if (!task_state %in% c("queued", "running", "finalizing")) {
         active_planning_attempt(NULL)
+        if (!identical(task_state, "complete")) {
+          continue_after_planning(FALSE)
+        }
         return(invisible(NULL))
       }
       if (!is.null(progress) && nrow(progress) > 0L) {
@@ -4683,6 +5652,7 @@ glcPreviewServer <- function(
         )
       ) {
         active_planning_attempt(NULL)
+        continue_after_planning(FALSE)
         planning_controller_reset_required(TRUE)
         context_revision(isolate(context_revision()) + 1L)
         replace_planning_task()
@@ -4704,6 +5674,7 @@ glcPreviewServer <- function(
     observeEvent(
       input$plan,
       {
+        continue_after_planning(FALSE)
         start_planning()
       },
       ignoreInit = TRUE
@@ -4717,6 +5688,7 @@ glcPreviewServer <- function(
           !is.null(isolate(active_planning_attempt()))
         pending_planning_attempt(NULL)
         active_planning_attempt(NULL)
+        continue_after_planning(FALSE)
         planning_pending_error(NULL)
         if (had_attempt) {
           # Planning shares the same session runtime slot and therefore uses
@@ -4972,6 +5944,250 @@ glcPreviewServer <- function(
       ignoreInit = TRUE
     )
 
+    submit_pending_apply <- function() {
+      attempt <- isolate(pending_apply_attempt())
+      if (is.null(attempt)) return(invisible(FALSE))
+      review <- isolate(transfer_review_value())
+      contract_fingerprint <- if (is.null(review)) {
+        NULL
+      } else {
+        glc_full_import_contract_fingerprint(review)
+      }
+      if (
+        !glc_full_import_attempt_is_current(
+          attempt,
+          isolate(apply_revision()),
+          glc_source_selection_key(isolate(source_selection())),
+          contract_fingerprint
+        )
+      ) {
+        pending_apply_attempt(NULL)
+        return(invisible(FALSE))
+      }
+
+      if (
+        glc_inspection_attempt_expired(
+          attempt,
+          timeout_seconds = task_start_timeout_seconds
+        )
+      ) {
+        pending_apply_attempt(NULL)
+        apply_controller_reset_required(TRUE)
+        replace_apply_task()
+        apply_pending_error(new_llw_error(
+          message = paste(
+            "The previous full-import controller did not release before the",
+            "new invocation deadline."
+          ),
+          type = "resource",
+          public_message = paste(
+            "The previous full import is still stopping.",
+            "Wait a moment, then retry."
+          )
+        ))
+        return(invisible(FALSE))
+      }
+
+      task <- isolate(current_apply_task())
+      released <- glc_inspection_controller_released(
+        isolate(task$state()),
+        isolate(task$extended_task$status()),
+        runtime$active_count()
+      )
+      if (!released) return(invisible(FALSE))
+
+      if (
+        !identical(isolate(task$state()), "idle") ||
+          isTRUE(isolate(apply_controller_reset_required()))
+      ) {
+        task <- replace_apply_task()
+      }
+      task_id <- task$invoke(
+        attempt$payload,
+        dataset_id = "glc-full-import-context"
+      )
+      if (isFALSE(task_id)) return(invisible(FALSE))
+      apply_progress_path(attempt$progress_path)
+      attempt$invoked_at <- Sys.time()
+      active_apply_attempt(attempt)
+      pending_apply_attempt(NULL)
+      apply_terminal_override(NULL)
+      apply_controller_reset_required(FALSE)
+      invisible(task_id)
+    }
+
+    start_apply <- function() {
+      apply_attempted(TRUE)
+      apply_pending_error(NULL)
+      apply_terminal_override(NULL)
+      apply_progress_path(NULL)
+      attempted <- tryCatch(
+        {
+          review <- isolate(transfer_review_value())
+          if (is.null(review)) {
+            abort_llw(
+              "Review the transfer contract before applying the full import.",
+              type = "validation"
+            )
+          }
+          validate_glc_transfer_review(review)
+          review <- glc_full_import_contract_review(review)
+          if (isTRUE(review$resource$full_import_blocked)) {
+            abort_llw(
+              paste(
+                "Known bytes for the complete selected file set exceed the",
+                "active session resource budget."
+              ),
+              type = "resource",
+              public_message = paste(
+                "Apply is blocked because the known selected bytes exceed",
+                "this session's resource limit. Narrow the selection first."
+              )
+            )
+          }
+          runtime$assert_capacity(review$resource$known_selected_bytes)
+          progress_path <- file.path(
+            runtime$paths$tasks,
+            paste0(new_stable_id("glc_full_import_progress"), ".rds")
+          )
+          inspection <- isolate(inspection_value())
+          if (is.null(inspection)) {
+            abort_llw(
+              "The accepted inspection is no longer available.",
+              type = "stale",
+              public_message = paste(
+                "The accepted package inspection changed.",
+                "Return to inspection before retrying Apply."
+              )
+            )
+          }
+          source <- glc_inspection_source_spec(inspection, cache_dir)
+          pending_apply_attempt(list(
+            payload = new_glc_full_import_task_payload(
+              source,
+              review,
+              progress_path = progress_path
+            ),
+            progress_path = progress_path,
+            apply_revision = isolate(apply_revision()),
+            source_key = glc_source_selection_key(isolate(source_selection())),
+            contract_fingerprint =
+              glc_full_import_contract_fingerprint(review),
+            requested_at = Sys.time()
+          ))
+          submit_pending_apply()
+        },
+        error = identity
+      )
+      if (inherits(attempted, "error")) {
+        pending_apply_attempt(NULL)
+        apply_pending_error(normalize_task_error(attempted, "glc_read"))
+      }
+      invisible(attempted)
+    }
+
+    apply_attempt_poll <- reactiveTimer(100, session)
+    observe({
+      apply_attempt_poll()
+      if (!is.null(pending_apply_attempt())) {
+        result <- isolate(tryCatch(
+          submit_pending_apply(),
+          error = identity
+        ))
+        if (inherits(result, "error")) {
+          pending_apply_attempt(NULL)
+          apply_controller_reset_required(TRUE)
+          apply_pending_error(normalize_task_error(result, "glc_read"))
+        }
+      }
+
+      attempt <- isolate(active_apply_attempt())
+      if (is.null(attempt)) return(invisible(NULL))
+      review <- isolate(transfer_review_value())
+      contract_fingerprint <- if (is.null(review)) {
+        NULL
+      } else {
+        glc_full_import_contract_fingerprint(review)
+      }
+      if (
+        !glc_full_import_attempt_is_current(
+          attempt,
+          isolate(apply_revision()),
+          glc_source_selection_key(isolate(source_selection())),
+          contract_fingerprint
+        )
+      ) {
+        active_apply_attempt(NULL)
+        return(invisible(NULL))
+      }
+      task <- isolate(current_apply_task())
+      task_state <- isolate(task$state())
+      progress <- read_glc_task_progress(attempt$progress_path)
+      if (!task_state %in% c("queued", "running", "finalizing")) {
+        active_apply_attempt(NULL)
+        return(invisible(NULL))
+      }
+      if (!is.null(progress) && nrow(progress) > 0L) {
+        return(invisible(NULL))
+      }
+      startup_attempt <- attempt
+      startup_attempt$requested_at <- attempt$invoked_at
+      if (
+        glc_inspection_attempt_expired(
+          startup_attempt,
+          timeout_seconds = task_start_timeout_seconds
+        )
+      ) {
+        active_apply_attempt(NULL)
+        apply_controller_reset_required(TRUE)
+        apply_revision(isolate(apply_revision()) + 1L)
+        replace_apply_task()
+        apply_pending_error(new_llw_error(
+          message = paste(
+            "The full-import worker did not begin before the invocation",
+            "deadline."
+          ),
+          type = "resource",
+          public_message = paste(
+            "The full import could not start in time.",
+            "Retry when background capacity is available."
+          )
+        ))
+      }
+      invisible(NULL)
+    })
+
+    observeEvent(
+      input$apply_full_import,
+      {
+        start_apply()
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$cancel_apply,
+      {
+        had_attempt <-
+          !is.null(isolate(pending_apply_attempt())) ||
+          !is.null(isolate(active_apply_attempt()))
+        pending_apply_attempt(NULL)
+        active_apply_attempt(NULL)
+        apply_pending_error(NULL)
+        if (had_attempt) {
+          apply_revision(isolate(apply_revision()) + 1L)
+          apply_controller_reset_required(TRUE)
+          replace_apply_task()
+          apply_terminal_override(new_task_status(
+            "glc_read",
+            state = "cancelled",
+            message = "Cancellation was requested."
+          ))
+        }
+      },
+      ignoreInit = TRUE
+    )
+
     selected_compatibility_id <- reactive({
       plan <- plan_value()
       if (is.null(plan) || nrow(plan$compatibility_sets) == 0L) return(NULL)
@@ -5126,46 +6342,61 @@ glcPreviewServer <- function(
       clear_scope_state(reset_inputs = TRUE)
     })
 
+    run_current_refinement <- function() {
+      clear_scope_state()
+      result <- tryCatch(
+        {
+          plan <- plan_value()
+          compatibility_id <- selected_compatibility_id()
+          file_group_ids <- filtered_group_ids()
+          if (is.null(plan) || is.null(compatibility_id)) {
+            abort_llw(
+              "Choose one compatible structure before refinement.",
+              type = "validation"
+            )
+          }
+          if (length(file_group_ids) == 0L) {
+            abort_llw(
+              "The current metadata filters retain no file groups.",
+              type = "validation",
+              public_message = paste(
+                "No file groups match every active metadata filter.",
+                "Adjust the filters before continuing."
+              )
+            )
+          }
+          withProgress(
+            message = "Confirming the filtered groups",
+            detail = "Running glcdp's zero-access refinement.",
+            value = 0.5,
+            refine_collection(plan, compatibility_id, file_group_ids)
+          )
+        },
+        error = identity
+      )
+      if (inherits(result, "error")) {
+        refinement_value(NULL)
+        refinement_error(llw_public_message(result))
+        return(invisible(FALSE))
+      }
+      refinement_error(NULL)
+      refinement_value(result)
+      invisible(TRUE)
+    }
+
+    # Keep the legacy server event for deterministic module fixtures while the
+    # production UI uses the single confirm-and-continue action below.
     observeEvent(
       input$refine,
+      run_current_refinement(),
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$continue_variables,
       {
-        clear_scope_state()
-        result <- tryCatch(
-          {
-            plan <- plan_value()
-            compatibility_id <- selected_compatibility_id()
-            file_group_ids <- filtered_group_ids()
-            if (is.null(plan) || is.null(compatibility_id)) {
-              abort_llw(
-                "Choose one compatible structure before refinement.",
-                type = "validation"
-              )
-            }
-            if (length(file_group_ids) == 0L) {
-              abort_llw(
-                "The current metadata filters retain no file groups.",
-                type = "validation",
-                public_message = paste(
-                  "No file groups match every active metadata filter.",
-                  "Adjust the filters before confirming."
-                )
-              )
-            }
-            withProgress(
-              message = "Confirming filtered groups",
-              detail = "Running glcdp's zero-access refinement.",
-              value = 0.5,
-              refine_collection(plan, compatibility_id, file_group_ids)
-            )
-          },
-          error = identity
-        )
-        if (inherits(result, "error")) {
-          refinement_value(NULL)
-          refinement_error(llw_public_message(result))
-        } else {
-          refinement_error(NULL)
-          refinement_value(result)
+        if (isTRUE(run_current_refinement())) {
+          select_wizard_step("variables")
         }
       },
       ignoreInit = TRUE
@@ -5191,25 +6422,21 @@ glcPreviewServer <- function(
     observeEvent(
       input$scope_apply,
       {
-        scope_review_value(NULL)
-        scope_review_error(NULL)
-        result <- tryCatch(
-          {
-            variables <- isolate(scope_projection_variables())
-            if (length(variables) == 0L) {
-              abort_llw(
-                "Choose at least one exact source variable for the output.",
-                type = "validation"
-              )
-            }
-            build_projection_review(variables)
-          },
-          error = identity
+        withProgress(
+          message = "Reviewing output variables",
+          detail = "Validating the fixed projection without reopening data.",
+          value = 0.5,
+          prepare_projection_review()
         )
-        if (inherits(result, "error")) {
-          scope_review_error(result)
-        } else {
-          scope_review_value(result)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$continue_preview,
+      {
+        if (isTRUE(prepare_projection_review())) {
+          select_wizard_step("preview")
         }
       },
       ignoreInit = TRUE
@@ -5233,7 +6460,11 @@ glcPreviewServer <- function(
       if (identical(key, isolate(transfer_review_key()))) {
         return(invisible(NULL))
       }
-      clear_transfer_state(reset_inputs = FALSE, clear_review = FALSE)
+      clear_transfer_state(
+        reset_inputs = FALSE,
+        clear_review = FALSE,
+        clear_apply = FALSE
+      )
       result <- tryCatch(
         build_transfer_review(total_preview_rows, problems),
         error = identity
@@ -5369,20 +6600,44 @@ glcPreviewServer <- function(
       bindEvent(input$continue_discovery, ignoreInit = TRUE)
     observe(select_wizard_step("inspect")) |>
       bindEvent(input$back_inspect, ignoreInit = TRUE)
-    observe(select_wizard_step("structure")) |>
-      bindEvent(input$continue_structure, ignoreInit = TRUE)
+    observeEvent(
+      input$continue_structure,
+      {
+        plan <- isolate(plan_value())
+        if (
+          !is.null(plan) &&
+            nrow(plan$compatibility_sets) > 0L
+        ) {
+          select_wizard_step("structure")
+          return(invisible(NULL))
+        }
+        request_ready <-
+          !is.null(isolate(inspection_value())) &&
+          (
+            !is.null(isolate(selected_term_value())) ||
+              !is.null(isolate(selected_modality_value()))
+          )
+        busy <-
+          !is.null(isolate(pending_planning_attempt())) ||
+          !is.null(isolate(active_planning_attempt()))
+        if (!request_ready || busy) return(invisible(NULL))
+        continue_after_planning(TRUE)
+        started <- start_planning()
+        if (inherits(started, "error")) {
+          continue_after_planning(FALSE)
+        }
+        invisible(NULL)
+      },
+      ignoreInit = TRUE
+    )
     observe(select_wizard_step("narrow")) |>
       bindEvent(input$continue_narrow, ignoreInit = TRUE)
     observe(select_wizard_step("discovery")) |>
       bindEvent(input$back_discovery, ignoreInit = TRUE)
     observe(select_wizard_step("structure")) |>
       bindEvent(input$back_structure, ignoreInit = TRUE)
-    observe(select_wizard_step("variables")) |>
-      bindEvent(input$continue_variables, ignoreInit = TRUE)
     observe(select_wizard_step("narrow")) |>
       bindEvent(input$back_scope, ignoreInit = TRUE)
-    observe(select_wizard_step("preview")) |>
-      bindEvent(input$continue_preview, ignoreInit = TRUE)
     observe(select_wizard_step("variables")) |>
       bindEvent(input$back_preview, ignoreInit = TRUE)
 
@@ -5413,6 +6668,26 @@ glcPreviewServer <- function(
         )
       }
       button
+    })
+
+    output$inspect_button <- renderUI({
+      inspected <- !is.null(inspection_value())
+      button <- input_task_button(
+        session$ns("inspect"),
+        span(strong("Inspect package")),
+        icon = icon("magnifying-glass"),
+        class = "btn-primary btn-lg"
+      )
+      if (!inspected) return(button)
+      tagAppendAttributes(
+        button,
+        disabled = "disabled",
+        `aria-disabled` = "true",
+        title = paste(
+          "This exact package revision is already inspected.",
+          "Change the source to inspect another revision."
+        )
+      )
     })
 
     output$cancel_inspection_button <- renderUI({
@@ -5753,17 +7028,38 @@ glcPreviewServer <- function(
     })
 
     output$continue_structure_button <- renderUI({
-      ready <- !is.null(plan_value()) &&
+      has_plan <- !is.null(plan_value()) &&
         nrow(plan_value()$compatibility_sets) > 0L
+      request_ready <-
+        !is.null(inspection_value()) &&
+        (
+          !is.null(selected_term_value()) ||
+            !is.null(selected_modality_value())
+        )
+      busy <-
+        !is.null(pending_planning_attempt()) ||
+        !is.null(active_planning_attempt())
+      ready <- has_plan || (request_ready && !busy)
       button <- actionButton(
         session$ns("continue_structure"),
-        "Review compatible structures",
+        if (busy && !has_plan) {
+          "Collecting compatible groups..."
+        } else {
+          "Review compatible structures"
+        },
         icon = icon("arrow-right"),
         class = "btn-primary btn-lg",
-        title = if (ready) {
+        title = if (has_plan) {
           "Review the structures supplied by glcdp"
+        } else if (busy) {
+          "Compatibility planning is in progress"
+        } else if (request_ready) {
+          paste(
+            "Collect compatible groups for this request, then review",
+            "the structures supplied by glcdp"
+          )
         } else {
-          "Collect at least one compatible structure first"
+          "Choose a modality, canonical term, or both first"
         }
       )
       if (!ready) {
@@ -5800,16 +7096,20 @@ glcPreviewServer <- function(
     })
 
     output$continue_variables_button <- renderUI({
-      ready <- !is.null(refinement_value())
+      ready <- !is.null(selected_compatibility_id()) &&
+        length(filtered_group_ids()) > 0L
       button <- actionButton(
         session$ns("continue_variables"),
-        "Continue to variable scope",
+        "Confirm and continue to variable selection",
         icon = icon("arrow-right"),
         class = "btn-primary btn-lg",
         title = if (ready) {
-          "Review the output-variable contract for the refined groups"
+          paste(
+            "Confirm the current metadata filters with glcdp and continue",
+            "to variable selection"
+          )
         } else {
-          "Confirm the filtered groups first"
+          "Retain at least one compatible file group first"
         }
       )
       if (!ready) {
@@ -5943,38 +7243,17 @@ glcPreviewServer <- function(
             )
           },
           if (retained == 0L) {
-            "Adjust the filters before confirming."
+            "Adjust the filters before continuing."
           } else {
-            "Confirm to let glcdp recompute the final unit membership."
+            paste(
+              "Continue to let glcdp recompute the final unit membership",
+              "before variable selection."
+            )
           }
         ),
         heading = "Filter result",
         compact = TRUE
       )
-    })
-
-    output$refine_button <- renderUI({
-      ready <- !is.null(selected_compatibility_id()) &&
-        length(filtered_group_ids()) > 0L
-      button <- actionButton(
-        session$ns("refine"),
-        "Confirm filtered groups",
-        icon = icon("filter"),
-        class = "btn-primary btn-lg",
-        title = if (ready) {
-          "Run glcdp's in-memory zero-access refinement"
-        } else {
-          "Retain at least one compatible file group first"
-        }
-      )
-      if (!ready) {
-        button <- htmltools::tagAppendAttributes(
-          button,
-          disabled = "disabled",
-          "aria-disabled" = "true"
-        )
-      }
-      button
     })
 
     output$refinement_summary <- renderUI({
@@ -6064,24 +7343,32 @@ glcPreviewServer <- function(
       group_count <- length(refined_file_group_ids())
       selected <- scope_projection_variables()
       if (identical(mode, "custom") && length(selected) == 0L) {
-        return(llw_status_callout(
-          "warning",
-          "Choose at least one exact source variable for the output.",
-          heading = "Custom variable selection is empty",
-          compact = TRUE
+        return(tags$div(
+          class = "llw-glc-scope-feedback-result",
+          llw_status_callout(
+            "warning",
+            "Choose at least one exact source variable for the output.",
+            heading = "Custom variable selection is empty",
+            compact = TRUE
+          )
         ))
       }
-      llw_status_callout(
-        "idle",
-        paste(
-          glc_pluralized_count(length(selected), "output variable"),
-          "will be projected from",
-          glc_pluralized_count(group_count, "fixed file group"),
-          "in the selected collectable unit. Identity, time, and key columns",
-          "required by glcdp are shown separately in the review."
-        ),
-        heading = "Compatibility stays fixed",
-        compact = TRUE
+      tags$div(
+        class = "llw-glc-scope-feedback-result",
+        llw_status_callout(
+          "idle",
+          paste(
+            glc_pluralized_count(length(selected), "output variable"),
+            "will be projected from",
+            glc_pluralized_count(group_count, "fixed file group"),
+            paste(
+              "in the selected collectable unit. Identity, time, and key",
+              "columns required by glcdp are shown separately in the review."
+            )
+          ),
+          heading = "Compatibility stays fixed",
+          compact = TRUE
+        )
       )
     })
 
@@ -6091,7 +7378,7 @@ glcPreviewServer <- function(
         session$ns("scope_apply"),
         "Review output variables",
         icon = icon("table-columns"),
-        class = "btn-primary btn-lg"
+        class = "btn-outline-secondary btn-lg"
       )
       if (enabled) return(button)
       tagAppendAttributes(
@@ -6120,16 +7407,19 @@ glcPreviewServer <- function(
     })
 
     output$continue_preview_button <- renderUI({
-      ready <- !is.null(scope_review_value())
+      ready <- length(scope_projection_variables()) > 0L
       button <- actionButton(
         session$ns("continue_preview"),
-        "Continue to transfer review",
+        "Continue to Import",
         icon = icon("arrow-right"),
         class = "btn-primary btn-lg",
         title = if (ready) {
-          "Review the bounded transfer contract before any measurement access"
+          paste(
+            "Validate the current output projection and continue to Import.",
+            "Nothing transfers until Preview or Apply is chosen."
+          )
         } else {
-          "Review the output variables first"
+          "Choose at least one exact source variable first"
         }
       )
       if (!ready) {
@@ -6142,11 +7432,28 @@ glcPreviewServer <- function(
       button
     })
 
+    output$import_review <- renderUI({
+      review <- transfer_review_value()
+      if (is.null(review)) {
+        return(llw_status_callout(
+          "idle",
+          paste(
+            "Choose a valid output projection in Step 6 before importing",
+            "the selected data."
+          ),
+          heading = "Import selection is not available yet",
+          compact = TRUE
+        ))
+      }
+      glc_import_review_ui(review)
+    })
+
     output$transfer_review <- renderUI({
       error <- transfer_review_error()
       if (!is.null(error)) {
         review <- transfer_review_value()
-        return(tagList(
+        return(tags$div(
+          class = "llw-glc-preview-review",
           llw_status_callout(
             "error",
             llw_public_message(error),
@@ -6154,19 +7461,18 @@ glcPreviewServer <- function(
             compact = TRUE
           ),
           if (!is.null(review)) {
-            tags$div(
-              class = "mt-3",
+            tagList(
               llw_status_callout(
                 "idle",
                 paste(
-                  "The last valid transfer review remains visible for",
-                  "context, but transfer stays disabled until the budget is",
+                  "The last valid preview allocation remains visible for",
+                  "context, but Preview stays disabled until the budget is",
                   "valid."
                 ),
-                heading = "Last valid review retained",
+                heading = "Last valid preview retained",
                 compact = TRUE
               ),
-              tags$div(class = "mt-3", glc_transfer_review_ui(review))
+              glc_preview_review_ui(review)
             )
           }
         ))
@@ -6177,20 +7483,22 @@ glcPreviewServer <- function(
           "idle",
           paste(
             "Review the output variables in Step 6 before preparing the",
-            "bounded transfer contract."
+            "optional bounded preview."
           ),
-          heading = "Transfer review is not available yet",
+          heading = "Preview is not available yet",
           compact = TRUE
         ))
       }
-      glc_transfer_review_ui(review)
+      glc_preview_review_ui(review)
     })
 
     output$transfer_preview_button <- renderUI({
       review <- transfer_review_value()
       review_error <- transfer_review_error()
       busy <- !is.null(pending_transfer_attempt()) ||
-        !is.null(active_transfer_attempt())
+        !is.null(active_transfer_attempt()) ||
+        !is.null(pending_apply_attempt()) ||
+        !is.null(active_apply_attempt())
       enabled <- !is.null(review) &&
         is.null(review_error) &&
         !isTRUE(review$resource$blocked) &&
@@ -6207,7 +7515,7 @@ glcPreviewServer <- function(
         disabled = "disabled",
         `aria-disabled` = "true",
         title = if (busy) {
-          "A bounded preview task is already active."
+          "A measurement-access task is already active."
         } else if (!is.null(review_error)) {
           llw_public_message(review_error)
         } else if (!is.null(review) && isTRUE(review$resource$blocked)) {
@@ -6299,6 +7607,168 @@ glcPreviewServer <- function(
       glc_transfer_preview_result_ui(result)
     })
 
+    output$apply_full_import_button <- renderUI({
+      review <- transfer_review_value()
+      completed <- !is.null(full_import_value())
+      busy <- !is.null(pending_apply_attempt()) ||
+        !is.null(active_apply_attempt()) ||
+        !is.null(pending_transfer_attempt()) ||
+        !is.null(active_transfer_attempt())
+      enabled <- !is.null(review) &&
+        !isTRUE(review$resource$full_import_blocked) &&
+        !completed &&
+        !busy
+      button <- input_task_button(
+        session$ns("apply_full_import"),
+        span(strong("Apply full import")),
+        icon = icon("cloud-arrow-down"),
+        class = "btn-primary btn-lg"
+      )
+      if (enabled) return(button)
+      tagAppendAttributes(
+        button,
+        disabled = "disabled",
+        `aria-disabled` = "true",
+        title = if (busy) {
+          "A measurement-access task is already active."
+        } else if (completed) {
+          paste(
+            "This exact selection is already imported in this session.",
+            "Change the selection to run a new import."
+          )
+        } else if (
+          !is.null(review) &&
+            isTRUE(review$resource$full_import_blocked)
+        ) {
+          "Known selected bytes exceed this session's full-import resource limit."
+        } else {
+          "Choose a valid output projection before importing."
+        }
+      )
+    })
+
+    output$cancel_apply_button <- renderUI({
+      glc_cancel_task_button(
+        session$ns,
+        "cancel_apply",
+        !is.null(pending_apply_attempt()) ||
+          !is.null(active_apply_attempt()),
+        "Cancel full import"
+      )
+    })
+
+    output$apply_cancellation_drain <- renderUI({
+      cancellation_drain_for_display(apply_display_status())
+    })
+
+    output$apply_progress_card <- renderUI({
+      status <- apply_display_status()
+      state <- status$state
+      pending <- !is.null(pending_apply_attempt())
+      active <- pending || !is.null(active_apply_attempt())
+      progress_path <- apply_progress_path()
+      progress <- glc_full_import_progress_for_display(
+        read_glc_task_progress(progress_path),
+        transfer_review_value(),
+        progress_path
+      )
+      elapsed_label <- attr(progress, "llw_elapsed_label", exact = TRUE)
+      if (active) invalidateLater(250, session)
+      if (
+        !apply_attempted() &&
+          !active &&
+          identical(state, "idle")
+      ) {
+        return(NULL)
+      }
+      if (
+        !active &&
+          state %in% c("complete", "warning") &&
+          !is.null(full_import_value())
+      ) {
+        return(NULL)
+      }
+      card(
+        class = "llw-glc-transfer-progress mt-3",
+        card_header("Full import progress", container = h3),
+        glc_full_import_elapsed_ui(elapsed_label),
+        glc_task_progress_ui(
+          progress,
+          total_phases = 5L,
+          heading = "Fresh complete import",
+          idle_message = paste(
+            "Use Apply full import after reviewing the exact contract.",
+            "No full import starts automatically."
+          ),
+          active = active,
+          active_label = "Preparing the fresh full import",
+          active_detail = paste(
+            "Starting a session-local worker that will reopen the exact",
+            "revision and read every selected file without using preview rows."
+          ),
+          terminal_state = if (pending) "queued" else state,
+          terminal_message = if (pending) {
+            "Waiting for the previous full-import worker to stop cleanly."
+          } else {
+            status$message %||% NULL
+          }
+        ),
+        if (
+          apply_attempted() &&
+            state %in% c("error", "stale")
+        ) {
+          tags$div(
+            class = "mt-3",
+            glc_task_status_tag(
+              status,
+              idle_heading = "Full import has not started",
+              idle_message = "Use Apply full import to start.",
+              task_label = "Full import"
+            )
+          )
+        }
+      )
+    })
+
+    output$full_import_result <- renderUI({
+      result <- full_import_value()
+      if (is.null(result)) return(NULL)
+      status <- apply_display_status()
+      active <-
+        !is.null(pending_apply_attempt()) ||
+        !is.null(active_apply_attempt())
+      retained <- active || status$state %in% c(
+        "cancelled",
+        "error",
+        "stale",
+        "queued",
+        "running",
+        "finalizing"
+      )
+      glc_full_import_result_ui(
+        result,
+        retained = retained,
+        progress = read_glc_task_progress(apply_progress_path())
+      )
+    })
+
+    # These uiOutput containers are intentionally empty until their review,
+    # task, or result is available. The app stylesheet hides empty outputs, so
+    # Shiny would otherwise suspend their first render and leave them empty
+    # forever.
+    for (output_id in c(
+      "import_review",
+      "transfer_review",
+      "transfer_cancellation_drain",
+      "transfer_progress_card",
+      "transfer_preview_result",
+      "apply_cancellation_drain",
+      "apply_progress_card",
+      "full_import_result"
+    )) {
+      outputOptions(output, output_id, suspendWhenHidden = FALSE)
+    }
+
     observe({
       status <- inspection_display_status()
       req(identical(status$state, "error"))
@@ -6331,6 +7801,17 @@ glcPreviewServer <- function(
     }) |>
       bindEvent(transfer_display_status()$state, ignoreInit = TRUE)
 
+    observe({
+      status <- apply_display_status()
+      req(identical(status$state, "error"))
+      showNotification(
+        status$message,
+        type = "error",
+        duration = 8
+      )
+    }) |>
+      bindEvent(apply_display_status()$state, ignoreInit = TRUE)
+
     list(
       inspection = reactive(inspection_value()),
       inspection_status = reactive({
@@ -6361,6 +7842,8 @@ glcPreviewServer <- function(
       ),
       planning_pending = reactive(!is.null(pending_planning_attempt())),
       planning_active = reactive(!is.null(active_planning_attempt())),
+      wizard_step = reactive(wizard_step()),
+      continue_after_planning = reactive(continue_after_planning()),
       selected_compatibility_id = selected_compatibility_id,
       metadata_filter_revision = reactive(metadata_filter_revision()),
       scope_input_revision = reactive(scope_input_revision()),
@@ -6389,7 +7872,18 @@ glcPreviewServer <- function(
         transfer_controller_revision()
       ),
       transfer_pending = reactive(!is.null(pending_transfer_attempt())),
-      transfer_active = reactive(!is.null(active_transfer_attempt()))
+      transfer_active = reactive(!is.null(active_transfer_attempt())),
+      full_import = reactive(full_import_value()),
+      apply_status = reactive({
+        if (apply_attempted()) {
+          apply_display_status()
+        } else {
+          new_task_status("glc_read")
+        }
+      }),
+      apply_controller_revision = reactive(apply_controller_revision()),
+      apply_pending = reactive(!is.null(pending_apply_attempt())),
+      apply_active = reactive(!is.null(active_apply_attempt()))
     )
   })
 }

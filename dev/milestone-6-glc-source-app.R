@@ -25,20 +25,37 @@ glc_source_showcase_deep_link_query <- function(packages, raw_query = "") {
   paste0("?repo=", utils::URLencode(repository, reserved = TRUE))
 }
 
-glc_source_showcase_preview_worker <- function(payload, spec) {
-  review <- payload$transfer_review
+glc_source_showcase_fixture_bundle <- function(
+  review,
+  selected_files,
+  rows_per_file,
+  input_prefix
+) {
   LightLogWeb:::validate_glc_transfer_review(review)
-  allocated <- review$allocated_files
-  rows_per_file <- as.integer(review$allocation$per_file_n_max)
+  rows_per_file <- as.integer(rows_per_file)
+  stopifnot(
+    is.data.frame(selected_files),
+    nrow(selected_files) > 0L,
+    length(rows_per_file) == 1L,
+    !is.na(rows_per_file),
+    rows_per_file > 0L,
+    is.character(input_prefix),
+    length(input_prefix) == 1L,
+    nzchar(input_prefix)
+  )
   output_names <- unique(as.character(review$projection$output_columns$name))
 
   fixture_column <- function(name, count, file_index) {
     lower <- tolower(name)
     if (grepl("date|time", lower)) {
-      return(as.POSIXct(
-        "2026-08-01 12:00:00",
-        tz = "UTC"
-      ) + seq_len(count) + (file_index - 1L) * 60L)
+      return(
+        as.POSIXct(
+          "2026-08-01 12:00:00",
+          tz = "UTC"
+        ) +
+          seq_len(count) +
+          (file_index - 1L) * 60L
+      )
     }
     if (grepl("(^|_)id$|participant|file_group|file\\.name", lower)) {
       return(paste0("fixture-", file_index, "-", seq_len(count)))
@@ -46,10 +63,14 @@ glc_source_showcase_preview_worker <- function(payload, spec) {
     as.numeric(seq_len(count) + (file_index - 1L) * count)
   }
 
-  file_data <- lapply(seq_len(nrow(allocated)), function(index) {
+  file_data <- lapply(seq_len(nrow(selected_files)), function(index) {
     values <- stats::setNames(
-      lapply(output_names, fixture_column, count = rows_per_file,
-        file_index = index),
+      lapply(
+        output_names,
+        fixture_column,
+        count = rows_per_file,
+        file_index = index
+      ),
       output_names
     )
     as.data.frame(values, check.names = FALSE, stringsAsFactors = FALSE)
@@ -57,15 +78,20 @@ glc_source_showcase_preview_worker <- function(payload, spec) {
   collected <- do.call(rbind, file_data)
   rownames(collected) <- NULL
   collection <- data.frame(
-    dataset_id = as.character(allocated$dataset_id),
-    file_group_id = as.character(allocated$file_group_id),
+    dataset_id = as.character(selected_files$dataset_id),
+    file_group_id = as.character(selected_files$file_group_id),
     files = I(lapply(
-      allocated$declared_path,
+      selected_files$declared_path,
       function(path) file.path("deterministic-fixture", path)
     )),
     runtime_input_ids = I(lapply(
-      seq_len(nrow(allocated)),
-      function(index) sprintf("fixture://preview-input/%03d", index)
+      seq_len(nrow(selected_files)),
+      function(index)
+        sprintf(
+          "fixture://%s/%03d",
+          input_prefix,
+          index
+        )
     )),
     data = I(file_data),
     stringsAsFactors = FALSE
@@ -79,14 +105,50 @@ glc_source_showcase_preview_worker <- function(payload, spec) {
   api$glc_open <- function(...) list(fixture = TRUE)
   api$glc_read <- function(...) collection
   api$glc_collect <- function(x, standardize) collected
-  LightLogWeb:::glcdp_transfer_preview_execute(
-    payload,
-    api = api,
-    execution_mode = "fixture"
-  )
+  list(api = api, collection = collection, collected = collected)
 }
 
-glc_source_showcase_app <- function() {
+glc_source_showcase_preview_worker <- local({
+  fixture_bundle <- glc_source_showcase_fixture_bundle
+  function(payload, spec) {
+    review <- payload$transfer_review
+    bundle <- fixture_bundle(
+      review,
+      selected_files = review$allocated_files,
+      rows_per_file = review$allocation$per_file_n_max,
+      input_prefix = "preview-input"
+    )
+    LightLogWeb:::glcdp_transfer_preview_execute(
+      payload,
+      api = bundle$api,
+      execution_mode = "fixture"
+    )
+  }
+})
+
+glc_source_showcase_full_import_worker <- local({
+  fixture_bundle <- glc_source_showcase_fixture_bundle
+  function(payload, spec) {
+    review <- payload$transfer_review
+    bundle <- fixture_bundle(
+      review,
+      selected_files = review$files,
+      rows_per_file = 2L,
+      input_prefix = "full-import-input"
+    )
+    LightLogWeb:::glcdp_full_import_execute(
+      payload,
+      api = bundle$api,
+      execution_mode = "fixture"
+    )
+  }
+})
+
+glc_source_showcase_app <- function(
+  execution_mode = c("fixture", "live")
+) {
+  execution_mode <- match.arg(execution_mode)
+  is_live_execution <- identical(execution_mode, "live")
   registry_url <- glc_source_showcase_registry_url()
   glcdp_provenance <- glcdp_runtime_provenance()
   runtime_profile <- resolve_runtime_profile(
@@ -103,15 +165,47 @@ glc_source_showcase_app <- function() {
       class = "llw-main-shell",
       tabindex = "-1",
       llw_view_header(
-        "Milestone 6 · Slice 2C-A",
-        "Review and exercise one bounded typed preview",
-          paste(
-            "This standalone review app reads the current public GLC registry",
-            "through the pinned glcdp planner revision. After metadata-only",
-            "inspection, full-schema structural planning, and narrowing, the",
-            "user can review a bounded transfer contract. The showcase uses",
-            "injected local preview records and never accesses live measurements."
+        "Milestone 6 · Slice 2C-B",
+        "Import selected GLC data with an optional bounded preview",
+        paste(
+          "This standalone review app reads the current public GLC registry",
+          "through the pinned glcdp planner revision. After metadata-only",
+          "inspection, full-schema structural planning, and narrowing, the",
+          "user can apply a fresh complete import. Preview remains optional.",
+          if (is_live_execution) {
+            paste(
+              "This explicitly selected live profile accesses public",
+              "measurements only after Preview or Apply is chosen."
+            )
+          } else {
+            paste(
+              "The default fixture profile uses separate injected records",
+              "for Preview and Apply and never accesses live measurements."
+            )
+          }
         )
+      ),
+      llw_status_callout(
+        if (is_live_execution) "warning" else "idle",
+        if (is_live_execution) {
+          paste(
+            "Preview performs the reviewed bounded public read. Apply starts",
+            "a fresh full read of every selected file. No transfer occurs",
+            "before either explicit action."
+          )
+        } else {
+          paste(
+            "Preview and Apply use independent deterministic local records.",
+            "Neither action opens the selected package or a measurement file."
+          )
+        },
+        heading = if (is_live_execution) {
+          "Live public execution mode"
+        } else {
+          "Fixture-only execution mode"
+        },
+        live = FALSE,
+        compact = TRUE
       ),
       glcPreviewUI(
         "glc_preview",
@@ -167,7 +261,7 @@ glc_source_showcase_app <- function() {
         )
       ),
       card(
-        card_header("Slice 2C-A safety boundary"),
+        card_header("Slice 2C-B safety boundary"),
         tags$p(
           class = "mb-1",
           tags$strong("Pinned public API: "),
@@ -181,25 +275,35 @@ glc_source_showcase_app <- function() {
           tags$strong("Inspection transfer: "),
           paste(
             "validated package information and core metadata only; the",
-            "size is not available and is shown as an informational note before",
-            "the explicit inspection action."
+            "package does not declare that metadata transfer size, and the",
+            "workflow does not present an unhelpful unknown-size callout."
           )
         ),
         tags$p(
           class = "mb-1",
-          tags$strong("Showcase preview: "),
-          paste(
-            "the explicit preview action uses deterministic injected local",
-            "records. It exercises the public read-and-collect contract without",
-            "opening a live package or measurement file."
-          )
+          tags$strong("Showcase measurement actions: "),
+          if (is_live_execution) {
+            paste(
+              "the optional Preview and consequential Apply actions use fresh",
+              "public glc_open, glc_read, and glc_collect invocations. Preview",
+              "rows are never used by Apply."
+            )
+          } else {
+            paste(
+              "the optional Preview and consequential Apply actions use separate",
+              "deterministic injected local records. They exercise fresh public",
+              "read-and-collect contracts without opening a live package or",
+              "measurement file. Preview rows are never used by Apply."
+            )
+          }
         ),
         tags$p(
           class = "mb-0",
           tags$strong("Closed actions: "),
           paste(
-            "no full read, import, dataset creation, persistence, download,",
-            "promotion, or later-slice action is available."
+            "no dataset-library integration, persistence, download, promotion,",
+            "or later-slice action is available. The complete Apply handoff",
+            "remains ephemeral in this standalone session."
           )
         )
       )
@@ -351,7 +455,16 @@ glc_source_showcase_app <- function() {
       source_selection = source_state$selection,
       runtime = runtime,
       cache_dir = runtime$paths$cache,
-      preview_worker = glc_source_showcase_preview_worker,
+      preview_worker = if (is_live_execution) {
+        glcdp_transfer_preview_task_worker
+      } else {
+        glc_source_showcase_preview_worker
+      },
+      apply_worker = if (is_live_execution) {
+        glcdp_full_import_task_worker
+      } else {
+        glc_source_showcase_full_import_worker
+      },
       auto_inspect = reactive({
         identical(
           input$arrival_mode %||% arrival_mode_default(),
@@ -424,3 +537,5 @@ glc_source_showcase_app <- function() {
 
 # Run from the package root with:
 # Rscript -e 'source("dev/milestone-6-glc-source-app.R"); shiny::runApp(glc_source_showcase_app())'
+# For the separately authorized live public profile:
+# Rscript -e 'source("dev/milestone-6-glc-source-app.R"); shiny::runApp(glc_source_showcase_app("live"))'

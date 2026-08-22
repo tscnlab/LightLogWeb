@@ -994,7 +994,7 @@ glc_preview_wait_for <- function(session, predicate, timeout_seconds = 6) {
   }
 }
 
-test_that("Slice 2C-A UI adds an explicit bounded transfer review", {
+test_that("Slice 2C-B UI separates optional preview from fresh full Apply", {
   html <- htmltools::renderTags(glcPreviewUI("glc"))$html
   step_labels <- c(
     "Source",
@@ -1003,31 +1003,66 @@ test_that("Slice 2C-A UI adds an explicit bounded transfer review", {
     "Selection",
     "Filtering",
     "Variables",
-    "Review"
+    "Import"
   )
 
   expect_identical(glc_wizard_steps()$label, step_labels)
-  expect_match(html, "core-metadata transfer size", fixed = TRUE)
-  expect_match(html, "Metadata transfer size unavailable", fixed = TRUE)
-  expect_match(html, ">Inspect package<", fixed = TRUE)
+  expect_match(html, "core metadata when needed", fixed = TRUE)
+  expect_false(grepl("Metadata transfer size unavailable", html, fixed = TRUE))
+  expect_match(html, "inspect_button", fixed = TRUE)
   expect_match(html, "Collect compatible groups", fixed = TRUE)
   expect_match(html, "modality and/or term", fixed = TRUE)
   expect_match(html, "validates their complete file schemas", fixed = TRUE)
   expect_false(grepl("compares the selected columns", html, fixed = TRUE))
-  expect_match(html, "No transfer until explicit preview", fixed = TRUE)
+  expect_match(html, "No transfer until Preview or Apply", fixed = TRUE)
   expect_match(html, "Project the output columns", fixed = TRUE)
   expect_match(html, "scope_mode_selector", fixed = TRUE)
+  expect_match(html, "llw-glc-scope-feedback-output", fixed = TRUE)
+  expect_match(
+    html,
+    ".llw-glc-scope-feedback-output:not(:empty)",
+    fixed = TRUE
+  )
+  expect_match(html, "padding-top: .75rem", fixed = TRUE)
   expect_match(html, "scope_review", fixed = TRUE)
+  expect_match(html, "continue_preview_button", fixed = TRUE)
   expect_match(html, "llw-glc-scope-review-output", fixed = TRUE)
   expect_false(grepl("llw-glc-scope-review-result", html, fixed = TRUE))
   expect_false(grepl("confirm_inspection", html, fixed = TRUE))
   expect_false(grepl("Exact inspection request", html, fixed = TRUE))
   expect_false(grepl("inspection_status", html, fixed = TRUE))
   expect_false(grepl("plan_status", html, fixed = TRUE))
-  expect_match(html, "Review an explicit bounded transfer", fixed = TRUE)
+  expect_match(html, "Import the selected data", fixed = TRUE)
+  expect_match(html, "Import the complete selected data", fixed = TRUE)
+  expect_match(html, "Apply starts a fresh read of every", fixed = TRUE)
+  expect_match(html, "llw-glc-import-card", fixed = TRUE)
+  expect_match(
+    html,
+    ".llw-glc-import-card__body {padding: 1rem; overflow: visible;}",
+    fixed = TRUE
+  )
+  expect_match(html, "height: auto !important", fixed = TRUE)
+  expect_match(html, "llw-glc-preview-disclosure", fixed = TRUE)
+  expect_match(html, ">Preview<", fixed = TRUE)
+  expect_false(grepl(
+    'class="llw-glc-preview-disclosure" open',
+    html,
+    fixed = TRUE
+  ))
+  expect_lt(
+    regexpr("transfer_row_budget", html, fixed = TRUE)[[1L]],
+    regexpr("apply_full_import_button", html, fixed = TRUE)[[1L]]
+  )
+  expect_false(grepl("Confirm filtered groups", html, fixed = TRUE))
+  expect_match(html, "continue_variables_button", fixed = TRUE)
+  expect_lt(
+    regexpr("back_scope", html, fixed = TRUE)[[1L]],
+    regexpr("continue_preview_button", html, fixed = TRUE)[[1L]]
+  )
+  expect_match(html, "import_review", fixed = TRUE)
   expect_match(html, "transfer_row_budget", fixed = TRUE)
   expect_match(html, "transfer_problems", fixed = TRUE)
-  expect_match(html, "1 through 10,000 whole preview rows", fixed = TRUE)
+  expect_match(html, "whole number from 1 through 10,000", fixed = TRUE)
   expect_match(html, 'max="10000"', fixed = TRUE)
   expect_match(
     html,
@@ -1043,6 +1078,45 @@ test_that("Slice 2C-A UI adds an explicit bounded transfer review", {
   expect_match(html, "inspection_cancellation_drain", fixed = TRUE)
   expect_match(html, "planning_cancellation_drain", fixed = TRUE)
   expect_match(html, "transfer_cancellation_drain", fixed = TRUE)
+  expect_match(html, "apply_full_import_button", fixed = TRUE)
+  expect_match(html, "cancel_apply_button", fixed = TRUE)
+  expect_match(html, "apply_cancellation_drain", fixed = TRUE)
+  expect_match(html, "full_import_result", fixed = TRUE)
+  expect_match(
+    html,
+    ".llw-glc-preview-table {display: block; width: 100%; max-width: 100%;",
+    fixed = TRUE
+  )
+  expect_match(
+    html,
+    ".llw-glc-preview-table table {width: max-content; min-width: 100%;",
+    fixed = TRUE
+  )
+  expect_match(
+    html,
+    ".llw-glc-full-import-result > *",
+    fixed = TRUE
+  )
+  expect_match(html, "llw-glc-full-import-output", fixed = TRUE)
+  expect_match(
+    html,
+    ".llw-glc-full-import-output:not(:empty)",
+    fixed = TRUE
+  )
+  expect_match(
+    html,
+    paste(
+      ".llw-glc-import-stack",
+      ".llw-glc-full-import-result.llw-glc-result-surface"
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    html,
+    ".llw-glc-scope-feedback-result {margin-top: .75rem !important;}",
+    fixed = TRUE
+  )
+  expect_match(html, "llw-glc-import-elapsed", fixed = TRUE)
   expect_match(
     html,
     'id="glc-transfer_preview_button"',
@@ -1051,7 +1125,12 @@ test_that("Slice 2C-A UI adds an explicit bounded transfer review", {
   expect_false(grepl("Import preview", html, fixed = TRUE))
   expect_false(grepl("Create dataset", html, fixed = TRUE))
   expect_false(grepl(
-    "llw-glc-transfer-preview-result",
+    'class="llw-glc-transfer-preview-result',
+    html,
+    fixed = TRUE
+  ))
+  expect_false(grepl(
+    'class="llw-glc-full-import-result',
     html,
     fixed = TRUE
   ))
@@ -1133,6 +1212,77 @@ test_that("scope review substitutes useful evidence when every size is unknown",
   expect_match(partial_html, "Listed size", fixed = TRUE)
   expect_match(partial_html, "2.00 KiB known; 1 unknown", fixed = TRUE)
   expect_false(grepl("Included variables", partial_html, fixed = TRUE))
+})
+
+test_that("import display is compact and uses neutral missing-value copy", {
+  expect_identical(glc_compact_display_value(NA_character_), "---")
+  expect_identical(glc_compact_display_value("Unknown"), "---")
+  expect_identical(glc_compact_display_value("unknown"), "---")
+  expect_identical(glc_typed_facet_value(NA_character_), "---")
+  expect_identical(glc_format_bytes(NA_real_), "---")
+  expect_identical(glc_transfer_display_row_limit(), 6L)
+
+  sample <- data.frame(
+    row = seq_len(8L),
+    value = c("Unknown", rep(NA_character_, 7L)),
+    stringsAsFactors = FALSE
+  )
+  table_html <- htmltools::renderTags(glc_transfer_preview_table(sample))$html
+  row_tags <- gregexpr("<tr>", table_html, fixed = TRUE)[[1L]]
+  expect_identical(sum(row_tags > 0L), 7L)
+  expect_false(grepl("Unknown", table_html, fixed = TRUE))
+  expect_match(table_html, "---", fixed = TRUE)
+})
+
+test_that("long full reads show a dedicated elapsed timer and phase timing", {
+  progress_path <- tempfile("full-import-progress-", fileext = ".rds")
+  on.exit(unlink(progress_path, force = TRUE), add = TRUE)
+  saveRDS(list(), progress_path)
+  now <- as.POSIXct("2026-08-21 19:00:00", tz = "UTC")
+  Sys.setFileTime(progress_path, now - 65)
+  progress <- data.frame(
+    phase = c("validate", "read"),
+    label = c("Validating contract", "Transferring selected files"),
+    status = c("complete", "running"),
+    elapsed_seconds = c(0.01, NA_real_),
+    detail = c("Valid.", "Reading."),
+    stringsAsFactors = FALSE
+  )
+  review <- structure(
+    list(files = data.frame(path = sprintf("file-%02d", seq_len(18L)))),
+    class = c("llw_glc_transfer_review", "list")
+  )
+
+  displayed <- glc_full_import_progress_for_display(
+    progress,
+    review,
+    progress_path,
+    now = now
+  )
+  expect_match(displayed$detail[[2L]], "18 selected files", fixed = TRUE)
+  expect_false(grepl("elapsed", displayed$detail[[2L]], fixed = TRUE))
+  expect_match(
+    displayed$detail[[2L]],
+    "rather than exposing a reliable per-file count",
+    fixed = TRUE
+  )
+  expect_identical(
+    attr(displayed, "llw_elapsed_label", exact = TRUE),
+    "1 min 5 s"
+  )
+  elapsed_html <- htmltools::renderTags(
+    glc_full_import_elapsed_ui(
+      attr(displayed, "llw_elapsed_label", exact = TRUE)
+    )
+  )$html
+  expect_match(elapsed_html, "Elapsed transfer time", fixed = TRUE)
+  expect_match(elapsed_html, "1 min 5 s", fixed = TRUE)
+  expect_match(elapsed_html, 'role="timer"', fixed = TRUE)
+
+  timing_html <- htmltools::renderTags(glc_task_timing_ui(progress))$html
+  expect_match(timing_html, "Process timing", fixed = TRUE)
+  expect_match(timing_html, "Validating contract", fixed = TRUE)
+  expect_match(timing_html, "0.01 s", fixed = TRUE)
 })
 
 test_that("inventory overview is explained and delegates full exploration", {
@@ -1988,10 +2138,16 @@ test_that("cancelled planning workers release for immediate repeated retries", {
       session$flushReact()
 
       for (attempt in seq_len(2L)) {
-        session$setInputs(plan = attempt)
+        if (attempt == 1L) {
+          session$setInputs(continue_structure = attempt)
+          expect_true(returned$continue_after_planning())
+        } else {
+          session$setInputs(plan = attempt)
+        }
         glc_preview_wait_for(session, returned$planning_active)
         session$setInputs(cancel_plan = attempt)
         expect_identical(returned$plan_status()$state, "cancelled")
+        expect_false(returned$continue_after_planning())
         expect_identical(returned$selected_term(), "melanopic_edi")
         expect_identical(returned$selected_modality(), "light")
         expect_false(returned$planning_active())
@@ -2060,10 +2216,12 @@ test_that("cancelled planning attempts use fresh controllers on retry", {
       expect_identical(returned$selected_modality(), "light")
       expect_identical(returned$selected_term(), "melanopic_edi")
 
-      session$setInputs(plan = 1L)
+      session$setInputs(continue_structure = 1L)
       expect_equal(calls$planning, 1L)
+      expect_true(returned$continue_after_planning())
       session$setInputs(cancel_plan = 1L)
       expect_identical(returned$plan_status()$state, "cancelled")
+      expect_false(returned$continue_after_planning())
       expect_identical(returned$selected_term(), "melanopic_edi")
       expect_identical(returned$selected_modality(), "light")
       flush_m1_promises(session)
@@ -2164,6 +2322,19 @@ test_that("planning cancellation is isolated across Shiny sessions", {
       session$flushReact()
       session$setInputs(inspect = 1L)
       flush_m1_promises(session)
+      inspected_button_html <- htmltools::renderTags(
+        output$inspect_button
+      )$html
+      expect_match(
+        inspected_button_html,
+        'disabled="disabled"',
+        fixed = TRUE
+      )
+      expect_match(
+        inspected_button_html,
+        "already inspected",
+        fixed = TRUE
+      )
       session$setInputs(term_id = "melanopic_edi")
       session$setInputs(plan = 1L)
       session$setInputs(cancel_plan = 1L)
@@ -3141,6 +3312,102 @@ glc_preview_test_preview_worker <- function(
   }
 }
 
+glc_preview_test_full_import_worker <- function(
+  calls = NULL,
+  delay_seconds = 0
+) {
+  force(calls)
+  force(delay_seconds)
+  function(payload, spec) {
+    if (!is.null(calls)) {
+      calls$apply <- (calls$apply %||% 0L) + 1L
+      calls$apply_payload_names <- names(payload)
+    }
+    if (delay_seconds > 0) {
+      saveRDS(
+        data.frame(
+          phase = "fixture",
+          label = "Preparing a fresh deterministic full read",
+          status = "running",
+          elapsed_seconds = NA_real_,
+          detail = "The injected full-import worker started successfully.",
+          stringsAsFactors = FALSE
+        ),
+        payload$progress_path,
+        version = 2
+      )
+      Sys.sleep(delay_seconds)
+    }
+
+    review <- payload$transfer_review
+    validate_glc_transfer_review(review)
+    selected <- review$files
+    output_names <- unique(as.character(review$projection$output_columns$name))
+
+    fixture_column <- function(name, count, file_index) {
+      lower <- tolower(name)
+      if (grepl("date|time", lower)) {
+        return(
+          as.POSIXct(
+            "2026-08-01 12:00:00",
+            tz = "UTC"
+          ) +
+            seq_len(count) +
+            (file_index - 1L) * 60L
+        )
+      }
+      if (grepl("(^|_)id$|participant|file_group|file\\.name", lower)) {
+        return(paste0("full-fixture-", file_index, "-", seq_len(count)))
+      }
+      as.numeric(seq_len(count) + (file_index - 1L) * count)
+    }
+
+    rows_per_file <- 2L
+    file_data <- lapply(seq_len(nrow(selected)), function(index) {
+      values <- stats::setNames(
+        lapply(
+          output_names,
+          fixture_column,
+          count = rows_per_file,
+          file_index = index
+        ),
+        output_names
+      )
+      as.data.frame(values, check.names = FALSE, stringsAsFactors = FALSE)
+    })
+    collected <- do.call(rbind, file_data)
+    rownames(collected) <- NULL
+    collection <- data.frame(
+      dataset_id = as.character(selected$dataset_id),
+      file_group_id = as.character(selected$file_group_id),
+      files = I(lapply(
+        selected$declared_path,
+        function(path) file.path("deterministic-full-fixture", path)
+      )),
+      runtime_input_ids = I(lapply(
+        seq_len(nrow(selected)),
+        function(index) sprintf("fixture://full-import-input/%03d", index)
+      )),
+      data = I(file_data),
+      stringsAsFactors = FALSE
+    )
+
+    exports <- glcdp_export_contract()
+    api <- stats::setNames(
+      lapply(exports, function(name) function(...) NULL),
+      exports
+    )
+    api$glc_open <- function(...) list(fixture = TRUE)
+    api$glc_read <- function(...) collection
+    api$glc_collect <- function(x, standardize) collected
+    glcdp_full_import_execute(
+      payload,
+      api = api,
+      execution_mode = "fixture"
+    )
+  }
+}
+
 test_that("numeric-looking scalar characteristics use a lossless range rule", {
   plan <- glc_preview_test_plan()
   first_id <- plan$compatibility_sets$compatibility_id[[1L]]
@@ -3295,6 +3562,7 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
   calls <- new.env(parent = emptyenv())
   calls$planning <- 0L
   calls$preview <- 0L
+  calls$apply <- 0L
 
   inspection_worker <- function(payload, spec) {
     glc_preview_test_projection_inspection(
@@ -3327,6 +3595,7 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       planning_worker = planning_worker,
       refine_collection = glc_preview_test_refinement,
       preview_worker = glc_preview_test_preview_worker(calls),
+      apply_worker = glc_preview_test_full_import_worker(calls),
       task_start_timeout_seconds = 1
     ),
     {
@@ -3348,20 +3617,56 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       flush_m1_promises(session)
       session$setInputs(term_id = "melanopic_edi")
       session$flushReact()
-      session$setInputs(plan = 1L)
+      continue_structure_html <- htmltools::renderTags(
+        output$continue_structure_button
+      )$html
+      expect_false(grepl(
+        'disabled="disabled"',
+        continue_structure_html,
+        fixed = TRUE
+      ))
+      expect_match(
+        continue_structure_html,
+        "Collect compatible groups for this request",
+        fixed = TRUE
+      )
+      session$setInputs(continue_structure = 1L)
       flush_m1_promises(session)
 
       expect_equal(calls$planning, 1L)
+      expect_identical(returned$wizard_step(), "structure")
+      expect_false(returned$continue_after_planning())
       expect_identical(returned$planning_request()$variable_scope, "all")
       parent_id <- returned$selected_compatibility_id()
       parent_unit_ids <- returned$plan()$compatibility_sets$final_unit_ids[[1L]]
 
-      session$setInputs(refine = 1L)
+      continue_variables_html <- htmltools::renderTags(
+        output$continue_variables_button
+      )$html
+      expect_match(
+        continue_variables_html,
+        "Confirm and continue to variable selection",
+        fixed = TRUE
+      )
+      expect_false(grepl(
+        'disabled="disabled"',
+        continue_variables_html,
+        fixed = TRUE
+      ))
+      session$setInputs(continue_variables = 1L)
       session$flushReact()
       refined_ids <- returned$refinement()$request$file_group
       expect_setequal(refined_ids, c("dataset-a:1", "dataset-b:1"))
 
       set_scope_input("scope_mode", "discovery")
+      scope_feedback_html <- htmltools::renderTags(
+        output$scope_feedback
+      )$html
+      expect_match(
+        scope_feedback_html,
+        'class="llw-glc-scope-feedback-result"',
+        fixed = TRUE
+      )
       session$setInputs(scope_apply = 1L)
       session$flushReact()
       discovery_review <- returned$scope_review()
@@ -3409,7 +3714,12 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
 
       set_scope_input("scope_mode", "custom")
       set_scope_input("scope_custom_variables", "MEDI")
-      session$setInputs(scope_apply = 3L)
+      expect_null(returned$scope_review())
+      continue_html <- htmltools::renderTags(
+        output$continue_preview_button
+      )$html
+      expect_match(continue_html, "Continue to Import", fixed = TRUE)
+      session$setInputs(continue_preview = 1L)
       session$flushReact()
       custom_review <- returned$scope_review()
       expect_equal(calls$planning, 1L)
@@ -3454,17 +3764,110 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
         transfer_review$assurance$measurement_contents_transferred
       )
 
-      review_html <- htmltools::renderTags(output$transfer_review)$html
+      import_html <- htmltools::renderTags(output$import_review)$html
+      expect_match(import_html, "Ready to import", fixed = TRUE)
+      expect_match(import_html, "2 selected files", fixed = TRUE)
+      expect_match(import_html, "Package-listed size", fixed = TRUE)
+      expect_match(import_html, "100 B known; 1 unknown", fixed = TRUE)
+      expect_false(grepl(
+        "Import size evidence is incomplete",
+        import_html,
+        fixed = TRUE
+      ))
+      expect_false(grepl("Preview-row budget", import_html, fixed = TRUE))
+
+      preview_review_html <- htmltools::renderTags(
+        output$transfer_review
+      )$html
+      expect_match(preview_review_html, "Preview-row budget", fixed = TRUE)
+      expect_match(preview_review_html, "Rows per file", fixed = TRUE)
+      expect_match(preview_review_html, "Maximum rows", fixed = TRUE)
+      expect_match(preview_review_html, "Git-LFS", fixed = TRUE)
+      expect_match(preview_review_html, "Problems: error", fixed = TRUE)
+
+      apply_button_html <- htmltools::renderTags(
+        output$apply_full_import_button
+      )$html
+      expect_false(grepl(
+        'disabled="disabled"',
+        apply_button_html,
+        fixed = TRUE
+      ))
+      expect_match(apply_button_html, "btn-primary", fixed = TRUE)
+      expect_false(grepl("btn-danger", apply_button_html, fixed = TRUE))
+      session$setInputs(apply_full_import = 1L, .priority = "event")
+      flush_m1_promises(session)
+      first_full_import <- returned$full_import()
+      expect_equal(calls$apply, 1L)
+      expect_identical(
+        calls$apply_payload_names,
+        c("operation", "source", "transfer_review", "progress_path")
+      )
+      expect_false("preview_result" %in% calls$apply_payload_names)
+      expect_s3_class(first_full_import, "llw_glc_full_import_result")
+      expect_identical(
+        first_full_import$transfer_review_fingerprint,
+        glc_full_import_contract_review(transfer_review)$fingerprint
+      )
+      expect_identical(first_full_import$actual$input_count, 2L)
+      expect_identical(first_full_import$actual$file_group_count, 2L)
+      expect_identical(first_full_import$actual$row_count, 4L)
+      expect_true(first_full_import$assurance$fresh_full_read)
+      expect_false(first_full_import$assurance$preview_result_used)
+      expect_true(first_full_import$assurance$complete_collected_handoff)
+      expect_false(first_full_import$assurance$persisted)
+      expect_null(nonserializable_path(first_full_import))
+      expect_type(serialize(first_full_import, NULL), "raw")
+      full_import_html <- htmltools::renderTags(
+        output$full_import_result
+      )$html
       expect_match(
-        review_html,
-        "No measurement transfer has started",
+        full_import_html,
+        paste(
+          'class="llw-glc-full-import-result',
+          'llw-glc-result-surface"'
+        ),
         fixed = TRUE
       )
-      expect_match(review_html, "Preview-row budget", fixed = TRUE)
-      expect_match(review_html, "Rows per file", fixed = TRUE)
-      expect_match(review_html, "Maximum rows", fixed = TRUE)
-      expect_match(review_html, "Git-LFS", fixed = TRUE)
-      expect_match(review_html, "Error on parsing problems", fixed = TRUE)
+      expect_match(
+        full_import_html,
+        "Development fixture full import ready",
+        fixed = TRUE
+      )
+      expect_match(
+        full_import_html,
+        "Complete collected handoff, not yet a dataset",
+        fixed = TRUE
+      )
+      expect_match(
+        full_import_html,
+        "llw-glc-full-import-panel",
+        fixed = TRUE
+      )
+      expect_match(
+        full_import_html,
+        "fixture://full-import-input/001",
+        fixed = TRUE
+      )
+      expect_match(full_import_html, "Preview rows used", fixed = TRUE)
+      expect_match(
+        full_import_html,
+        "No. Apply performed a fresh full read.",
+        fixed = TRUE
+      )
+      completed_apply_button <- htmltools::renderTags(
+        output$apply_full_import_button
+      )$html
+      expect_match(
+        completed_apply_button,
+        'disabled="disabled"',
+        fixed = TRUE
+      )
+      expect_match(
+        completed_apply_button,
+        "already imported",
+        fixed = TRUE
+      )
 
       valid_review_fingerprint <- transfer_review$fingerprint
       for (invalid_budget in c(0, -1, 1.5, 10001, 1e6)) {
@@ -3484,12 +3887,21 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
           "Correct the preview-row budget",
           fixed = TRUE
         )
-        expect_match(invalid_html, "Last valid review retained", fixed = TRUE)
+        expect_match(invalid_html, "Last valid preview retained", fixed = TRUE)
         expect_false(grepl("Unknown task state", invalid_html, fixed = TRUE))
         invalid_button <- htmltools::renderTags(
           output$transfer_preview_button
         )$html
         expect_match(invalid_button, 'disabled="disabled"', fixed = TRUE)
+        apply_after_invalid <- htmltools::renderTags(
+          output$apply_full_import_button
+        )$html
+        expect_match(
+          apply_after_invalid,
+          'disabled="disabled"',
+          fixed = TRUE
+        )
+        expect_identical(returned$full_import(), first_full_import)
       }
 
       session$setInputs(transfer_row_budget = 10000L)
@@ -3520,8 +3932,6 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       expect_null(returned$transfer_review_error())
       expect_identical(transfer_review$allocation$total_budget, 4L)
 
-      session$setInputs(continue_preview = 1L)
-      session$flushReact()
       transfer_button_html <- htmltools::renderTags(
         output$transfer_preview_button
       )$html
@@ -3607,6 +4017,19 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       )
       expect_false(grepl("Actual files", preview_html, fixed = TRUE))
 
+      session$setInputs(apply_full_import = 2L, .priority = "event")
+      flush_m1_promises(session)
+      second_full_import <- returned$full_import()
+      expect_equal(calls$apply, 2L)
+      expect_false("preview_result" %in% calls$apply_payload_names)
+      expect_s3_class(second_full_import, "llw_glc_full_import_result")
+      expect_identical(second_full_import$data, first_full_import$data)
+      expect_identical(
+        second_full_import$transfer_review_fingerprint,
+        glc_full_import_contract_review(transfer_review)$fingerprint
+      )
+      expect_false(second_full_import$assurance$preview_result_used)
+
       session$setInputs(transfer_row_budget = 0)
       session$flushReact()
       expect_s3_class(
@@ -3618,6 +4041,7 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
         transfer_review$fingerprint
       )
       expect_null(returned$transfer_preview())
+      expect_identical(returned$full_import(), second_full_import)
       invalid_after_result_button <- htmltools::renderTags(
         output$transfer_preview_button
       )$html
@@ -3626,11 +4050,20 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
         'disabled="disabled"',
         fixed = TRUE
       )
+      apply_after_result_invalid <- htmltools::renderTags(
+        output$apply_full_import_button
+      )$html
+      expect_match(
+        apply_after_result_invalid,
+        'disabled="disabled"',
+        fixed = TRUE
+      )
 
       session$setInputs(transfer_row_budget = 4L)
       session$flushReact()
       expect_null(returned$transfer_review_error())
       expect_null(returned$transfer_preview())
+      expect_identical(returned$full_import(), second_full_import)
       expect_identical(
         returned$transfer_review()$allocation$total_budget,
         4L
@@ -3655,7 +4088,25 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       ))
       expect_identical(changed_review$problems_policy, "warn")
       expect_identical(changed_review$allocation$total_budget, 2L)
+      expect_identical(
+        changed_review$projection,
+        transfer_review$projection
+      )
+      changed_apply_review <- glc_full_import_contract_review(changed_review)
+      expect_identical(
+        glc_full_import_contract_fingerprint(changed_review),
+        glc_full_import_contract_fingerprint(transfer_review)
+      )
+      expect_identical(
+        changed_apply_review$problems_policy,
+        "error"
+      )
+      expect_identical(
+        changed_apply_review$allocation$total_budget,
+        1L
+      )
       expect_null(returned$transfer_preview())
+      expect_identical(returned$full_import(), second_full_import)
       expect_equal(calls$preview, 1L)
 
       session$setInputs(transfer_preview = 3L)
@@ -3679,6 +4130,7 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
         fixed = TRUE
       ))
       expect_false(grepl("preview .", changed_preview_html, fixed = TRUE))
+      expect_identical(returned$full_import(), second_full_import)
 
       prior_scope_revision <- returned$scope_input_revision()
       session$setInputs(term_id = "datetime")
@@ -3687,6 +4139,7 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       expect_null(returned$scope_review())
       expect_null(returned$transfer_review())
       expect_null(returned$transfer_preview())
+      expect_null(returned$full_import())
       expect_null(returned$plan())
 
       session$setInputs(plan = 2L)
@@ -3711,7 +4164,16 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       expect_null(returned$scope_review())
       expect_null(returned$transfer_review())
       expect_null(returned$transfer_preview())
+      expect_null(returned$full_import())
       expect_equal(calls$planning, 2L)
+      reset_inspect_button <- htmltools::renderTags(
+        output$inspect_button
+      )$html
+      expect_false(grepl(
+        'disabled="disabled"',
+        reset_inspect_button,
+        fixed = TRUE
+      ))
     }
   )
 })
@@ -3737,6 +4199,8 @@ test_that("bounded preview workers release for immediate repeated retries", {
   source <- shiny::reactiveVal(selection)
   preview_box <- new.env(parent = emptyenv())
   preview_box$value <- NULL
+  apply_box <- new.env(parent = emptyenv())
+  apply_box$value <- NULL
 
   inspection_worker <- local({
     value <- inspection
@@ -3765,6 +4229,25 @@ test_that("bounded preview workers release for immediate repeated retries", {
       box$value
     }
   })
+  apply_worker <- local({
+    box <- apply_box
+    function(payload, spec) {
+      saveRDS(
+        data.frame(
+          phase = "read",
+          label = "Reading every selected fixture input",
+          status = "running",
+          elapsed_seconds = NA_real_,
+          detail = "The injected full-import worker started successfully.",
+          stringsAsFactors = FALSE
+        ),
+        payload$progress_path,
+        version = 2
+      )
+      Sys.sleep(0.25)
+      box$value
+    }
+  })
 
   shiny::testServer(
     glcPreviewServer,
@@ -3776,6 +4259,7 @@ test_that("bounded preview workers release for immediate repeated retries", {
       planning_worker = planning_worker,
       refine_collection = glc_preview_test_refinement,
       preview_worker = preview_worker,
+      apply_worker = apply_worker,
       task_start_timeout_seconds = 2
     ),
     {
@@ -3823,6 +4307,11 @@ test_that("bounded preview workers release for immediate repeated retries", {
       )
       payload <- new_glc_transfer_task_payload(source_spec, review)
       preview_box$value <- glc_preview_test_preview_worker()(payload, list())
+      apply_payload <- new_glc_full_import_task_payload(source_spec, review)
+      apply_box$value <- glc_preview_test_full_import_worker()(
+        apply_payload,
+        list()
+      )
       htmltools::renderTags(output$transfer_preview_button)
 
       for (attempt in seq_len(2L)) {
@@ -3857,6 +4346,56 @@ test_that("bounded preview workers release for immediate repeated retries", {
       expect_equal(runtime$active_count(), 0L)
       expect_false(returned$transfer_pending())
       expect_false(returned$transfer_active())
+
+      htmltools::renderTags(output$apply_full_import_button)
+      for (attempt in seq_len(2L)) {
+        session$setInputs(
+          apply_full_import = attempt * 10L + 1L,
+          .priority = "event"
+        )
+        glc_preview_wait_for(session, returned$apply_active)
+        session$setInputs(cancel_apply = attempt)
+        expect_identical(returned$apply_status()$state, "cancelled")
+        expect_false(returned$apply_active())
+        if (attempt == 1L) {
+          expect_null(returned$full_import())
+        } else {
+          expect_s3_class(
+            returned$full_import(),
+            "llw_glc_full_import_result"
+          )
+          retained_html <- htmltools::renderTags(
+            output$full_import_result
+          )$html
+          expect_match(
+            retained_html,
+            "Last successful full import retained",
+            fixed = TRUE
+          )
+        }
+
+        session$setInputs(
+          apply_full_import = attempt * 10L + 2L,
+          .priority = "event"
+        )
+        expect_true(returned$apply_pending() || returned$apply_active())
+        glc_preview_wait_for(session, function() {
+          identical(returned$apply_status()$state, "complete")
+        })
+        expect_s3_class(
+          returned$full_import(),
+          "llw_glc_full_import_result"
+        )
+        expect_identical(
+          returned$full_import()$transfer_review_fingerprint,
+          review$fingerprint
+        )
+        expect_false(returned$full_import()$assurance$preview_result_used)
+      }
+
+      expect_equal(runtime$active_count(), 0L)
+      expect_false(returned$apply_pending())
+      expect_false(returned$apply_active())
     }
   )
 })

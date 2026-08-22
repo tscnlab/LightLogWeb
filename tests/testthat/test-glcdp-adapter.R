@@ -1298,7 +1298,7 @@ test_that("bounded transfer review fixes provenance and allocates canonically", 
   )
 
   expect_s3_class(review, "llw_glc_transfer_review")
-  expect_identical(review$review_version, "1.1.0")
+  expect_identical(review$review_version, "1.2.0")
   expect_identical(review$limits$total_preview_rows, 10000L)
   expect_identical(review$problems_policy, "error")
   expect_identical(review$allocation$preview_files, "a.csv")
@@ -1324,7 +1324,11 @@ test_that("bounded transfer review fixes provenance and allocates canonically", 
   expect_identical(review$byte_evidence$allocated_known_declared_bytes, 100)
   expect_identical(review$byte_evidence$allocated_unknown_file_count, 0L)
   expect_false(review$resource$blocked)
+  expect_true(review$resource$full_import_size_evidence_incomplete)
+  expect_false(review$resource$full_import_blocked)
   expect_true(review$assurance$explicit_action_required)
+  expect_true(review$assurance$bounded_preview_available)
+  expect_true(review$assurance$full_import_available)
   expect_false(review$assurance$package_reopened)
   expect_false(review$assurance$measurement_contents_transferred)
   expect_null(nonserializable_path(review))
@@ -1343,6 +1347,223 @@ test_that("bounded transfer review fixes provenance and allocates canonically", 
     validate_glc_transfer_review(tampered),
     class = "llw_validation_error",
     regexp = "parent contract"
+  )
+})
+
+test_that("full Apply uses a fresh complete read and never accepts preview rows", {
+  fixture <- glc_adapter_projection_fixture()
+  review <- new_glc_transfer_review(
+    fixture$projection,
+    total_preview_rows = 1L,
+    problems = "error",
+    available_session_bytes = 1000
+  )
+  calls <- new.env(parent = emptyenv())
+  calls$open <- 0L
+  calls$read <- 0L
+  calls$collect <- 0L
+
+  full_file_data <- list(
+    data.frame(MEDI = c(10, 11), stringsAsFactors = FALSE),
+    data.frame(MEDI = c(12, 13), stringsAsFactors = FALSE)
+  )
+  full_collection <- data.frame(
+    dataset_id = review$files$dataset_id,
+    file_group_id = review$files$file_group_id,
+    files = I(lapply(
+      review$files$declared_path,
+      function(path) file.path("deterministic-fixture", path)
+    )),
+    runtime_input_ids = I(lapply(
+      seq_len(nrow(review$files)),
+      function(index) sprintf("fixture://full-input/%03d", index)
+    )),
+    data = I(full_file_data),
+    stringsAsFactors = FALSE
+  )
+  full_data <- data.frame(
+    MEDI = c(10, 11, 12, 13),
+    Datetime = as.POSIXct("2026-08-01 12:00:00", tz = "UTC") + 0:3,
+    EVENT = factor(c("0", "1", "4", "5")),
+    stringsAsFactors = FALSE
+  )
+
+  exports <- glcdp_export_contract()
+  api <- stats::setNames(
+    lapply(exports, function(name) function(...) NULL),
+    exports
+  )
+  api$glc_open <- function(...) {
+    calls$open <- calls$open + 1L
+    calls$open_args <- list(...)
+    list(fixture = TRUE)
+  }
+  api$glc_read <- function(...) {
+    calls$read <- calls$read + 1L
+    calls$read_args <- list(...)
+    full_collection
+  }
+  api$glc_collect <- function(x, standardize) {
+    calls$collect <- calls$collect + 1L
+    calls$collect_args <- list(x = x, standardize = standardize)
+    full_data
+  }
+
+  payload <- new_glc_full_import_task_payload(
+    fixture$source,
+    review,
+    progress_path = tempfile("glc-full-progress-", fileext = ".rds")
+  )
+  expect_identical(
+    names(payload),
+    c("operation", "source", "transfer_review", "progress_path")
+  )
+  expect_error(
+    validate_glc_full_import_task_payload(c(
+      payload,
+      list(preview_result = list(tampered = TRUE))
+    )),
+    class = "llw_validation_error",
+    regexp = "Preview results cannot be supplied"
+  )
+
+  first <- glcdp_full_import_execute(
+    payload,
+    api = api,
+    execution_mode = "fixture"
+  )
+  arbitrary_preview <- list(
+    data = data.frame(MEDI = -999),
+    fingerprint = "tampered-preview"
+  )
+  arbitrary_preview$data$MEDI <- 999
+  second <- glcdp_full_import_execute(
+    new_glc_full_import_task_payload(fixture$source, review),
+    api = api,
+    execution_mode = "fixture"
+  )
+
+  expect_equal(calls$open, 2L)
+  expect_equal(calls$read, 2L)
+  expect_equal(calls$collect, 2L)
+  expect_identical(calls$read_args$files, c("a.csv", "b.csv"))
+  expect_identical(
+    calls$read_args$file_group,
+    c("dataset-a:1", "dataset-b:1")
+  )
+  expect_identical(calls$read_args$variables, "MEDI")
+  expect_null(calls$read_args$terms)
+  expect_false(calls$read_args$primary_only)
+  expect_identical(calls$read_args$n_max, Inf)
+  expect_identical(calls$read_args$problems, "error")
+  expect_false(calls$read_args$progress)
+  expect_identical(calls$collect_args$standardize, "lightlogr")
+  expect_s3_class(first, "llw_glc_full_import_result")
+  expect_identical(first$data, full_data)
+  expect_identical(second$data, full_data)
+  expect_identical(
+    first$transfer_review_fingerprint,
+    second$transfer_review_fingerprint
+  )
+  expect_false("preview_result" %in% names(payload))
+  expect_identical(first$actual$row_count, 4L)
+  expect_identical(first$actual$input_count, 2L)
+  expect_identical(first$actual$file_group_count, 2L)
+  expect_identical(first$actual$factor_evidence$name, "EVENT")
+  expect_identical(
+    first$actual$factor_evidence$levels[[1L]],
+    c("0", "1", "4", "5")
+  )
+  expect_true(first$assurance$fresh_full_read)
+  expect_false(first$assurance$preview_result_used)
+  expect_true(first$assurance$complete_collected_handoff)
+  expect_true(first$assurance$ephemeral)
+  expect_false(first$assurance$persisted)
+  expect_false(first$assurance$promoted)
+  expect_false(first$assurance$integrated)
+  expect_false(first$assurance$downloaded)
+  expect_true(first$assurance$deterministic_fixture)
+  expect_true(first$assurance$no_live_measurement_access)
+  expect_null(nonserializable_path(first))
+  expect_false(glc_value_contains_path(first, fixture$source$cache_dir))
+  expect_type(serialize(first, NULL), "raw")
+})
+
+test_that("full Apply enforces full-set resources and rejects tampered handoffs", {
+  fixture <- glc_adapter_projection_fixture()
+  projection <- fixture$projection
+  projection$files$declared_bytes <- c(60, 60)
+  projection$files$bytes_known <- TRUE
+  projection$byte_evidence$known_file_count <- 2L
+  projection$byte_evidence$unknown_file_count <- 0L
+  projection$byte_evidence$known_declared_bytes <- 120
+  projection$byte_evidence$declared_bytes_complete <- TRUE
+  projection$byte_evidence$declared_total_bytes <- 120
+  review <- new_glc_transfer_review(
+    projection,
+    total_preview_rows = 1L,
+    available_session_bytes = 100
+  )
+  expect_false(review$resource$blocked)
+  expect_true(review$resource$full_import_blocked)
+  expect_identical(review$resource$known_allocated_bytes, 60)
+  expect_identical(review$resource$known_selected_bytes, 120)
+
+  fake <- fake_glcdp_api()
+  expect_error(
+    glcdp_full_import_execute(
+      new_glc_full_import_task_payload(fixture$source, review),
+      api = fake$api,
+      execution_mode = "fixture"
+    ),
+    class = "llw_resource_error",
+    regexp = "full selected file set"
+  )
+  expect_null(fake$calls$opened_ref)
+  expect_null(fake$calls$read)
+
+  open_review <- new_glc_transfer_review(
+    fixture$projection,
+    total_preview_rows = 1L,
+    available_session_bytes = 1000
+  )
+  collection <- data.frame(
+    dataset_id = open_review$files$dataset_id,
+    file_group_id = open_review$files$file_group_id,
+    files = I(lapply(
+      open_review$files$declared_path,
+      function(path) file.path("deterministic-fixture", path)
+    )),
+    runtime_input_ids = I(list(
+      "fixture://full-input/001",
+      "fixture://full-input/002"
+    )),
+    data = I(list(
+      data.frame(MEDI = 1),
+      data.frame(MEDI = 2)
+    )),
+    stringsAsFactors = FALSE
+  )
+  result <- new_glc_full_import_result(
+    open_review,
+    collection,
+    data.frame(
+      MEDI = c(1, 2),
+      Datetime = as.POSIXct(
+        c("2026-08-01 12:00:00", "2026-08-01 12:00:01"),
+        tz = "UTC"
+      )
+    ),
+    execution_mode = "fixture"
+  )
+  tampered <- result
+  tampered$assurance$preview_result_used <- TRUE
+  tampered$fingerprint <- NULL
+  tampered$fingerprint <- glc_transfer_value_fingerprint(tampered)
+  expect_error(
+    validate_glc_full_import_result(tampered, open_review),
+    class = "llw_validation_error",
+    regexp = "assurance"
   )
 })
 
@@ -1399,6 +1620,11 @@ test_that("bounded transfer review enforces one authoritative row ceiling", {
     )
     expect_s3_class(error, "llw_validation_error")
     expect_match(llw_public_message(error), "10,000", fixed = TRUE)
+    expect_false(grepl(
+      "Slice 2C-A",
+      llw_public_message(error),
+      fixed = TRUE
+    ))
   }
 
   tampered <- at_limit
