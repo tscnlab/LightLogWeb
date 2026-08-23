@@ -13,6 +13,224 @@ shiny_upload_limit_on_start <- function(runtime_profile) {
   }
 }
 
+new_dataset_example_task_payload <- function(
+  key,
+  project_root = lightlogweb_development_root()
+) {
+  assert_scalar_string(key, "key")
+  assert_scalar_string(project_root, "project_root")
+  project_root <- normalizePath(
+    project_root,
+    winslash = "/",
+    mustWork = TRUE
+  )
+  payload <- list(
+    schema_version = "1.0.0",
+    key = key,
+    project_root = project_root
+  )
+  assert_serializable_value(payload, "dataset example task payload")
+  payload
+}
+
+validate_dataset_example_task_payload <- function(payload) {
+  if (
+    !is.list(payload) ||
+      !identical(
+        names(payload),
+        c("schema_version", "key", "project_root")
+      ) ||
+      !identical(payload$schema_version, "1.0.0")
+  ) {
+    abort_llw(
+      "The dataset example task payload is malformed or unsupported.",
+      type = "validation"
+    )
+  }
+  assert_scalar_string(payload$key, "payload$key")
+  assert_scalar_string(payload$project_root, "payload$project_root")
+  if (!dir.exists(payload$project_root)) {
+    abort_llw(
+      "The dataset example project root is unavailable.",
+      type = "unavailable_feature",
+      public_message = paste(
+        "The ready-to-use example files are unavailable in this checkout.",
+        "Choose another example or use the import workflow."
+      )
+    )
+  }
+  assert_serializable_value(payload, "dataset example task payload")
+  payload
+}
+
+dataset_example_load_task_worker <- function(payload, spec = NULL) {
+  payload <- validate_dataset_example_task_payload(payload)
+  load_dataset_example(
+    payload$key,
+    project_root = payload$project_root
+  )
+}
+
+new_dataset_example_loader <- function(
+  runtime,
+  schedule,
+  on_busy,
+  on_loaded,
+  on_failed,
+  worker = dataset_example_load_task_worker
+) {
+  callbacks <- list(
+    schedule = schedule,
+    on_busy = on_busy,
+    on_loaded = on_loaded,
+    on_failed = on_failed,
+    worker = worker
+  )
+  if (!all(vapply(callbacks, is.function, logical(1)))) {
+    abort_llw(
+      "Dataset example loader callbacks and worker must be functions.",
+      type = "validation"
+    )
+  }
+
+  pending <- shiny::reactiveVal(FALSE)
+  current_request <- NULL
+  handled_task_id <- NULL
+  task <- if (identical(worker, dataset_example_load_task_worker)) {
+    new_long_task(
+      worker = dataset_example_load_task_worker,
+      task_type = "preparation",
+      runtime = runtime
+    )
+  } else {
+    new_long_task(
+      worker = worker,
+      task_type = "preparation",
+      runtime = runtime
+    )
+  }
+
+  active <- shiny::reactive({
+    isTRUE(pending()) ||
+      task$state() %in% c("queued", "running", "finalizing")
+  })
+
+  invoke <- function(
+    key,
+    project_root = lightlogweb_development_root()
+  ) {
+    if (isTRUE(shiny::isolate(active()))) return(invisible(FALSE))
+    payload <- tryCatch(
+      new_dataset_example_task_payload(key, project_root),
+      error = identity
+    )
+    if (inherits(payload, "error")) {
+      on_failed(normalize_task_error(payload, "preparation"), key, NULL)
+      return(invisible(FALSE))
+    }
+
+    pending(TRUE)
+    current_request <<- payload
+    busy_error <- tryCatch(
+      {
+        on_busy(payload$key)
+        NULL
+      },
+      error = identity
+    )
+    if (inherits(busy_error, "error")) {
+      pending(FALSE)
+      on_failed(
+        normalize_task_error(busy_error, "preparation"),
+        payload$key,
+        NULL
+      )
+      return(invisible(FALSE))
+    }
+
+    scheduled <- tryCatch(
+      {
+        schedule(function() task$invoke(payload))
+        TRUE
+      },
+      error = identity
+    )
+    if (inherits(scheduled, "error")) {
+      pending(FALSE)
+      on_failed(
+        normalize_task_error(scheduled, "preparation"),
+        payload$key,
+        NULL
+      )
+      return(invisible(FALSE))
+    }
+    invisible(TRUE)
+  }
+
+  shiny::observe({
+    status <- task$status()
+    if (
+      !status$state %in%
+        c("complete", "warning", "error", "cancelled", "stale") ||
+        is.null(status$task_id) ||
+        identical(status$task_id, handled_task_id)
+    ) {
+      return()
+    }
+    handled_task_id <<- status$task_id
+    pending(FALSE)
+    key <- current_request$key %||% "selected example"
+
+    if (status$state %in% c("complete", "warning")) {
+      callback_error <- tryCatch(
+        {
+          on_loaded(task$result(), key, status)
+          NULL
+        },
+        error = identity
+      )
+      if (inherits(callback_error, "error")) {
+        on_failed(
+          normalize_task_error(callback_error, "preparation"),
+          key,
+          status
+        )
+      }
+      return()
+    }
+
+    condition <- if (identical(status$state, "error")) {
+      task$error()
+    } else {
+      new_llw_error(
+        paste("Dataset example task settled as", status$state),
+        type = "preparation",
+        public_message = paste(
+          "Example loading did not complete.",
+          "The previous dataset remains selected and you can retry."
+        )
+      )
+    }
+    on_failed(condition, key, status)
+  })
+
+  list(
+    invoke = invoke,
+    cancel = task$cancel,
+    active = active,
+    state = shiny::reactive({
+      if (isTRUE(pending()) && identical(task$state(), "idle")) {
+        "queued"
+      } else {
+        task$state()
+      }
+    }),
+    status = task$status,
+    result = task$result,
+    error = task$error
+  )
+}
+
 #' Launch LightLogWeb
 #'
 #' @param profile Runtime profile. `"auto"` respects
@@ -85,6 +303,18 @@ LightLogWeb <- function(
       )
     ),
     nav_panel(
+      "GLC Import",
+      value = "glc_import",
+      tags$main(
+        class = "llw-main-shell",
+        `aria-label` = "Import a validated GLC package selection",
+        glcPreviewUI(
+          "glc_preview",
+          source_ui = glcSourceUI("glc_source")
+        )
+      )
+    ),
+    nav_panel(
       "Dashboard",
       value = "dashboard",
       tags$main(
@@ -131,6 +361,20 @@ LightLogWeb <- function(
       color_mode = color_mode,
       presentation = import_presentation
     )
+    glc_source <- glcSourceServer(
+      "glc_source",
+      registry_url = glc_default_registry_url()
+    )
+    glc_import <- glcPreviewServer(
+      "glc_preview",
+      source_selection = glc_source$selection,
+      runtime = runtime,
+      cache_dir = runtime$paths$cache,
+      auto_inspect = reactive(
+        identical(glc_source$deep_link()$state, "matched")
+      ),
+      enable_library_integration = TRUE
+    )
     manager <- datasetManagerServer(
       "datasets",
       datasets = store$datasets,
@@ -140,7 +384,12 @@ LightLogWeb <- function(
       "dashboard",
       dataset = store$selected_dataset,
       active_panel = reactive(input$main_nav),
-      color_mode = color_mode
+      color_mode = color_mode,
+      snapshot_cache_max_bytes = min(
+        as.numeric(runtime_profile$cache_max_bytes) * 0.4,
+        384 * 1024^2
+      ),
+      snapshot_cache_max_entries = 3L
     )
     appended <- append_merge_server(
       "append",
@@ -148,6 +397,11 @@ LightLogWeb <- function(
       selected_dataset_id = store$selected_dataset_id
     )
     pending_name_retry <- reactiveVal(NULL)
+
+    restore_manager_selection <- function() {
+      manager$resync_selection()
+      invisible(NULL)
+    }
 
     dispatch_safely <- function(event, success = NULL, on_success = NULL) {
       tryCatch(
@@ -193,6 +447,82 @@ LightLogWeb <- function(
         }
       )
     }
+
+    example_notification_id <- "llw-dataset-example-load"
+    update_example_load_button <- function(active) {
+      updateActionButton(
+        session,
+        "datasets-load_example",
+        label = if (isTRUE(active)) {
+          "Loading selected example..."
+        } else {
+          "Load selected example"
+        },
+        icon = if (isTRUE(active)) {
+          icon("spinner", class = "fa-spin")
+        } else {
+          icon("flask")
+        },
+        disabled = isTRUE(active)
+      )
+    }
+    example_loader <- new_dataset_example_loader(
+      runtime = runtime,
+      schedule = function(callback) {
+        session$onFlushed(function() {
+          shiny::withReactiveDomain(
+            session,
+            shiny::isolate(callback())
+          )
+        }, once = TRUE)
+      },
+      on_busy = function(key) {
+        update_example_load_button(TRUE)
+        showNotification(
+          paste(
+            "Loading the selected ready-to-use example.",
+            "Device files are being parsed and validated;",
+            "the current dashboard remains available until loading succeeds."
+          ),
+          id = example_notification_id,
+          type = "message",
+          duration = NULL,
+          closeButton = FALSE
+        )
+      },
+      on_loaded = function(record, key, status) {
+        update_example_load_button(FALSE)
+        removeNotification(example_notification_id)
+        dispatch_safely(
+          new_session_event("add", value = record),
+          success = function(event) {
+            paste0(
+              "Example `",
+              event$value$display_name,
+              "` loaded and selected."
+            )
+          },
+          on_success = function() {
+            nav_select("main_nav", selected = "dashboard")
+          }
+        )
+      },
+      on_failed = function(condition, key, status) {
+        update_example_load_button(FALSE)
+        mapped <- normalize_task_error(condition, "preparation")
+        showNotification(
+          paste(
+            llw_public_message(mapped),
+            "The previous dataset remains selected.",
+            "Choose Load selected example to retry."
+          ),
+          id = example_notification_id,
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+      }
+    )
 
     observe({
       context <- pending_name_retry()
@@ -264,6 +594,74 @@ LightLogWeb <- function(
       bindEvent(imported$add_dataset(), ignoreInit = TRUE)
 
     observe({
+      request <- glc_import$library_add_request()
+      req(request)
+      request_id <- request$request_id
+      current <- glc_import$mark_library_add_progress(
+        request_id,
+        "preparing",
+        "Preparing dataset...",
+        paste(
+          "The complete collected handoff and its provenance are being",
+          "validated."
+        )
+      )
+      if (!isTRUE(current)) return()
+      session$onFlushed(function() {
+        record <- tryCatch(
+          {
+            validate_glc_library_add_request(request)
+            new_glc_dataset_record(request$full_import)
+          },
+          error = identity
+        )
+        if (inherits(record, "error")) {
+          mapped <- normalize_task_error(record, "preparation")
+          glc_import$mark_library_add_failed(
+            request_id,
+            llw_public_message(mapped)
+          )
+          showNotification(
+            llw_public_message(mapped),
+            type = "error",
+            duration = NULL
+          )
+          return()
+        }
+        current <- glc_import$mark_library_add_progress(
+          request_id,
+          "adding",
+          "Adding to session library...",
+          "The validated dataset record is being added to this session."
+        )
+        if (!isTRUE(current)) return()
+        session$onFlushed(function() {
+          dispatch_safely(
+            new_session_event("add", value = record),
+            success = function(event) {
+              paste0(
+                "GLC dataset `",
+                event$value$display_name,
+                "` added with its normalized metadata and exact provenance."
+              )
+            },
+            on_success = function() {
+              glc_import$mark_library_add_progress(
+                request_id,
+                "opening",
+                "Opening dashboard...",
+                "The new session dataset is ready and its dashboard is opening."
+              )
+              glc_import$mark_library_added(request_id, record$id)
+              nav_select("main_nav", selected = "dashboard")
+            }
+          )
+        }, once = TRUE)
+      }, once = TRUE)
+    }) |>
+      bindEvent(glc_import$library_add_request(), ignoreInit = TRUE)
+
+    observe({
       event <- manager$event()
       req(event)
       switch(
@@ -273,32 +671,22 @@ LightLogWeb <- function(
           imported$open_import()
         },
         load_example = {
-          record <- tryCatch(
-            load_dataset_example(event$value),
-            error = identity
-          )
-          if (inherits(record, "error")) {
-            mapped <- normalize_task_error(record, "raw_import")
+          started <- example_loader$invoke(event$value)
+          if (
+            !isTRUE(started) &&
+              isTRUE(isolate(example_loader$active()))
+          ) {
             showNotification(
-              llw_public_message(mapped),
-              type = "error",
-              duration = NULL
+              paste(
+                "The selected example is already loading.",
+                "The current dataset remains available while it finishes."
+              ),
+              id = example_notification_id,
+              type = "message",
+              duration = NULL,
+              closeButton = FALSE
             )
-            return()
           }
-          dispatch_safely(
-            new_session_event("add", value = record),
-            success = function(event) {
-              paste0(
-                "Example `",
-                event$value$display_name,
-                "` added to this session."
-              )
-            },
-            on_success = function() {
-              nav_select("main_nav", selected = "dashboard")
-            }
-          )
         },
         open_append = {
           nav_select("main_nav", selected = "append")
@@ -309,10 +697,41 @@ LightLogWeb <- function(
             )
           }
         },
-        select = dispatch_safely(new_session_event(
-          "select",
-          dataset_id = event$dataset_id
-        )),
+        select = {
+          target <- store$datasets()[[event$dataset_id]]
+          if (is.null(target)) {
+            restore_manager_selection()
+            showNotification(
+              "The selected dataset is no longer available.",
+              type = "error",
+              duration = 8
+            )
+          } else {
+            started <- dashboard$request_switch(
+              target,
+              on_success = function() {
+                dispatch_safely(new_session_event(
+                  "select",
+                  dataset_id = event$dataset_id
+                ))
+              },
+              on_error = function(condition) restore_manager_selection()
+            )
+            if (!isTRUE(started)) {
+              restore_manager_selection()
+              if (isTRUE(isolate(dashboard$switching()))) {
+                showNotification(
+                  paste(
+                    "A dataset switch is already in progress.",
+                    "The current dashboard remains available."
+                  ),
+                  type = "message",
+                  duration = 6
+                )
+              }
+            }
+          }
+        },
         rename = dispatch_safely(
           new_session_event(
             "rename",

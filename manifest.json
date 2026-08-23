@@ -6131,7 +6131,7 @@
       "checksum": "5535f3a4b13127f9021f926cbdb3a72b"
     },
     ".Rprofile": {
-      "checksum": "d0c4f12b2c109c47dae8ece508ac7191"
+      "checksum": "a7a1779b4de9a32a935a4738dd6209b1"
     },
     "app.R": {
       "checksum": "c3bee4557904cfc7d7e9e95012537770"
@@ -7025,7 +7025,7 @@
       "checksum": "d4615ae7d3924bd5cc48dc2f3f3f66d0"
     },
     "inst/app/scss/lightlogweb.scss": {
-      "checksum": "5b65fca74ee22c161d02acc6c526deed"
+      "checksum": "c70861df8bffcd4cfb1df65ae7014056"
     },
     "inst/app/www/brand/apple-touch-icon.png": {
       "checksum": "4f38b00ff91d95b2bef3f64e5360c9b9"
@@ -7160,7 +7160,7 @@
       "checksum": "1f09f4b55017d0a7b3e34273c855f90c"
     },
     "R/append-merge.R": {
-      "checksum": "5c34994f0823c74f6ed59373da6a3fa2"
+      "checksum": "2d34ffe46769f7b3da12eec064f1c04f"
     },
     "R/conditions.R": {
       "checksum": "2ee9fcd8c7b3b445b83bdff72ec633c8"
@@ -7169,10 +7169,10 @@
       "checksum": "7e98256a383f65a3a5de08fea6cb2941"
     },
     "R/dashboard-data.R": {
-      "checksum": "be7b9bc7addb36239f9376355b614994"
+      "checksum": "6b9772bf7825ca5eb46cd8bacb156c81"
     },
     "R/dataset-record-builders.R": {
-      "checksum": "943d40ba3cd161f3fa6d7226f0e49b16"
+      "checksum": "9239958a7f32405c0742c8e7661a67e9"
     },
     "R/design-system.R": {
       "checksum": "577d22e333dea13510d2a64d0a413a75"
@@ -7181,7 +7181,7 @@
       "checksum": "afcc46e6d898b789d9b3d5228bd00087"
     },
     "R/glcdp-adapter.R": {
-      "checksum": "cf02df9176007292702ef271d8639008"
+      "checksum": "bf758a82ac3ce125b45204742bb66e42"
     },
     "R/helper.R": {
       "checksum": "539ec6f3da6793428739a8cf58da6349"
@@ -7193,7 +7193,7 @@
       "checksum": "0369c4e448c6a4dbc8e4738602d8bcbe"
     },
     "R/LightLogWeb-app.R": {
-      "checksum": "aa381a3aa9009b1b84cc24d6a3e65b1c"
+      "checksum": "bb7813857e7998be7ed3d15adef422b3"
     },
     "R/LightLogWeb-package.R": {
       "checksum": "408c93ffc85a899d1c7309ed1c85bbfd"
@@ -7202,22 +7202,22 @@
       "checksum": "80105f0890fbd4dee4f4d79bd961fc6c"
     },
     "R/m_append_merge.R": {
-      "checksum": "76847fe1b20e1c16278142a19c79eb89"
+      "checksum": "b6fcc1735ea86b6017703a29700d1f8d"
     },
     "R/m_core_architecture.R": {
       "checksum": "052d2ea2ed20afa0d7c2ffab65181661"
     },
     "R/m_dataset_dashboard.R": {
-      "checksum": "dc1fcd5f751d953f220a9f09dfeed98b"
+      "checksum": "18efa6924faa147a5fcaedf9d8bc893b"
     },
     "R/m_dataset_manager.R": {
-      "checksum": "3ebd0a60ee8e5bd1c8d9ecd204b7f100"
+      "checksum": "20f6199d1dd755e0ed66bc864e822fed"
     },
     "R/m_glc_preview.R": {
-      "checksum": "7885ad913e3fc6367c3c32acf1c9e266"
+      "checksum": "61293c65d8e5810b8622b62434d4b3c5"
     },
     "R/m_glc_source.R": {
-      "checksum": "b413ce2d0c5b8fc30743af03e28f1854"
+      "checksum": "79417d3fd562f1f300e6f3b61fbe7b92"
     },
     "R/m_import_wizard.R": {
       "checksum": "332f2cd7e0aa7da210a89d9271ca9bf0"
@@ -7361,19 +7361,19 @@
       "checksum": "7ad1b3d365572801d7c3aa60cb55f722"
     },
     "tests/testthat/test-app-smoke.R": {
-      "checksum": "321271b34d6eba7f903b93bac8f361ca"
+      "checksum": "bdbb0de5c382faa6f9d349beed55307d"
     },
     "tests/testthat/test-append-merge.R": {
-      "checksum": "139a579ae4d336a63ef250b502defd69"
+      "checksum": "2adc89b4d6af3e2e4a0a958b6f127b78"
     },
     "tests/testthat/test-conditions.R": {
       "checksum": "273af3e0a51df89e51e63a739888bdf9"
     },
     "tests/testthat/test-dashboard-data.R": {
-      "checksum": "4db324ed6f0e0ffdb8f4d6bec00e19ed"
+      "checksum": "9535baa5bdf15d27649b075bf91887a0"
     },
     "tests/testthat/test-dashboard-navigation.R": {
-      "checksum": "f1b037ae2fdf8e152cd366d8140bcad2"
+      "checksum": "7c8f549aeffbf0d17b36937c3af2609f"
     },
     "tests/testthat/test-dashboard-refinements.R": {
       "checksum": "5facb163fc5dcda5dd71834724073ac8"
@@ -7385,13 +7385,13 @@
       "checksum": "bd2686b6e5435f74fb481c73bab71565"
     },
     "tests/testthat/test-glc-preview.R": {
-      "checksum": "21e6af94ea69d2ffe57ea853c26ab15f"
+      "checksum": "fbe75ea161124e4e6f9e03cae2148e1d"
     },
     "tests/testthat/test-glc-source.R": {
       "checksum": "4686862beac2b6c30ad564f2d090d15f"
     },
     "tests/testthat/test-glcdp-adapter.R": {
-      "checksum": "9d41a88099cef55efbaf6380f4b601ec"
+      "checksum": "55071019bccc66f02b2e94446465e5e5"
     },
     "tests/testthat/test-import-boundary.R": {
       "checksum": "04a14343674de2bb99293dfeb073b5ba"
@@ -7403,7 +7403,7 @@
       "checksum": "1ab7ce7323bb0303eafe4179b4cbff1a"
     },
     "tests/testthat/test-module-contracts.R": {
-      "checksum": "0e4fa951f1c1bdf2ceeb34fc6bfa428f"
+      "checksum": "17375b3be977a99b3792560474ef6003"
     },
     "tests/testthat/test-raw-import-contract.R": {
       "checksum": "71481a1c067317e9d3f1632664218985"

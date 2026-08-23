@@ -512,6 +512,9 @@ glc_adapter_plan_fixture <- function(
   groups$device_link_status <- "resolved"
   groups$device_location <- "wrist"
   groups$device_location_type <- "body_worn"
+  groups$dataset_timezone <- "UTC"
+  groups$dataset_latitude <- c(48.1372, 48.2082)
+  groups$dataset_longitude <- c(11.5756, 16.3738)
   groups$description <- c("Group A", "Group B")
   groups$format <- "csv"
   groups$timezone <- "UTC"
@@ -647,6 +650,142 @@ glc_adapter_plan_fixture <- function(
       glc_adapter_empty_table
     )
   )
+  metadata$datasets <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$datasets,
+    3L
+  )
+  metadata$datasets$dataset_id <- c(
+    "dataset-a",
+    "dataset-b",
+    "dataset-unselected"
+  )
+  metadata$datasets$schema_version <- "3.0.2"
+  metadata$datasets$study_id <- c("study-a", "study-a", "study-other")
+  metadata$datasets$study_link_status <- "resolved"
+  metadata$datasets$participant_id <- c(
+    "participant-a",
+    "participant-b",
+    "participant-unselected"
+  )
+  metadata$datasets$participant_associated <- TRUE
+  metadata$datasets$participant_link_status <- "resolved"
+  metadata$datasets$timezone <- c("UTC", "UTC", "Europe/Berlin")
+  metadata$datasets$latitude <- c(48.1372, 48.2082, 52.5200)
+  metadata$datasets$longitude <- c(11.5756, 16.3738, 13.4050)
+  metadata$datasets$file_group_count <- 1L
+  metadata$datasets$file_count <- 1L
+  metadata$datasets$modalities <- rep(list("light"), 3L)
+  metadata$datasets$device_ids <- list(
+    "device-a",
+    "device-b",
+    "device-unselected"
+  )
+  metadata$datasets$primary_variables <- rep(list("MEDI"), 3L)
+  metadata$participants <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$participants,
+    3L
+  )
+  metadata$participants$participant_id <- c(
+    "participant-a",
+    "participant-b",
+    "participant-unselected"
+  )
+  metadata$participants$age <- c(31, 44, 52)
+  metadata$devices <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$devices,
+    3L
+  )
+  metadata$devices$device_id <- c(
+    "device-a",
+    "device-b",
+    "device-unselected"
+  )
+  metadata$devices$schema_version <- "3.0.2"
+  metadata$devices$manufacturer <- "Fixture"
+  metadata$devices$model <- c("WristOne", "ChestOne", "UnusedOne")
+  metadata$studies <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$studies,
+    2L
+  )
+  metadata$studies$study_id <- c("study-a", "study-other")
+  metadata$studies$schema_version <- "3.0.2"
+  metadata$studies$title <- c("Selected study", "Unselected study")
+  metadata$studies$dataset_ids <- list(
+    c("dataset-a", "dataset-b"),
+    "dataset-unselected"
+  )
+  metadata$contributors <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$contributors,
+    2L
+  )
+  metadata$contributors$contributor_id <- c(
+    "contributor-a",
+    "contributor-package"
+  )
+  metadata$contributors$position <- 1:2
+  metadata$contributors$full_name <- c(
+    "Selected Contributor",
+    "Package Contributor"
+  )
+  metadata$contributors$roles <- list("Investigation", "Data curation")
+  metadata$study_contributors <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$study_contributors,
+    2L
+  )
+  metadata$study_contributors$study_id <- c("study-a", "study-other")
+  metadata$study_contributors$position <- 1L
+  metadata$study_contributors$full_name <- c(
+    "Selected Contributor",
+    "Unselected Contributor"
+  )
+  metadata$study_contributors$roles <- list("Investigation", "Investigation")
+  metadata$participant_characteristics <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$participant_characteristics,
+    3L
+  )
+  metadata$participant_characteristics$participant_id <- c(
+    "participant-a",
+    "participant-b",
+    "participant-unselected"
+  )
+  metadata$participant_characteristics$participant_link_status <- "resolved"
+  metadata$participant_characteristics$characteristic_position <- 1L
+  metadata$participant_characteristics$value_position <- 1L
+  metadata$participant_characteristics$name <- "VLSQ8"
+  metadata$participant_characteristics$value <- c("14", "22", "35")
+  metadata$participant_characteristics$value_type <- "number"
+  metadata$participant_characteristics$unit <- "points"
+  metadata$participant_characteristics$description <- "Fixture score"
+  metadata$file_group_variables <- glc_adapter_empty_table(
+    glc_collection_plan_metadata_tables()$file_group_variables,
+    3L
+  )
+  metadata$file_group_variables$dataset_id <- c(
+    "dataset-a",
+    "dataset-b",
+    "dataset-unselected"
+  )
+  metadata$file_group_variables$file_group_id <- c(
+    "dataset-a:1",
+    "dataset-b:1",
+    "dataset-unselected:1"
+  )
+  metadata$file_group_variables$declaration_position <- 1L
+  metadata$file_group_variables$selected_by_request <- TRUE
+  metadata$file_group_variables$selected_for_output <- TRUE
+  metadata$file_group_variables$selection_origin <- "all"
+  metadata$file_group_variables$name <- "MEDI"
+  metadata$file_group_variables$label <- "Melanopic EDI"
+  metadata$file_group_variables$description <- paste(
+    "Melanopic equivalent daylight illuminance"
+  )
+  metadata$file_group_variables$unit <- "lx"
+  metadata$file_group_variables$calibration <- "Factory calibration"
+  metadata$file_group_variables$type <- "number"
+  metadata$file_group_variables$term <- "melanopic_edi"
+  metadata$file_group_variables$term_name <- "Melanopic EDI"
+  metadata$file_group_variables$primary <- TRUE
+  metadata$file_group_variables$factor_level_count <- 0L
 
   structure(
     list(
@@ -1133,7 +1272,7 @@ test_that("variable projection preserves the exact Slice 2A structure", {
     metadata_filters = list(characteristic_numeric_tokens = token_map)
   )
   expect_s3_class(review, "llw_glc_projection_review")
-  expect_identical(review$review_version, "1.0.0")
+  expect_identical(review$review_version, "1.1.0")
   expect_identical(review$refined_file_group_ids, refined_ids)
   expect_identical(review$parent$plan_fingerprint, strrep("f", 64L))
   expect_identical(review$selected_compatibility_id, parent_id)
@@ -1151,12 +1290,72 @@ test_that("variable projection preserves the exact Slice 2A structure", {
     review$metadata_filters$characteristic_numeric_tokens,
     token_map
   )
+  expect_s3_class(review$metadata, "llw_glc_selected_metadata")
+  expect_identical(
+    review$metadata$selected_ids$dataset_ids,
+    c("dataset-a", "dataset-b")
+  )
+  expect_identical(
+    review$metadata$selected_ids$participant_ids,
+    c("participant-a", "participant-b")
+  )
+  expect_identical(
+    review$metadata$selected_ids$device_ids,
+    c("device-a", "device-b")
+  )
+  expect_false(
+    "dataset-unselected" %in% review$metadata$tables$datasets$dataset_id
+  )
+  expect_false(
+    "participant-unselected" %in%
+      review$metadata$tables$participants$participant_id
+  )
+  expect_false(
+    "device-unselected" %in% review$metadata$tables$devices$device_id
+  )
+  expect_identical(
+    review$metadata$tables$study_contributors$full_name,
+    "Selected Contributor"
+  )
+  expect_setequal(
+    review$metadata$tables$contributors$full_name,
+    c("Selected Contributor", "Package Contributor")
+  )
+  expect_equal(
+    review$metadata$tables$datasets$latitude,
+    c(48.1372, 48.2082)
+  )
+  expect_equal(
+    review$metadata$tables$datasets$longitude,
+    c(11.5756, 16.3738)
+  )
+  expect_identical(
+    review$metadata$tables$file_group_variables$unit,
+    c("lx", "lx")
+  )
+  expect_null(nonserializable_path(review$metadata))
+  expect_type(serialize(review$metadata, NULL), "raw")
   expect_true(review$assurance$projection_only)
   expect_false(review$assurance$compatibility_replanned)
   expect_false(review$assurance$compatibility_identity_changed)
   expect_false(review$assurance$measurement_contents_transferred)
   expect_null(nonserializable_path(review))
   expect_type(serialize(review, NULL), "raw")
+
+  tampered_metadata <- review$metadata
+  tampered_metadata$tables$datasets$latitude[[1L]] <- 999
+  expect_error(
+    validate_glc_selected_metadata(tampered_metadata),
+    class = "llw_validation_error",
+    regexp = "invalid coordinates"
+  )
+  tampered_metadata <- review$metadata
+  tampered_metadata$tables$participants$gender[[1L]] <- "tampered"
+  expect_error(
+    validate_glc_selected_metadata(tampered_metadata),
+    class = "llw_validation_error",
+    regexp = "fingerprint"
+  )
 
   expect_error(
     new_glc_projection_review(
@@ -1382,6 +1581,20 @@ test_that("full Apply uses a fresh complete read and never accepts preview rows"
     stringsAsFactors = FALSE
   )
   full_data <- data.frame(
+    Id = c("participant-a", "participant-a", "participant-b", "participant-b"),
+    file.name = c("a.csv", "a.csv", "b.csv", "b.csv"),
+    file_group_id = c(
+      "dataset-a:1",
+      "dataset-a:1",
+      "dataset-b:1",
+      "dataset-b:1"
+    ),
+    participant_Id = c(
+      "participant-a",
+      "participant-a",
+      "participant-b",
+      "participant-b"
+    ),
     MEDI = c(10, 11, 12, 13),
     Datetime = as.POSIXct("2026-08-01 12:00:00", tz = "UTC") + 0:3,
     EVENT = factor(c("0", "1", "4", "5")),
@@ -1484,9 +1697,74 @@ test_that("full Apply uses a fresh complete read and never accepts preview rows"
   expect_false(first$assurance$downloaded)
   expect_true(first$assurance$deterministic_fixture)
   expect_true(first$assurance$no_live_measurement_access)
+  expect_s3_class(first$metadata, "llw_glc_selected_metadata")
+  expect_identical(first$metadata, fixture$projection$metadata)
+  tampered_handoff <- first
+  tampered_handoff$metadata$tables$datasets$timezone[[1L]] <-
+    "Europe/Berlin"
+  expect_error(
+    validate_glc_full_import_result(tampered_handoff, review),
+    class = "llw_validation_error",
+    regexp = "metadata"
+  )
   expect_null(nonserializable_path(first))
   expect_false(glc_value_contains_path(first, fixture$source$cache_dir))
   expect_type(serialize(first, NULL), "raw")
+
+  record <- new_glc_dataset_record(first)
+  expect_s3_class(record, "llw_dataset_record")
+  expect_identical(dataset_raw_data(record), full_data)
+  expect_identical(
+    record$factual_metadata$glc_metadata,
+    first$metadata
+  )
+  expect_identical(
+    record$factual_metadata$dataset_metadata$dataset_id,
+    c("dataset-a", "dataset-b")
+  )
+  expect_equal(
+    record$factual_metadata$dataset_metadata$latitude,
+    c(48.1372, 48.2082)
+  )
+  expect_equal(
+    record$factual_metadata$dataset_metadata$longitude,
+    c(11.5756, 16.3738)
+  )
+  expect_false("latitude" %in% names(record$factual_metadata))
+  expect_false("longitude" %in% names(record$factual_metadata))
+  expect_identical(record$factual_metadata$variables$MEDI$unit, "lx")
+  expect_identical(
+    record$factual_metadata$variables$MEDI$calibration,
+    "Factory calibration"
+  )
+  expect_identical(
+    record$source_manifest$details$resolved_revision,
+    strrep("e", 40L)
+  )
+  expect_identical(
+    record$source_manifest$details$metadata$selected_metadata_fingerprint,
+    first$metadata$fingerprint
+  )
+  expect_true(record$provenance$glc_library_integration$complete_handoff_used)
+  expect_false(record$provenance$glc_library_integration$preview_result_used)
+
+  snapshot <- dashboard_dataset_snapshot(record)
+  expect_s3_class(snapshot, "llw_dashboard_snapshot")
+  expect_identical(snapshot$glc_metadata, first$metadata)
+  provenance <- dashboard_provenance_table(snapshot)
+  expect_identical(
+    provenance$Value[provenance$Field == "Exact package revision"],
+    strrep("e", 40L)
+  )
+  expect_identical(
+    provenance$Value[provenance$Field == "Datasets with coordinates"],
+    "2"
+  )
+  expect_match(
+    provenance$Value[provenance$Field == "Metadata table row counts"],
+    "datasets=2",
+    fixed = TRUE
+  )
 })
 
 test_that("full Apply enforces full-set resources and rejects tampered handoffs", {

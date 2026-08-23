@@ -24,6 +24,100 @@ test_that("dataset inventory reports provenance, dimensions, time, and unknowns"
   expect_true(is.na(unknown_inventory$device))
 })
 
+test_that("append UI contracts are lightweight, cached, bounded, and exact", {
+  records <- m4_records()
+  first <- records[[1L]]
+  builds <- 0L
+  cache <- new_append_ui_cache(max_entries = 1L, max_bytes = 1024^2)
+  key <- paste0("contract:", append_ui_record_signature(first))
+  builder <- function() {
+    builds <<- builds + 1L
+    append_ui_record_contract(first)
+  }
+
+  cold <- cache$get(key, builder)
+  warm <- cache$get(key, builder)
+  expect_identical(cold, warm)
+  expect_identical(builds, 1L)
+  expect_identical(cache$stats()$hits, 1L)
+  expect_identical(cache$stats()$entries, 1L)
+  expect_lte(cache$stats()$bytes, cache$stats()$max_bytes)
+  expect_identical(cold$choices, append_record_column_choices(first))
+
+  contains_payload <- function(value) {
+    if (is.raw(value) || is.data.frame(value)) return(TRUE)
+    if (!is.list(value)) return(FALSE)
+    any(vapply(value, contains_payload, logical(1)))
+  }
+  expect_false(contains_payload(cold))
+
+  second <- records[[2L]]
+  second_key <- paste0("contract:", append_ui_record_signature(second))
+  cache$get(second_key, function() append_ui_record_contract(second))
+  expect_identical(cache$stats()$entries, 1L)
+  expect_false(key %in% cache$keys())
+
+  revised <- first
+  revised$revision <- revised$revision + 1L
+  expect_false(identical(
+    append_ui_record_signature(first),
+    append_ui_record_signature(revised)
+  ))
+  cache$clear()
+  expect_identical(cache$stats()$entries, 0L)
+  expect_identical(cache$stats()$bytes, 0)
+})
+
+test_that("cached append inputs preserve spec parity while full preview revalidates", {
+  records <- m4_records()
+  ids <- names(records)
+  input <- list(
+    source_ids = ids,
+    participant_policy = "prefix_source",
+    measurement_strategy = "separate",
+    display_name = "Cached append parity"
+  )
+  contracts <- stats::setNames(
+    lapply(records, append_ui_record_contract),
+    ids
+  )
+  uncached_spec <- append_spec_from_inputs(input, records)
+  cached_spec <- append_spec_from_inputs(input, records, contracts)
+  expect_identical(cached_spec, uncached_spec)
+
+  preview <- preview_append_merge(records, cached_spec)
+  expect_true(preview$can_apply)
+  expect_identical(
+    preview$fingerprint,
+    append_source_fingerprint(records, cached_spec)
+  )
+
+  changed <- m4_record(
+    "Changed current source",
+    instants = c(1767254400, 1767254520, 1767254400)
+  )
+  changed$id <- records[[1L]]$id
+  changed <- validate_dataset_record(changed)
+  current_records <- records
+  current_records[[1L]] <- changed
+  expect_false(identical(
+    append_ui_record_signature(records[[1L]]),
+    append_ui_record_signature(current_records[[1L]])
+  ))
+  expect_false(identical(
+    preview$fingerprint,
+    append_source_fingerprint(current_records, cached_spec)
+  ))
+
+  current_spec <- append_spec_from_inputs(input, current_records)
+  current_preview <- preview_append_merge(current_records, current_spec)
+  expect_true(current_preview$can_apply)
+  expect_identical(
+    current_preview$fingerprint,
+    append_source_fingerprint(current_records, current_spec)
+  )
+})
+
 test_that("dataset duplication creates a new independent stable record", {
   source <- m4_record("Source")
   duplicate <- duplicate_dataset_record(source, "Source copy")
@@ -41,6 +135,19 @@ test_that("dataset duplication creates a new independent stable record", {
 
 test_that("a differing-schema append uses a union and preserves source context", {
   records <- m4_records()
+  first_id <- names(records)[[1L]]
+  second_id <- names(records)[[2L]]
+  records[[first_id]]$factual_metadata$locations <- data.frame(
+    Id = c("P01", "P02"),
+    latitude = c(48.15, 48.16),
+    longitude = c(11.57, 11.58),
+    stringsAsFactors = FALSE
+  )
+  records[[second_id]]$factual_metadata$participants <- data.frame(
+    Participant = c("P01", "P02"),
+    age = c(31L, 32L),
+    stringsAsFactors = FALSE
+  )
   source_checksums <- vapply(records, `[[`, character(1), "raw_checksum")
   source_clock_labels <- lapply(records, function(record) {
     data <- dataset_raw_data(record)
@@ -107,7 +214,30 @@ test_that("a differing-schema append uses a union and preserves source context",
   expect_identical(merged_record$source_manifest$source_type, "append_merge")
   expect_identical(merged_record$source_manifest$source_timezone, "UTC")
   expect_length(merged_record$provenance$append_merge$source_records, 2L)
-  expect_null(merged_record$analysis_settings$primary_variable)
+  expect_identical(
+    names(merged_record$factual_metadata$source_metadata),
+    names(records)
+  )
+  expect_identical(
+    merged_record$factual_metadata$source_metadata[[first_id]],
+    records[[first_id]]$factual_metadata
+  )
+  expect_identical(
+    merged_record$factual_metadata$source_metadata[[second_id]],
+    records[[second_id]]$factual_metadata
+  )
+  expect_identical(
+    merged_record$analysis_settings$primary_variable,
+    "first_MEDI"
+  )
+  expect_identical(
+    merged_record$provenance$append_merge$source_records[[1L]]$provenance,
+    records[[first_id]]$provenance
+  )
+  expect_identical(
+    merged_record$provenance$append_merge$source_records[[2L]]$provenance,
+    records[[second_id]]$provenance
+  )
   provenance_eligibility <- merged_record$provenance$primary_variable_eligibility
   expect_false(provenance_eligibility$eligible[
     provenance_eligibility$variable == "llw_source_row"
@@ -796,6 +926,12 @@ test_that("missing required mapping types return a recoverable named error", {
 })
 
 test_that("append UI helpers expose select-all and state-dependent actions", {
+  append_ui <- htmltools::renderTags(append_merge_ui("append"))$html
+  expect_match(
+    append_ui,
+    "llw-append-measurement-layout",
+    fixed = TRUE
+  )
   eligible <- c("Context", "Temperature")
   expect_identical(
     append_selected_optional_columns(append_optional_all_value(), eligible),
@@ -823,6 +959,37 @@ test_that("append UI helpers expose select-all and state-dependent actions", {
   )$html
   expect_match(ready, "Preview again", fixed = TRUE)
   expect_false(grepl('id="append-apply" disabled=', ready, fixed = TRUE))
+
+  preview_busy <- htmltools::renderTags(
+    append_preview_actions_ui(
+      NS("append"),
+      TRUE,
+      TRUE,
+      TRUE,
+      busy_action = "preview"
+    )
+  )$html
+  expect_match(preview_busy, "Building preview...", fixed = TRUE)
+  expect_match(preview_busy, 'aria-busy="true"', fixed = TRUE)
+  expect_identical(
+    stringr::str_count(preview_busy, 'disabled="disabled"'),
+    2L
+  )
+
+  create_busy <- htmltools::renderTags(
+    append_preview_actions_ui(
+      NS("append"),
+      TRUE,
+      TRUE,
+      TRUE,
+      busy_action = "create"
+    )
+  )$html
+  expect_match(create_busy, "Creating dataset...", fixed = TRUE)
+  expect_identical(
+    stringr::str_count(create_busy, 'disabled="disabled"'),
+    2L
+  )
 
   mapping_action <- htmltools::renderTags(
     append_error_step_action_ui(NS("append"), "mapping")

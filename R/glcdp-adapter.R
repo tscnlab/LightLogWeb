@@ -1955,6 +1955,369 @@ glc_collection_plan_metadata_tables <- function() {
   )
 }
 
+glc_metadata_ids <- function(values) {
+  values <- unlist(values, recursive = TRUE, use.names = FALSE)
+  glc_nonempty_unique(values)
+}
+
+glc_metadata_rows <- function(table, column, ids) {
+  if (!is.data.frame(table) || !column %in% names(table)) {
+    abort_llw(
+      paste0("Normalized metadata table is missing `", column, "`."),
+      type = "validation"
+    )
+  }
+  if (length(ids) == 0L) return(table[FALSE, , drop = FALSE])
+  table[as.character(table[[column]]) %in% ids, , drop = FALSE]
+}
+
+new_glc_selected_metadata <- function(parent_plan, selected_groups) {
+  if (
+    !inherits(parent_plan, "glc_collection_plan") ||
+      !is.list(parent_plan) ||
+      !is.list(parent_plan$metadata) ||
+      !is.data.frame(selected_groups)
+  ) {
+    abort_llw(
+      "Selected GLC metadata requires one validated public collection plan.",
+      type = "validation"
+    )
+  }
+  required_group_columns <- c(
+    "dataset_id",
+    "file_group_id",
+    "study_id",
+    "participant_id",
+    "device_id",
+    "datasheet_id",
+    "device_location",
+    "device_location_type",
+    "dataset_timezone",
+    "dataset_latitude",
+    "dataset_longitude"
+  )
+  if (!all(required_group_columns %in% names(selected_groups))) {
+    abort_llw(
+      "The selected GLC groups lack public metadata context.",
+      type = "validation"
+    )
+  }
+  metadata_contract <- glc_collection_plan_metadata_tables()
+  if (
+    !all(names(metadata_contract) %in% names(parent_plan$metadata)) ||
+      !is.character(parent_plan$provenance$metadata_fingerprint) ||
+      length(parent_plan$provenance$metadata_fingerprint) != 1L ||
+      is.na(parent_plan$provenance$metadata_fingerprint) ||
+      !grepl(
+        "^[0-9a-f]{64}$",
+        parent_plan$provenance$metadata_fingerprint
+      )
+  ) {
+    abort_llw(
+      "The parent plan has invalid normalized metadata provenance.",
+      type = "validation"
+    )
+  }
+
+  metadata <- parent_plan$metadata
+  dataset_ids <- glc_metadata_ids(selected_groups$dataset_id)
+  file_group_ids <- glc_metadata_ids(selected_groups$file_group_id)
+  datasets <- glc_metadata_rows(metadata$datasets, "dataset_id", dataset_ids)
+  study_ids <- glc_metadata_ids(c(selected_groups$study_id, datasets$study_id))
+  participant_ids <- glc_metadata_ids(c(
+    selected_groups$participant_id,
+    datasets$participant_id
+  ))
+  device_ids <- glc_metadata_ids(c(
+    selected_groups$device_id,
+    datasets$device_ids
+  ))
+  devices <- glc_metadata_rows(metadata$devices, "device_id", device_ids)
+  device_sensors <- glc_metadata_rows(
+    metadata$device_sensors,
+    "device_id",
+    device_ids
+  )
+  datasheet_ids <- glc_metadata_ids(c(
+    selected_groups$datasheet_id,
+    devices$datasheet_id,
+    device_sensors$datasheet_id
+  ))
+  # The public package-level contributors table has no study or dataset
+  # foreign key. Retain it as package provenance instead of silently dropping
+  # records that cannot be scoped more narrowly.
+  contributor_ids <- glc_metadata_ids(metadata$contributors$contributor_id)
+  selected_entity_ids <- glc_metadata_ids(c(
+    dataset_ids,
+    file_group_ids,
+    study_ids,
+    participant_ids,
+    device_ids,
+    datasheet_ids,
+    contributor_ids
+  ))
+  extension_rows <- metadata$extensions[
+    as.character(metadata$extensions$entity_id) %in%
+      selected_entity_ids |
+      as.character(metadata$extensions$parent_id) %in% selected_entity_ids,
+    ,
+    drop = FALSE
+  ]
+  study_contributors <- glc_metadata_rows(
+    metadata$study_contributors,
+    "study_id",
+    study_ids
+  )
+  tables <- list(
+    resource_status = metadata$resource_status,
+    studies = glc_metadata_rows(metadata$studies, "study_id", study_ids),
+    study_groups = glc_metadata_rows(
+      metadata$study_groups,
+      "study_id",
+      study_ids
+    ),
+    study_contributors = study_contributors,
+    contributors = metadata$contributors,
+    datasets = datasets,
+    dataset_terms = glc_metadata_rows(
+      metadata$dataset_terms,
+      "dataset_id",
+      dataset_ids
+    ),
+    participants = glc_metadata_rows(
+      metadata$participants,
+      "participant_id",
+      participant_ids
+    ),
+    participant_characteristics = glc_metadata_rows(
+      metadata$participant_characteristics,
+      "participant_id",
+      participant_ids
+    ),
+    devices = devices,
+    device_sensors = device_sensors,
+    datasheets = glc_metadata_rows(
+      metadata$datasheets,
+      "datasheet_id",
+      datasheet_ids
+    ),
+    datasheet_parameters = glc_metadata_rows(
+      metadata$datasheet_parameters,
+      "datasheet_id",
+      datasheet_ids
+    ),
+    datasheet_channels = glc_metadata_rows(
+      metadata$datasheet_channels,
+      "datasheet_id",
+      datasheet_ids
+    ),
+    instruments = metadata$instruments[
+      as.character(metadata$instruments$dataset_id) %in%
+        dataset_ids &
+        as.character(metadata$instruments$file_group_id) %in% file_group_ids,
+      ,
+      drop = FALSE
+    ],
+    file_group_variables = metadata$file_group_variables[
+      as.character(metadata$file_group_variables$dataset_id) %in%
+        dataset_ids &
+        as.character(metadata$file_group_variables$file_group_id) %in%
+          file_group_ids,
+      ,
+      drop = FALSE
+    ],
+    file_group_factor_levels = metadata$file_group_factor_levels[
+      as.character(metadata$file_group_factor_levels$dataset_id) %in%
+        dataset_ids &
+        as.character(metadata$file_group_factor_levels$file_group_id) %in%
+          file_group_ids,
+      ,
+      drop = FALSE
+    ],
+    extensions = extension_rows
+  )
+  selected <- structure(
+    list(
+      metadata_schema = "llw-glc-selected-metadata",
+      metadata_version = "1.0.0",
+      upstream_schema = parent_plan$metadata$schema,
+      upstream_version = parent_plan$metadata$version,
+      upstream_fingerprint = parent_plan$provenance$metadata_fingerprint,
+      selected_ids = list(
+        file_group_ids = file_group_ids,
+        dataset_ids = dataset_ids,
+        study_ids = study_ids,
+        participant_ids = participant_ids,
+        device_ids = device_ids,
+        datasheet_ids = datasheet_ids
+      ),
+      file_group_context = selected_groups[,
+        required_group_columns,
+        drop = FALSE
+      ],
+      tables = tables
+    ),
+    class = c("llw_glc_selected_metadata", "list")
+  )
+  selected$fingerprint <- glc_transfer_value_fingerprint(selected)
+  validate_glc_selected_metadata(selected)
+  selected
+}
+
+validate_glc_selected_metadata <- function(metadata) {
+  if (!inherits(metadata, "llw_glc_selected_metadata") || !is.list(metadata)) {
+    abort_llw("The selected GLC metadata is invalid.", type = "validation")
+  }
+  required <- c(
+    "metadata_schema",
+    "metadata_version",
+    "upstream_schema",
+    "upstream_version",
+    "upstream_fingerprint",
+    "selected_ids",
+    "file_group_context",
+    "tables",
+    "fingerprint"
+  )
+  id_names <- c(
+    "file_group_ids",
+    "dataset_ids",
+    "study_ids",
+    "participant_ids",
+    "device_ids",
+    "datasheet_ids"
+  )
+  context_columns <- c(
+    "dataset_id",
+    "file_group_id",
+    "study_id",
+    "participant_id",
+    "device_id",
+    "datasheet_id",
+    "device_location",
+    "device_location_type",
+    "dataset_timezone",
+    "dataset_latitude",
+    "dataset_longitude"
+  )
+  if (
+    !all(required %in% names(metadata)) ||
+      !identical(metadata$metadata_schema, "llw-glc-selected-metadata") ||
+      !identical(metadata$metadata_version, "1.0.0") ||
+      !identical(metadata$upstream_schema, "glc-package-metadata") ||
+      !identical(metadata$upstream_version, "1.0.0") ||
+      !is.character(metadata$upstream_fingerprint) ||
+      length(metadata$upstream_fingerprint) != 1L ||
+      is.na(metadata$upstream_fingerprint) ||
+      !grepl("^[0-9a-f]{64}$", metadata$upstream_fingerprint) ||
+      !is.list(metadata$selected_ids) ||
+      !identical(names(metadata$selected_ids), id_names) ||
+      !is.data.frame(metadata$file_group_context) ||
+      !all(context_columns %in% names(metadata$file_group_context)) ||
+      !is.list(metadata$tables)
+  ) {
+    abort_llw(
+      "The selected GLC metadata contract is incomplete.",
+      type = "validation"
+    )
+  }
+  metadata_contract <- glc_collection_plan_metadata_tables()
+  if (!all(names(metadata_contract) %in% names(metadata$tables))) {
+    abort_llw(
+      "The selected GLC metadata lacks normalized tables.",
+      type = "validation"
+    )
+  }
+  for (name in names(metadata_contract)) {
+    validate_glc_inspection_table(
+      metadata$tables[[name]],
+      paste("selected GLC metadata", name),
+      metadata_contract[[name]]
+    )
+  }
+  ids <- lapply(metadata$selected_ids, glc_metadata_ids)
+  if (
+    length(ids$file_group_ids) == 0L ||
+      length(ids$dataset_ids) == 0L ||
+      !identical(
+        glc_metadata_ids(metadata$file_group_context$file_group_id),
+        ids$file_group_ids
+      ) ||
+      !identical(
+        glc_metadata_ids(metadata$file_group_context$dataset_id),
+        ids$dataset_ids
+      ) ||
+      any(
+        !as.character(metadata$tables$datasets$dataset_id) %in%
+          ids$dataset_ids
+      ) ||
+      any(
+        !as.character(metadata$tables$dataset_terms$dataset_id) %in%
+          ids$dataset_ids
+      ) ||
+      any(
+        !as.character(metadata$tables$instruments$file_group_id) %in%
+          ids$file_group_ids
+      ) ||
+      any(
+        !as.character(metadata$tables$file_group_variables$file_group_id) %in%
+          ids$file_group_ids
+      ) ||
+      any(
+        !as.character(
+          metadata$tables$file_group_factor_levels$file_group_id
+        ) %in%
+          ids$file_group_ids
+      )
+  ) {
+    abort_llw(
+      "The selected GLC metadata does not match its fixed membership.",
+      type = "validation"
+    )
+  }
+  latitude <- suppressWarnings(as.numeric(c(
+    metadata$file_group_context$dataset_latitude,
+    metadata$tables$datasets$latitude
+  )))
+  longitude <- suppressWarnings(as.numeric(c(
+    metadata$file_group_context$dataset_longitude,
+    metadata$tables$datasets$longitude
+  )))
+  if (
+    any(
+      !is.na(latitude) &
+        (!is.finite(latitude) | latitude < -90 | latitude > 90)
+    ) ||
+      any(
+        !is.na(longitude) &
+          (!is.finite(longitude) | longitude < -180 | longitude > 180)
+      )
+  ) {
+    abort_llw(
+      "The selected GLC metadata contains invalid coordinates.",
+      type = "validation"
+    )
+  }
+  fingerprint_value <- metadata
+  fingerprint_value$fingerprint <- NULL
+  if (
+    !is.character(metadata$fingerprint) ||
+      length(metadata$fingerprint) != 1L ||
+      is.na(metadata$fingerprint) ||
+      !identical(
+        metadata$fingerprint,
+        glc_transfer_value_fingerprint(fingerprint_value)
+      )
+  ) {
+    abort_llw(
+      "The selected GLC metadata fingerprint is invalid.",
+      type = "validation"
+    )
+  }
+  assert_serializable_value(metadata, "Selected GLC metadata")
+  invisible(metadata)
+}
+
 new_glc_planning_request <- function(
   term = NULL,
   modality = NULL,
@@ -2631,7 +2994,7 @@ new_glc_projection_review <- function(
   review <- structure(
     list(
       review_schema = "llw-glc-variable-projection-review",
-      review_version = "1.0.0",
+      review_version = "1.1.0",
       source = list(
         registry_url = source$registry_url,
         registry_generated_at = source$registry_generated_at,
@@ -2665,6 +3028,7 @@ new_glc_projection_review <- function(
       selected_compatibility_id = parent_compatibility_id,
       selected_unit_ids = selected_unit_ids,
       selected_groups = groups,
+      metadata = new_glc_selected_metadata(parent_plan, groups),
       diagnostics = diagnostics,
       diagnostic_groups = diagnostic_groups,
       read_columns = read_columns,
@@ -2719,6 +3083,7 @@ validate_glc_projection_review <- function(review) {
     "selected_compatibility_id",
     "selected_unit_ids",
     "selected_groups",
+    "metadata",
     "diagnostics",
     "diagnostic_groups",
     "read_columns",
@@ -2740,7 +3105,7 @@ validate_glc_projection_review <- function(review) {
   }
   if (
     !identical(review$review_schema, "llw-glc-variable-projection-review") ||
-      !identical(review$review_version, "1.0.0")
+      !identical(review$review_version, "1.1.0")
   ) {
     abort_llw(
       "The output projection review schema is not supported.",
@@ -2829,6 +3194,26 @@ validate_glc_projection_review <- function(review) {
   ) {
     abort_llw(
       "The output projection file-group membership is invalid.",
+      type = "validation"
+    )
+  }
+  validate_glc_selected_metadata(review$metadata)
+  if (
+    !identical(
+      review$metadata$upstream_fingerprint,
+      review$parent$metadata_fingerprint
+    ) ||
+      !identical(
+        glc_metadata_ids(review$metadata$selected_ids$file_group_ids),
+        group_ids
+      ) ||
+      !identical(
+        glc_metadata_ids(review$metadata$selected_ids$dataset_ids),
+        glc_metadata_ids(review$selected_groups$dataset_id)
+      )
+  ) {
+    abort_llw(
+      "The output projection metadata does not match its parent selection.",
       type = "validation"
     )
   }
@@ -4529,7 +4914,7 @@ new_glc_full_import_result <- function(
   result <- structure(
     list(
       result_schema = "llw-glc-full-import-handoff",
-      result_version = "1.0.0",
+      result_version = "1.1.0",
       transfer_review_fingerprint = transfer_review$fingerprint,
       projection_fingerprint = transfer_review$projection_fingerprint,
       source = transfer_review$source,
@@ -4537,6 +4922,7 @@ new_glc_full_import_result <- function(
       selected_source_variables = transfer_review$selected_source_variables,
       read_columns = transfer_review$projection$read_columns,
       output_columns = transfer_review$projection$output_columns,
+      metadata = transfer_review$projection$metadata,
       problems_policy = transfer_review$problems_policy,
       reviewed = list(
         file_ids = as.character(reviewed_file_membership$declared_path),
@@ -4627,6 +5013,7 @@ validate_glc_full_import_result <- function(
     "selected_source_variables",
     "read_columns",
     "output_columns",
+    "metadata",
     "problems_policy",
     "reviewed",
     "actual",
@@ -4644,7 +5031,7 @@ validate_glc_full_import_result <- function(
   }
   if (
     !identical(result$result_schema, "llw-glc-full-import-handoff") ||
-      !identical(result$result_version, "1.0.0") ||
+      !identical(result$result_version, "1.1.0") ||
       !result$execution_mode %in% c("runtime", "fixture") ||
       !is.data.frame(result$data) ||
       !is.data.frame(result$reviewed$file_membership) ||
@@ -4667,6 +5054,7 @@ validate_glc_full_import_result <- function(
       type = "validation"
     )
   }
+  validate_glc_selected_metadata(result$metadata)
   if (!is.null(transfer_review)) {
     validate_glc_transfer_review(transfer_review)
     expected_membership <- transfer_review$files[,
@@ -4696,6 +5084,7 @@ validate_glc_full_import_result <- function(
           result$output_columns,
           transfer_review$projection$output_columns
         ) ||
+        !identical(result$metadata, transfer_review$projection$metadata) ||
         !identical(result$problems_policy, transfer_review$problems_policy) ||
         !identical(result$reviewed$file_membership, expected_membership)
     ) {

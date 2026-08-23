@@ -126,6 +126,261 @@ dashboard_page_select_input <- function(
   )
 }
 
+dashboard_metadata_value_text <- function(value) {
+  if (is.null(value) || length(value) == 0L) return("---")
+  if (inherits(value, "POSIXct")) {
+    return(format(value, tz = lubridate::tz(value), usetz = TRUE))
+  }
+  if (inherits(value, "Date")) return(format(value, "%Y-%m-%d"))
+  if (is.factor(value)) value <- as.character(value)
+  if (is.logical(value)) {
+    return(ifelse(is.na(value), "---", ifelse(value, "TRUE", "FALSE")))
+  }
+  if (is.numeric(value)) {
+    return(ifelse(
+      is.na(value),
+      "---",
+      format(value, digits = 15L, scientific = FALSE, trim = TRUE)
+    ))
+  }
+  value <- as.character(value)
+  value[is.na(value) | !nzchar(value)] <- "---"
+  value
+}
+
+dashboard_metadata_table_ui <- function(data, max_rows = 10L) {
+  if (!is.data.frame(data)) {
+    abort_llw("Metadata table display requires a data frame.", type = "validation")
+  }
+  max_rows <- as.integer(max_rows)
+  shown <- utils::head(data, max_rows)
+  shown[] <- lapply(shown, function(value) {
+    if (is.list(value) && !is.data.frame(value)) {
+      vapply(value, function(item) {
+        paste(dashboard_metadata_value_text(item), collapse = ", ")
+      }, character(1))
+    } else {
+      dashboard_metadata_value_text(value)
+    }
+  })
+  header <- tags$tr(lapply(names(shown), tags$th))
+  body <- if (nrow(shown) == 0L) {
+    tags$tr(tags$td(colspan = max(1L, ncol(shown)), "No rows recorded"))
+  } else {
+    lapply(seq_len(nrow(shown)), function(index) {
+      cells <- unname(as.list(shown[index, , drop = FALSE]))
+      tags$tr(lapply(cells, tags$td))
+    })
+  }
+  tags$div(
+    class = "table-responsive llw-dashboard-appended-metadata-table",
+    tags$table(
+      class = "table table-striped table-sm mb-0",
+      tags$thead(header),
+      tags$tbody(body)
+    )
+  )
+}
+
+dashboard_metadata_value_ui <- function(value, depth = 0L) {
+  if (is.data.frame(value)) {
+    return(tagList(
+      tags$p(
+        class = "llw-secondary small mb-2",
+        paste0(
+          format(nrow(value), big.mark = ","),
+          " row(s) x ",
+          format(ncol(value), big.mark = ","),
+          " column(s). The complete table remains stored; up to 10 rows are shown."
+        )
+      ),
+      dashboard_metadata_table_ui(value)
+    ))
+  }
+  if (is.list(value)) {
+    labels <- names(value)
+    if (is.null(labels)) labels <- paste0("Item ", seq_along(value))
+    if (length(value) == 0L) {
+      return(tags$p(class = "llw-secondary small mb-0", "No values recorded"))
+    }
+    if (depth >= 3L) {
+      return(tags$pre(
+        class = "llw-dashboard-metadata-code mb-0",
+        paste(utils::capture.output(utils::str(value, give.attr = FALSE)), collapse = "\n")
+      ))
+    }
+    return(tags$div(
+      class = "llw-dashboard-appended-metadata-tree",
+      lapply(seq_along(value), function(index) {
+        tags$details(
+          class = "llw-dashboard-appended-metadata-item",
+          tags$summary(labels[[index]]),
+          tags$div(
+            class = "llw-dashboard-appended-metadata-item__body",
+            dashboard_metadata_value_ui(value[[index]], depth + 1L)
+          )
+        )
+      })
+    ))
+  }
+  text <- dashboard_metadata_value_text(value)
+  shown <- utils::head(text, 50L)
+  tagList(
+    tags$p(
+      class = "llw-dashboard-metadata-values mb-0",
+      paste(shown, collapse = ", ")
+    ),
+    if (length(text) > length(shown)) {
+      tags$p(
+        class = "llw-secondary small mb-0",
+        paste(
+          format(length(text), big.mark = ","),
+          "values remain stored; the first",
+          length(shown),
+          "are shown."
+        )
+      )
+    }
+  )
+}
+
+dashboard_appended_source_metadata_ui <- function(
+  inventory,
+  heading_id = "llw_appended_sources_heading"
+) {
+  if (is.null(inventory)) return(NULL)
+  if (!inherits(inventory, "llw_dashboard_append_sources")) {
+    abort_llw("Appended source metadata inventory is invalid.", type = "validation")
+  }
+  if (
+    !is.character(heading_id) ||
+      length(heading_id) != 1L ||
+      is.na(heading_id) ||
+      !nzchar(heading_id)
+  ) {
+    abort_llw("`heading_id` must be one non-empty string.", type = "validation")
+  }
+  tags$section(
+    class = "llw-dashboard-appended-sources",
+    `aria-labelledby` = heading_id,
+    tags$div(
+      class = "llw-dashboard-appended-sources__heading",
+      tags$h2(
+        id = heading_id,
+        class = "h5 mb-1",
+        "Preserved source metadata and row lineage"
+      ),
+      tags$p(
+        class = "llw-secondary small mb-0",
+        paste(
+          "Each source namespace is retained exactly under",
+          "factual_metadata$source_metadata[[source_dataset_id]].",
+          "Rows point back through llw_source_dataset_id and llw_source_row.",
+          "No metadata values are flattened, reconciled, deduplicated, or inferred."
+        )
+      )
+    ),
+    dashboard_metadata_table_ui(inventory$overview, max_rows = 50L),
+    tags$div(
+      class = "llw-dashboard-appended-source-details",
+      lapply(inventory$sources, function(source) {
+        namespaces <- source$metadata_namespaces
+        tags$details(
+          class = "llw-dashboard-appended-source",
+          tags$summary(
+            paste0(source$display_name, " (", source$dataset_id, ")")
+          ),
+          tags$div(
+            class = "llw-dashboard-appended-source__body",
+            tags$dl(
+              class = "llw-dashboard-appended-source__facts",
+              tags$div(
+                tags$dt("Stable source dataset ID"),
+                tags$dd(source$dataset_id)
+              ),
+              tags$div(
+                tags$dt("Rows in appended table"),
+                tags$dd(format(source$row_count, big.mark = ","))
+              ),
+              tags$div(
+                tags$dt("Source-row cross-reference"),
+                tags$dd(paste0(
+                  "llw_source_dataset_id = ",
+                  source$dataset_id,
+                  "; llw_source_row ",
+                  source$source_row_min,
+                  "-",
+                  source$source_row_max
+                ))
+              ),
+              tags$div(
+                tags$dt("Source checksum"),
+                tags$dd(source$raw_checksum)
+              ),
+              tags$div(
+                tags$dt("Original source files"),
+                tags$dd(dashboard_format_available(
+                  source$source_files,
+                  "No source filename supplied"
+                ))
+              ),
+              tags$div(
+                tags$dt("Source time zone"),
+                tags$dd(dashboard_format_available(
+                  source$source_timezone,
+                  "Not supplied"
+                ))
+              )
+            ),
+            tags$details(
+              class = "llw-dashboard-appended-source__metadata",
+              tags$summary(paste0(
+                "Preserved factual metadata (",
+                length(namespaces),
+                " namespace(s))"
+              )),
+              tags$div(
+                class = "llw-dashboard-appended-source__metadata-body",
+                if (length(namespaces) == 0L) {
+                  tags$p(
+                    class = "llw-secondary small mb-0",
+                    "This source recorded no factual metadata namespaces."
+                  )
+                } else {
+                  lapply(namespaces, function(namespace) {
+                    tags$details(
+                      class = "llw-dashboard-appended-metadata-namespace",
+                      tags$summary(namespace),
+                      tags$div(
+                        class = "llw-dashboard-appended-metadata-namespace__body",
+                        dashboard_metadata_value_ui(
+                          source$factual_metadata[[namespace]]
+                        )
+                      )
+                    )
+                  })
+                }
+              )
+            ),
+            tags$details(
+              class = "llw-dashboard-appended-source__provenance",
+              tags$summary("Exact source manifest and provenance"),
+              tags$div(
+                class = "llw-dashboard-appended-source__provenance-body",
+                dashboard_metadata_value_ui(list(
+                  source_manifest = source$source_manifest,
+                  provenance = source$provenance,
+                  append_mapping = source$mapping
+                ))
+              )
+            )
+          )
+        )
+      })
+    )
+  )
+}
+
 datasetDashboardUI <- function(id) {
   ns <- NS(id)
   defaults <- dashboard_view_defaults()
@@ -145,6 +400,7 @@ datasetDashboardUI <- function(id) {
       )
     ),
     uiOutput(ns("dashboard_error")),
+    uiOutput(ns("dashboard_switch_status")),
     layout_column_wrap(
       fill = FALSE,
       width = "15rem",
@@ -825,6 +1081,7 @@ datasetDashboardUI <- function(id) {
             tabindex = "0",
             DT::dataTableOutput(ns("raw_table"), fill = FALSE)
           ),
+          uiOutput(ns("appended_source_metadata")),
           tags$div(
             class = "llw-dashboard-source-support",
             card(
@@ -888,11 +1145,151 @@ datasetDashboardUI <- function(id) {
   )
 }
 
+dashboard_record_signature <- function(record) {
+  if (!inherits(record, "llw_dataset_record") || !is.list(record)) {
+    abort_llw(
+      "Dashboard records must be immutable dataset records.",
+      type = "validation"
+    )
+  }
+  required <- c(
+    "id", "display_name", "raw_checksum", "prepared_payload", "revision",
+    "source_manifest", "factual_metadata", "analysis_settings", "recipe",
+    "provenance"
+  )
+  if (!all(required %in% names(record)) || !is.raw(record$prepared_payload)) {
+    abort_llw("The dashboard record contract is incomplete.", type = "validation")
+  }
+  paste0(
+    "sha256:",
+    digest::digest(
+      list(
+        id = record$id,
+        display_name = record$display_name,
+        revision = record$revision,
+        raw_checksum = record$raw_checksum,
+        prepared_checksum = sha256_raw(record$prepared_payload),
+        source_manifest = record$source_manifest,
+        factual_metadata = record$factual_metadata,
+        analysis_settings = record$analysis_settings,
+        recipe = record$recipe,
+        provenance = record$provenance
+      ),
+      algo = "sha256",
+      serialize = TRUE
+    )
+  )
+}
+
+new_dashboard_snapshot_cache <- function(
+  max_bytes = 192 * 1024^2,
+  max_entries = 2L,
+  builder = dashboard_dataset_snapshot
+) {
+  if (
+    !is.numeric(max_bytes) || length(max_bytes) != 1L || is.na(max_bytes) ||
+      !is.finite(max_bytes) || max_bytes < 1
+  ) {
+    abort_llw("`max_bytes` must be positive and finite.", type = "validation")
+  }
+  if (
+    !is.numeric(max_entries) || length(max_entries) != 1L ||
+      is.na(max_entries) || max_entries < 1 || max_entries != floor(max_entries)
+  ) {
+    abort_llw("`max_entries` must be a positive whole number.", type = "validation")
+  }
+  if (!is.function(builder)) {
+    abort_llw("`builder` must be a function.", type = "validation")
+  }
+
+  values <- new.env(parent = emptyenv())
+  bytes <- new.env(parent = emptyenv())
+  touched <- new.env(parent = emptyenv())
+  clock <- 0L
+  build_count <- 0L
+  hit_count <- 0L
+
+  keys <- function() ls(values, all.names = TRUE)
+  total_bytes <- function() {
+    present <- keys()
+    if (length(present) == 0L) return(0)
+    sum(vapply(present, function(key) get(key, bytes), numeric(1)))
+  }
+  touch <- function(key) {
+    clock <<- clock + 1L
+    assign(key, clock, envir = touched)
+  }
+  remove_key <- function(key) {
+    for (where in list(values, bytes, touched)) {
+      if (exists(key, envir = where, inherits = FALSE)) {
+        rm(list = key, envir = where)
+      }
+    }
+  }
+  prune <- function(protect = character()) {
+    repeat {
+      present <- keys()
+      over_entries <- length(present) > as.integer(max_entries)
+      over_bytes <- total_bytes() > as.numeric(max_bytes)
+      if (!over_entries && !over_bytes) break
+      candidates <- setdiff(present, protect)
+      if (length(candidates) == 0L) break
+      ages <- vapply(candidates, function(key) get(key, touched), integer(1))
+      remove_key(candidates[[which.min(ages)]])
+    }
+    invisible(NULL)
+  }
+  get_value <- function(record) {
+    key <- dashboard_record_signature(record)
+    if (exists(key, envir = values, inherits = FALSE)) {
+      hit_count <<- hit_count + 1L
+      touch(key)
+      return(list(
+        value = get(key, envir = values, inherits = FALSE),
+        signature = key,
+        cache_hit = TRUE
+      ))
+    }
+    build_count <<- build_count + 1L
+    value <- builder(record)
+    size <- as.numeric(utils::object.size(value))
+    if (size <= as.numeric(max_bytes)) {
+      assign(key, value, envir = values)
+      assign(key, size, envir = bytes)
+      touch(key)
+      prune(protect = key)
+    }
+    list(value = value, signature = key, cache_hit = FALSE)
+  }
+  stats <- function() {
+    list(
+      entries = length(keys()),
+      bytes = total_bytes(),
+      max_bytes = as.numeric(max_bytes),
+      max_entries = as.integer(max_entries),
+      builds = build_count,
+      hits = hit_count,
+      signatures = keys()
+    )
+  }
+  clear <- function() {
+    present <- keys()
+    if (length(present) > 0L) {
+      for (key in present) remove_key(key)
+    }
+    invisible(NULL)
+  }
+  list(get = get_value, stats = stats, clear = clear, keys = keys)
+}
+
 datasetDashboardServer <- function(
   id,
   dataset,
   active_panel,
-  color_mode = reactive("light")
+  color_mode = reactive("light"),
+  snapshot_cache_max_bytes = 192 * 1024^2,
+  snapshot_cache_max_entries = 2L,
+  snapshot_builder = dashboard_dataset_snapshot
 ) {
   reactive_inputs <- list(
     dataset = dataset,
@@ -923,6 +1320,17 @@ datasetDashboardServer <- function(
     event_value <- reactiveVal(NULL)
     empty_modal_visible <- reactiveVal(FALSE)
     focus_cache <- new.env(parent = emptyenv())
+    focus_cache_touched <- new.env(parent = emptyenv())
+    focus_cache_clock <- 0L
+    snapshot_cache <- new_dashboard_snapshot_cache(
+      max_bytes = snapshot_cache_max_bytes,
+      max_entries = snapshot_cache_max_entries,
+      builder = snapshot_builder
+    )
+    active_snapshot_result <- reactiveVal(NULL)
+    active_snapshot_signature <- reactiveVal(NULL)
+    dashboard_switch_state <- reactiveVal(NULL)
+    dashboard_ready_revision <- reactiveVal(0L)
     scope_revision <- reactiveVal(0L)
     plot_scale_preference <- reactiveVal(NULL)
     symlog_threshold_preference <- reactiveVal(NULL)
@@ -965,21 +1373,172 @@ datasetDashboardServer <- function(
     }) |>
       bindEvent(input$to_import, ignoreInit = TRUE)
 
-    snapshot_result <- reactive({
-      record <- dataset()
-      if (is.null(record)) return(NULL)
+    prepare_dashboard_record <- function(record) {
       tryCatch(
-        dashboard_dataset_snapshot(record),
+        snapshot_cache$get(record),
         llw_error = identity,
         error = function(cnd) normalize_task_error(cnd, "preparation")
       )
-    })
+    }
+
+    activate_dashboard_result <- function(prepared) {
+      if (inherits(prepared, "error")) {
+        active_snapshot_result(prepared)
+        active_snapshot_signature(NULL)
+      } else {
+        active_snapshot_result(prepared$value)
+        active_snapshot_signature(prepared$signature)
+      }
+      dashboard_ready_revision(dashboard_ready_revision() + 1L)
+      invisible(prepared)
+    }
+
+    observe({
+      record <- dataset()
+      if (is.null(record)) {
+        active_snapshot_result(NULL)
+        active_snapshot_signature(NULL)
+        dashboard_switch_state(NULL)
+        dashboard_ready_revision(dashboard_ready_revision() + 1L)
+        return()
+      }
+      current_state <- isolate(dashboard_switch_state())
+      if (is.list(current_state) && isTRUE(current_state$active)) {
+        return()
+      }
+      signature <- tryCatch(
+        dashboard_record_signature(record),
+        error = identity
+      )
+      if (
+        !inherits(signature, "error") &&
+          identical(signature, isolate(active_snapshot_signature()))
+      ) {
+        dashboard_switch_state(list(
+          active = FALSE,
+          state = "complete",
+          target = record$display_name,
+          message = paste0("Now showing `", record$display_name, "`.")
+        ))
+        return()
+      }
+      prepared <- prepare_dashboard_record(record)
+      if (inherits(prepared, "error")) {
+        if (is.null(isolate(active_snapshot_result()))) {
+          activate_dashboard_result(prepared)
+        }
+        dashboard_switch_state(list(
+          active = FALSE,
+          state = "error",
+          target = record$display_name,
+          message = paste(
+            llw_public_message(prepared),
+            "The previous dashboard is unchanged. Choose the dataset again to retry."
+          )
+        ))
+        return()
+      }
+      activate_dashboard_result(prepared)
+      dashboard_switch_state(list(
+        active = FALSE,
+        state = "complete",
+        target = record$display_name,
+        message = paste0("Now showing `", record$display_name, "`.")
+      ))
+    }) |>
+      bindEvent(dataset(), ignoreInit = FALSE)
+
+    snapshot_result <- reactive(active_snapshot_result())
 
     snapshot <- reactive({
       value <- snapshot_result()
       req(inherits(value, "llw_dashboard_snapshot"))
       value
     })
+
+    request_switch <- function(
+      record,
+      on_success = function() TRUE,
+      on_error = function(condition) invisible(NULL)
+    ) {
+      if (!is.function(on_success) || !is.function(on_error)) {
+        abort_llw("Dashboard switch callbacks must be functions.", type = "validation")
+      }
+      current_state <- shiny::isolate(dashboard_switch_state())
+      if (is.list(current_state) && isTRUE(current_state$active)) {
+        return(invisible(FALSE))
+      }
+      if (!inherits(record, "llw_dataset_record")) {
+        condition <- normalize_task_error(
+          simpleError("The selected dataset record is unavailable."),
+          "preparation"
+        )
+        dashboard_switch_state(list(
+          active = FALSE,
+          state = "error",
+          target = "the selected dataset",
+          message = llw_public_message(condition)
+        ))
+        on_error(condition)
+        return(invisible(FALSE))
+      }
+      target <- record$display_name
+      dashboard_switch_state(list(
+        active = TRUE,
+        state = "running",
+        target = target,
+        message = paste0("Preparing `", target, "` while the current dashboard remains visible.")
+      ))
+      session$onFlushed(function() {
+        shiny::withReactiveDomain(session, shiny::isolate({
+          prepared <- prepare_dashboard_record(record)
+          if (inherits(prepared, "error")) {
+            dashboard_switch_state(list(
+              active = FALSE,
+              state = "error",
+              target = target,
+              message = paste(
+                llw_public_message(prepared),
+                "The previous dashboard is unchanged. Choose the dataset again to retry."
+              )
+            ))
+            on_error(prepared)
+            return(invisible(NULL))
+          }
+          applied <- tryCatch(on_success(), error = identity)
+          if (inherits(applied, "error") || !isTRUE(applied)) {
+            condition <- if (inherits(applied, "error")) {
+              normalize_task_error(applied, "preparation")
+            } else {
+              normalize_task_error(
+                simpleError("The selected dataset could not be activated."),
+                "preparation"
+              )
+            }
+            dashboard_switch_state(list(
+              active = FALSE,
+              state = "error",
+              target = target,
+              message = paste(
+                llw_public_message(condition),
+                "The previous dashboard is unchanged. Choose the dataset again to retry."
+              )
+            ))
+            on_error(condition)
+            return(invisible(NULL))
+          }
+          activate_dashboard_result(prepared)
+          dashboard_switch_state(list(
+            active = FALSE,
+            state = "complete",
+            target = target,
+            message = paste0("Now showing `", target, "`.")
+          ))
+          invisible(NULL)
+        }))
+      }, once = TRUE)
+      invisible(TRUE)
+    }
 
     observe({
       value <- snapshot()
@@ -1013,18 +1572,9 @@ datasetDashboardServer <- function(
     })
 
     snapshot_signature <- reactive({
-      value <- snapshot()
-      paste(value$record$id, value$record$revision, value$record$raw_checksum)
+      req(active_snapshot_signature())
+      active_snapshot_signature()
     })
-
-    observeEvent(
-      snapshot_signature(),
-      {
-        keys <- ls(focus_cache, all.names = TRUE)
-        if (length(keys) > 0L) rm(list = keys, envir = focus_cache)
-      },
-      ignoreInit = FALSE
-    )
 
     selected_focus_variable <- reactive({
       value <- snapshot()
@@ -1056,6 +1606,19 @@ datasetDashboardServer <- function(
           ),
           envir = focus_cache
         )
+      }
+      focus_cache_clock <<- focus_cache_clock + 1L
+      assign(key, focus_cache_clock, envir = focus_cache_touched)
+      present <- ls(focus_cache, all.names = TRUE)
+      if (length(present) > 12L) {
+        ages <- vapply(
+          present,
+          function(candidate) get(candidate, envir = focus_cache_touched),
+          integer(1)
+        )
+        stale <- present[[which.min(ages)]]
+        rm(list = stale, envir = focus_cache)
+        rm(list = stale, envir = focus_cache_touched)
       }
       get(key, envir = focus_cache, inherits = FALSE)
     }
@@ -1430,29 +1993,36 @@ datasetDashboardServer <- function(
     })
 
     output$participant_previous_control <- renderUI({
-      value <- selection()
-      if (value$participant_pages <= 1L) return(NULL)
+      participant_pages <- sort(unique(
+        available_page_navigator()$participant_page
+      ))
+      if (length(participant_pages) <= 1L) return(NULL)
       current <- current_page_state()[["participant"]]
       actionButton(
         session$ns("participant_previous"),
         label = tags$span(class = "visually-hidden", "Previous participants"),
         icon = tagList(icon("users"), icon("arrow-up")),
         title = "Show the previous participant page",
-        disabled = current <= 1L,
+        disabled = identical(current, participant_pages[[1L]]),
         class = "llw-participant-rail__button"
       )
     })
 
     output$participant_next_control <- renderUI({
-      value <- selection()
-      if (value$participant_pages <= 1L) return(NULL)
+      participant_pages <- sort(unique(
+        available_page_navigator()$participant_page
+      ))
+      if (length(participant_pages) <= 1L) return(NULL)
       current <- current_page_state()[["participant"]]
       actionButton(
         session$ns("participant_next"),
         label = tags$span(class = "visually-hidden", "Next participants"),
         icon = tagList(icon("users"), icon("arrow-down")),
         title = "Show the next participant page",
-        disabled = current >= value$participant_pages,
+        disabled = identical(
+          current,
+          participant_pages[[length(participant_pages)]]
+        ),
         class = "llw-participant-rail__button"
       )
     })
@@ -1494,39 +2064,44 @@ datasetDashboardServer <- function(
       )
     })
 
-    current_page_state <- reactive({
-      available <- base_selection()
-      requested <- page_state()
-      c(
-        participant = dashboard_page_number(
-          requested[["participant"]],
-          available$participant_pages
-        ),
-        time = dashboard_page_number(
-          requested[["time"]],
-          available$time_pages
-        )
+    available_page_navigator <- reactive({
+      dashboard_nonempty_page_navigator(page_navigator_data())
+    })
+
+    normalize_page_state <- function(requested) {
+      navigator <- available_page_navigator()
+      participant <- dashboard_nearest_available_page(
+        requested[["participant"]],
+        navigator$participant_page
       )
+      time <- dashboard_nearest_available_page(
+        requested[["time"]],
+        navigator$time_page[
+          navigator$participant_page == participant
+        ]
+      )
+      c(participant = participant, time = time)
+    }
+
+    current_page_state <- reactive({
+      normalize_page_state(page_state())
     })
 
     set_page_state <- function(participant = NULL, time = NULL) {
-      available <- base_selection()
       current <- current_page_state()
-      next_state <- c(
+      requested <- c(
         participant = if (is.null(participant)) {
           current[["participant"]]
         } else {
-          dashboard_page_number(
-            participant,
-            available$participant_pages
-          )
+          participant
         },
         time = if (is.null(time)) {
           current[["time"]]
         } else {
-          dashboard_page_number(time, available$time_pages)
+          time
         }
       )
+      next_state <- normalize_page_state(requested)
       if (!identical(as.integer(next_state), as.integer(current))) {
         freezeReactiveValue(input, "participant_page")
         freezeReactiveValue(input, "time_page")
@@ -1546,14 +2121,14 @@ datasetDashboardServer <- function(
 
     output$participant_pagination <- renderUI({
       value <- base_selection()
-      if (value$participant_pages <= 1L) {
+      navigator <- available_page_navigator()
+      participant_pages <- sort(unique(navigator$participant_page))
+      if (length(participant_pages) <= 1L) {
         return(NULL)
       }
-      participant_choices <- as.list(as.character(seq_len(
-        value$participant_pages
-      )))
+      participant_choices <- as.list(as.character(participant_pages))
       participant_starts <- (
-        seq_len(value$participant_pages) - 1L
+        participant_pages - 1L
       ) * value$participants_per_page + 1L
       participant_ends <- pmin(
         length(value$participants),
@@ -1601,7 +2176,8 @@ datasetDashboardServer <- function(
 
     output$facet_pagination <- renderUI({
       value <- base_selection()
-      if (value$participant_pages <= 1L && value$time_pages <= 1L) {
+      navigator <- available_page_navigator()
+      if (nrow(navigator) <= 1L) {
         return(NULL)
       }
       participant_starts <- (
@@ -1611,16 +2187,18 @@ datasetDashboardServer <- function(
         length(value$participants),
         participant_starts + value$participants_per_page - 1L
       )
-      time_choices <- as.list(as.character(seq_len(value$time_pages)))
-      names(time_choices) <- value$time_chunks$Label
       pages <- current_page_state()
       current_participant <- pages[["participant"]]
       current_time <- pages[["time"]]
-      navigator <- page_navigator_data()
+      participant_pages <- sort(unique(navigator$participant_page))
+      time_pages <- sort(unique(navigator$time_page[
+        navigator$participant_page == current_participant
+      ]))
+      time_choices <- as.list(as.character(time_pages))
+      names(time_choices) <- value$time_chunks$Label[time_pages]
       navigator_names <- lapply(seq_len(nrow(navigator)), function(index) {
         participant_page <- navigator$participant_page[[index]]
         time_page <- navigator$time_page[[index]]
-        available <- isTRUE(navigator$has_data[[index]])
         current <- identical(participant_page, current_participant) &&
           identical(time_page, current_time)
         label <- paste0(
@@ -1630,28 +2208,18 @@ datasetDashboardServer <- function(
           participant_ends[[participant_page]],
           ", ",
           value$time_chunks$Label[[time_page]],
-          if (available) {
-            paste0(
-              ", ",
-              format(
-                navigator$observed_focus_values[[index]],
-                big.mark = ",",
-                scientific = FALSE
-              ),
-              " observed focus value(s)"
-            )
-          } else {
-            ", empty focus-metric page"
-          }
+          ", ",
+          format(
+            navigator$observed_focus_values[[index]],
+            big.mark = ",",
+            scientific = FALSE
+          ),
+          " observed focus value(s)"
         )
         tags$span(
           class = paste(
             "llw-dashboard-page-navigator__cell",
-            if (available) {
-              "llw-dashboard-page-navigator__cell--available"
-            } else {
-              "llw-dashboard-page-navigator__cell--empty"
-            },
+            "llw-dashboard-page-navigator__cell--available",
             if (current) {
               "llw-dashboard-page-navigator__cell--current"
             }
@@ -1684,29 +2252,29 @@ datasetDashboardServer <- function(
         `aria-label` = "Participant and time page map",
         style = paste0(
           "--llw-time-page-count:",
-          value$time_pages,
+          max(1L, max(table(navigator$participant_page))),
           ";--llw-participant-page-count:",
-          value$participant_pages,
+          length(participant_pages),
           ";--llw-navigator-width:",
-          max(3, min(18, 1.1 * value$time_pages)),
+          max(3, min(18, 1.1 * max(table(navigator$participant_page)))),
           "rem;--llw-navigator-row-size:",
-          max(0.32, min(0.9, 3.5 / value$participant_pages)),
+          max(0.32, min(0.9, 3.5 / length(participant_pages))),
           "rem;"
         )
       )
       pagination_class <- paste(
         "llw-dashboard-pagination",
         if (
-          value$participant_pages > 1L &&
-            value$time_pages > 1L
+          length(participant_pages) > 1L &&
+            length(time_pages) > 1L
         ) {
           "llw-dashboard-pagination--2d"
         } else {
           "llw-dashboard-pagination--single"
         },
-        if (value$participant_pages <= 1L) {
+        if (length(participant_pages) <= 1L) {
           "llw-dashboard-pagination--time-only"
-        } else if (value$time_pages <= 1L) {
+        } else if (length(time_pages) <= 1L) {
           "llw-dashboard-pagination--participants-only"
         }
       )
@@ -1715,7 +2283,7 @@ datasetDashboardServer <- function(
         tags$div(
           class = "llw-explorer-pager__main",
           navigator_control,
-          if (value$time_pages > 1L) {
+          if (length(time_pages) > 1L) {
             tags$div(
               class = paste(
                 "llw-dashboard-page-axis llw-dashboard-page-axis--time",
@@ -1740,7 +2308,7 @@ datasetDashboardServer <- function(
                   )
                 ),
                 title = "Show the previous time page",
-                disabled = current_time <= 1L,
+                disabled = identical(current_time, time_pages[[1L]]),
                 class = paste(
                   "llw-dashboard-time-page-button",
                   "llw-dashboard-time-page-button--previous",
@@ -1775,7 +2343,7 @@ datasetDashboardServer <- function(
                   )
                 ),
                 title = "Show the next time page",
-                disabled = current_time >= value$time_pages,
+                disabled = identical(current_time, time_pages[[length(time_pages)]]),
                 class = paste(
                   "llw-dashboard-time-page-button",
                   "llw-dashboard-time-page-button--next",
@@ -1898,7 +2466,11 @@ datasetDashboardServer <- function(
       input$participant_previous,
       {
         current <- current_page_state()[["participant"]]
-        set_page_state(participant = current - 1L)
+        pages <- sort(unique(available_page_navigator()$participant_page))
+        index <- match(current, pages)
+        if (!is.na(index) && index > 1L) {
+          set_page_state(participant = pages[[index - 1L]])
+        }
       },
       ignoreInit = TRUE
     )
@@ -1907,7 +2479,11 @@ datasetDashboardServer <- function(
       input$participant_next,
       {
         current <- current_page_state()[["participant"]]
-        set_page_state(participant = current + 1L)
+        pages <- sort(unique(available_page_navigator()$participant_page))
+        index <- match(current, pages)
+        if (!is.na(index) && index < length(pages)) {
+          set_page_state(participant = pages[[index + 1L]])
+        }
       },
       ignoreInit = TRUE
     )
@@ -1915,8 +2491,15 @@ datasetDashboardServer <- function(
     observeEvent(
       input$time_previous,
       {
-        current <- current_page_state()[["time"]]
-        set_page_state(time = current - 1L)
+        current <- current_page_state()
+        navigator <- available_page_navigator()
+        pages <- sort(unique(navigator$time_page[
+          navigator$participant_page == current[["participant"]]
+        ]))
+        index <- match(current[["time"]], pages)
+        if (!is.na(index) && index > 1L) {
+          set_page_state(time = pages[[index - 1L]])
+        }
       },
       ignoreInit = TRUE
     )
@@ -1924,8 +2507,15 @@ datasetDashboardServer <- function(
     observeEvent(
       input$time_next,
       {
-        current <- current_page_state()[["time"]]
-        set_page_state(time = current + 1L)
+        current <- current_page_state()
+        navigator <- available_page_navigator()
+        pages <- sort(unique(navigator$time_page[
+          navigator$participant_page == current[["participant"]]
+        ]))
+        index <- match(current[["time"]], pages)
+        if (!is.na(index) && index < length(pages)) {
+          set_page_state(time = pages[[index + 1L]])
+        }
       },
       ignoreInit = TRUE
     )
@@ -1983,6 +2573,50 @@ datasetDashboardServer <- function(
         live = TRUE
       )
     })
+
+    output$dashboard_switch_status <- renderUI({
+      state <- dashboard_switch_state()
+      if (is.null(state)) return(NULL)
+      if (isTRUE(state$active)) {
+        return(llw_status_callout(
+          "running",
+          state$message,
+          heading = paste("Switching to", state$target),
+          live = TRUE,
+          compact = TRUE
+        ))
+      }
+      if (identical(state$state, "error")) {
+        return(llw_status_callout(
+          "error",
+          state$message,
+          heading = paste("Could not switch to", state$target),
+          live = TRUE,
+          compact = TRUE
+        ))
+      }
+      NULL
+    })
+
+    observe({
+      state <- dashboard_switch_state()
+      notification_id <- session$ns("dashboard_ready_notice")
+      if (
+        !is.list(state) || isTRUE(state$active) ||
+          !identical(state$state, "complete")
+      ) {
+        removeNotification(notification_id)
+        return()
+      }
+      showNotification(
+        paste0("Dashboard ready: ", state$target),
+        id = notification_id,
+        type = "message",
+        duration = 3,
+        closeButton = FALSE
+      )
+    }) |>
+      bindEvent(dashboard_switch_state(), ignoreInit = TRUE)
 
     output$dataset_name <- renderUI({
       value <- snapshot()
@@ -2520,6 +3154,12 @@ datasetDashboardServer <- function(
       bordered = FALSE,
       spacing = "s"
     )
+    output$appended_source_metadata <- renderUI({
+      dashboard_appended_source_metadata_ui(
+        snapshot()$append_sources,
+        heading_id = session$ns("appended_sources_heading")
+      )
+    })
     output$state_table <- renderTable(
       dashboard_state_table(snapshot()),
       striped = TRUE,
@@ -2770,7 +3410,7 @@ datasetDashboardServer <- function(
             }
           ),
           paste(
-            "Checks the active Id–Datetime key after recipe application.",
+            "Checks the active Id-Datetime key after recipe application.",
             "Repeated keys are reported for review and are not removed here."
           )
         ),
@@ -3011,6 +3651,29 @@ datasetDashboardServer <- function(
       initialized = FALSE,
       selected = character()
     ))
+    table_schema_revision <- reactiveVal(0L)
+
+    observeEvent(
+      snapshot_signature(),
+      {
+        preprocessed_column_selection(list(
+          initialized = FALSE,
+          selected = character()
+        ))
+        source_column_selection(list(
+          initialized = FALSE,
+          selected = character()
+        ))
+        updateCheckboxInput(
+          session,
+          "preprocessed_main_only",
+          value = TRUE
+        )
+        updateCheckboxInput(session, "source_main_only", value = TRUE)
+        table_schema_revision(table_schema_revision() + 1L)
+      },
+      ignoreInit = TRUE
+    )
 
     table_column_spec <- function(stage) {
       value <- snapshot()
@@ -3167,16 +3830,20 @@ datasetDashboardServer <- function(
       ignoreNULL = FALSE
     )
     preprocessed_table_data <- reactive({
+      table_schema_revision()
       value <- snapshot()
       data <- value$prepared_data
       columns <- selected_table_columns("preprocessed")
+      columns <- intersect(columns, names(data))
       data[, columns, drop = FALSE]
     })
 
     source_table_data <- reactive({
+      table_schema_revision()
       value <- snapshot()
       data <- value$raw_data
       columns <- selected_table_columns("source")
+      columns <- intersect(columns, names(data))
       data[, columns, drop = FALSE]
     })
 
@@ -3209,6 +3876,21 @@ datasetDashboardServer <- function(
     list(
       event = reactive(event_value()),
       recommendation = reactive(view_recommendation()),
+      request_switch = request_switch,
+      switching = reactive({
+        state <- dashboard_switch_state()
+        is.list(state) && isTRUE(state$active)
+      }),
+      ready = reactive(list(
+        revision = dashboard_ready_revision(),
+        signature = active_snapshot_signature(),
+        dataset_id = if (inherits(snapshot_result(), "llw_dashboard_snapshot")) {
+          snapshot_result()$record$id
+        } else {
+          NULL
+        }
+      )),
+      cache_stats = snapshot_cache$stats,
       status = reactive({
         value <- snapshot_result()
         if (is.null(value)) {

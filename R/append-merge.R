@@ -1501,12 +1501,15 @@ preview_append_merge <- function(records, spec, max_preview_rows = 100L) {
   )
   source_provenance <- lapply(seq_along(profiles), function(index) {
     profile <- profiles[[index]]
+    record <- records[[profile$dataset_id]]
     list(
       dataset_id = profile$dataset_id,
       display_name = profile$display_name,
       revision = profile$revision,
       raw_checksum = profile$raw_checksum,
       source_manifest = profile$source_manifest,
+      factual_metadata = record$factual_metadata %||% list(),
+      provenance = record$provenance %||% list(),
       mapping = spec$mappings[[index]]
     )
   })
@@ -1564,6 +1567,50 @@ mark_append_provenance_ineligible <- function(quality) {
     "Structural append-provenance column, not a selectable analysis variable."
   )
   quality
+}
+
+append_default_primary_variable <- function(merged, spec, profiles, quality) {
+  if (!is.data.frame(merged) || !is.data.frame(profiles)) {
+    abort_llw(
+      "The appended measurement contract is invalid.",
+      type = "validation"
+    )
+  }
+  candidates <- if (spec$measurement_strategy %in% c("combine", "identical")) {
+    spec$output_measurement
+  } else {
+    profiles$measurement_target
+  }
+  candidates <- unique(as.character(candidates))
+  candidates <- candidates[
+    !is.na(candidates) &
+      nzchar(candidates) &
+      candidates %in% names(merged)
+  ]
+  candidates <- candidates[vapply(
+    merged[candidates],
+    function(value) {
+      is.numeric(value) &&
+        !inherits(value, c("POSIXct", "Date", "difftime"))
+    },
+    logical(1)
+  )]
+  eligibility <- quality$eligibility %||% NULL
+  if (inherits(eligibility, "llw_variable_eligibility")) {
+    eligible <- eligibility$variable[eligibility$eligible]
+    candidates <- intersect(candidates, eligible)
+  }
+  if (length(candidates) == 0L) {
+    abort_llw(
+      "The appended result has no eligible numeric measurement output.",
+      type = "validation",
+      public_message = paste(
+        "The selected append mappings produced no numeric measurement that",
+        "can open in the dashboard. Review the measurement mappings."
+      )
+    )
+  }
+  candidates[[1L]]
 }
 
 new_appended_dataset_record <- function(preview) {
@@ -1659,16 +1706,34 @@ new_appended_dataset_record <- function(preview) {
   }
   quality <- summarize_raw_import_quality(merged, spec$output_timezone)
   quality <- mark_append_provenance_ineligible(quality)
+  primary_variable <- append_default_primary_variable(
+    merged,
+    spec,
+    preview$profiles,
+    quality
+  )
+  source_metadata <- stats::setNames(
+    lapply(
+      preview$source_provenance,
+      function(source) source$factual_metadata %||% list()
+    ),
+    vapply(
+      preview$source_provenance,
+      function(source) source$dataset_id,
+      character(1)
+    )
+  )
   new_dataset_record(
     raw_data = merged,
     display_name = spec$display_name,
     source_manifest = manifest,
     factual_metadata = list(
       device = if (length(devices) > 0L) devices else NA_character_,
-      variables = variable_metadata
+      variables = variable_metadata,
+      source_metadata = source_metadata
     ),
     analysis_settings = list(
-      primary_variable = spec$output_measurement,
+      primary_variable = primary_variable,
       analysis_timezone = spec$output_timezone,
       source_local_time_column = "llw_local_datetime",
       source_timezone_column = "llw_source_timezone"

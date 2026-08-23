@@ -482,7 +482,8 @@ dashboard_participant_epoch_accounting <- function(
     nearest_intervals <- round(lag_seconds / epoch_seconds)
     jitter <- abs(
       lag_seconds - nearest_intervals * epoch_seconds
-    ) > tolerance
+    ) >
+      tolerance
     jitter_counts <- as.integer(table(factor(
       format(unique_dates[-1L][jitter], "%Y-%m-%d"),
       levels = date_levels
@@ -491,19 +492,15 @@ dashboard_participant_epoch_accounting <- function(
 
   boundary_gap_counts <- integer(length(dates))
   first_padding <- floor(
-    (
-      unique_instants[[1L]] -
-        as.numeric(boundaries$start[[1L]]) +
-        tolerance
-    ) /
+    (unique_instants[[1L]] -
+      as.numeric(boundaries$start[[1L]]) +
+      tolerance) /
       epoch_seconds
   )
   last_padding <- ceiling(
-    (
-      as.numeric(boundaries$end[[length(dates)]]) -
-        unique_instants[[length(unique_instants)]] -
-        tolerance
-    ) /
+    (as.numeric(boundaries$end[[length(dates)]]) -
+      unique_instants[[length(unique_instants)]] -
+      tolerance) /
       epoch_seconds
   ) -
     1
@@ -715,10 +712,8 @@ dashboard_focus_missingness <- function(
   coverage_variables <- coverage_variables[!is.na(coverage_variables)]
   if (
     length(coverage_variables) > 0L &&
-      (
-        length(coverage_variables) != 1L ||
-          !identical(coverage_variables[[1L]], focus_variable)
-      )
+      (length(coverage_variables) != 1L ||
+        !identical(coverage_variables[[1L]], focus_variable))
   ) {
     abort_llw(
       "`coverage` does not describe the requested focus variable.",
@@ -903,6 +898,223 @@ dashboard_focus_missingness <- function(
   )
 }
 
+dashboard_append_source_inventory <- function(record, raw_data) {
+  if (!identical(record$source_manifest$source_type, "append_merge")) {
+    return(NULL)
+  }
+  if (!is.data.frame(raw_data)) {
+    abort_llw(
+      "The appended source table is invalid.",
+      type = "validation"
+    )
+  }
+  lineage_columns <- c("llw_source_dataset_id", "llw_source_row")
+  missing_lineage <- setdiff(lineage_columns, names(raw_data))
+  if (length(missing_lineage) > 0L) {
+    abort_llw(
+      paste0(
+        "The appended source table is missing lineage column(s): ",
+        paste(missing_lineage, collapse = ", "),
+        "."
+      ),
+      type = "validation",
+      public_message = paste(
+        "The appended dataset cannot show its source row lineage because its",
+        "stored source cross-reference is incomplete. No data were changed."
+      )
+    )
+  }
+
+  source_records <- record$provenance$append_merge$source_records %||%
+    record$source_manifest$details$source_records %||%
+    NULL
+  if (!is.list(source_records) || length(source_records) == 0L) {
+    abort_llw(
+      "The appended record has no preserved source records.",
+      type = "validation",
+      public_message = paste(
+        "The appended dataset has no preserved source provenance to show.",
+        "No data were changed."
+      )
+    )
+  }
+  source_ids <- vapply(source_records, function(source) {
+    value <- source$dataset_id %||% NA_character_
+    if (
+      !is.character(value) ||
+        length(value) != 1L ||
+        is.na(value) ||
+        !nzchar(value)
+    ) {
+      abort_llw(
+        "A preserved append source has no stable dataset ID.",
+        type = "validation"
+      )
+    }
+    value
+  }, character(1))
+  if (anyDuplicated(source_ids)) {
+    abort_llw(
+      "Preserved append source dataset IDs must be unique.",
+      type = "validation"
+    )
+  }
+
+  source_metadata <- record$factual_metadata$source_metadata %||% NULL
+  if (
+    !is.list(source_metadata) ||
+      is.null(names(source_metadata)) ||
+      anyDuplicated(names(source_metadata)) ||
+      !setequal(names(source_metadata), source_ids)
+  ) {
+    abort_llw(
+      paste(
+        "Preserved source metadata must be named by the exact append source",
+        "dataset IDs."
+      ),
+      type = "validation",
+      public_message = paste(
+        "The appended dataset's preserved source metadata does not match its",
+        "stable source IDs. No data were changed."
+      )
+    )
+  }
+
+  row_source_ids <- as.character(raw_data$llw_source_dataset_id)
+  source_rows <- suppressWarnings(as.numeric(raw_data$llw_source_row))
+  invalid_source <- is.na(row_source_ids) |
+    !nzchar(row_source_ids) |
+    !row_source_ids %in% source_ids
+  invalid_row <- !is.finite(source_rows) |
+    source_rows < 1 |
+    source_rows != floor(source_rows)
+  if (any(invalid_source) || any(invalid_row)) {
+    abort_llw(
+      "The appended source row cross-reference is invalid.",
+      type = "validation",
+      public_message = paste(
+        "The appended dataset contains an invalid source-row cross-reference.",
+        "No data were changed."
+      )
+    )
+  }
+  observed_ids <- unique(row_source_ids)
+  if (!setequal(observed_ids, source_ids)) {
+    abort_llw(
+      "Every preserved append source must be represented by stored rows.",
+      type = "validation"
+    )
+  }
+
+  items <- lapply(seq_along(source_records), function(index) {
+    source <- source_records[[index]]
+    dataset_id <- source_ids[[index]]
+    index_rows <- which(row_source_ids == dataset_id)
+    manifest <- source$source_manifest %||% NULL
+    if (!inherits(manifest, "llw_source_manifest")) {
+      abort_llw(
+        paste0(
+          "Append source `",
+          dataset_id,
+          "` has no valid source manifest."
+        ),
+        type = "validation"
+      )
+    }
+    metadata <- source_metadata[[dataset_id]]
+    preserved_metadata <- source$factual_metadata %||% list()
+    if (!identical(metadata, preserved_metadata)) {
+      abort_llw(
+        paste0(
+          "Append source metadata changed for `",
+          dataset_id,
+          "`."
+        ),
+        type = "validation"
+      )
+    }
+    namespaces <- names(metadata)
+    if (is.null(namespaces)) namespaces <- character()
+    quality <- source$provenance$raw_import_quality %||% NULL
+    diagnostics <- if (inherits(quality, "llw_raw_import_quality")) {
+      quality$diagnostics
+    } else {
+      NULL
+    }
+    structure(
+      list(
+        dataset_id = dataset_id,
+        display_name = as.character(
+          source$display_name %||% dataset_id
+        ),
+        revision = source$revision %||% NA_integer_,
+        raw_checksum = as.character(
+          source$raw_checksum %||% NA_character_
+        ),
+        source_manifest = manifest,
+        factual_metadata = metadata,
+        provenance = source$provenance %||% list(),
+        mapping = source$mapping %||% list(),
+        metadata_namespaces = namespaces,
+        row_count = length(index_rows),
+        source_row_min = min(source_rows[index_rows]),
+        source_row_max = max(source_rows[index_rows]),
+        source_files = unname(manifest$original_filenames),
+        source_timezone = manifest$source_timezone,
+        diagnostics = diagnostics
+      ),
+      class = c("llw_dashboard_append_source", "list")
+    )
+  })
+  names(items) <- source_ids
+
+  overview <- do.call(rbind, lapply(items, function(source) {
+    namespaces <- source$metadata_namespaces
+    data.frame(
+      `Stable source dataset ID` = source$dataset_id,
+      `Source dataset` = source$display_name,
+      Rows = source$row_count,
+      `Source row range` = paste0(
+        format(source$source_row_min, scientific = FALSE, trim = TRUE),
+        "-",
+        format(source$source_row_max, scientific = FALSE, trim = TRUE)
+      ),
+      Revision = paste0("r", source$revision),
+      `Source time zone` = dashboard_format_available(
+        source$source_timezone,
+        "Not supplied"
+      ),
+      `Metadata namespaces` = if (length(namespaces) == 0L) {
+        "None recorded"
+      } else {
+        paste(namespaces, collapse = ", ")
+      },
+      `Source files` = dashboard_format_available(
+        source$source_files,
+        "No source filename supplied"
+      ),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+  }))
+  rownames(overview) <- NULL
+
+  inventory <- structure(
+    list(
+      schema = "llw-dashboard-append-source-inventory",
+      version = "1.0.0",
+      source_dataset_ids = source_ids,
+      row_reference_columns = lineage_columns,
+      overview = overview,
+      sources = items,
+      reconciliation = "none"
+    ),
+    class = c("llw_dashboard_append_sources", "list")
+  )
+  assert_serializable_value(inventory, "appended source inventory")
+  inventory
+}
+
 dashboard_dataset_snapshot <- function(record) {
   record <- validate_dataset_record(record)
   raw_data <- unserialize(record$raw_payload)
@@ -967,6 +1179,9 @@ dashboard_dataset_snapshot <- function(record) {
     prepared_local_dates,
     focus_variable = primary_variable
   )
+  glc_metadata <- record$factual_metadata$glc_metadata %||% NULL
+  if (!is.null(glc_metadata)) validate_glc_selected_metadata(glc_metadata)
+  append_sources <- dashboard_append_source_inventory(record, raw_data)
 
   structure(
     list(
@@ -991,7 +1206,9 @@ dashboard_dataset_snapshot <- function(record) {
       quality_origin = quality_info$origin,
       coverage = coverage,
       recipe = dashboard_recipe_summary(record),
-      grouping = dashboard_grouping_summary(record)
+      grouping = dashboard_grouping_summary(record),
+      glc_metadata = glc_metadata,
+      append_sources = append_sources
     ),
     class = c("llw_dashboard_snapshot", "list")
   )
@@ -1156,13 +1373,11 @@ dashboard_participant_ranges <- function(
   }
   if (
     !is.null(focus_variable) &&
-      (
-        !is.character(focus_variable) ||
-          length(focus_variable) != 1L ||
-          is.na(focus_variable) ||
-          !focus_variable %in% names(data) ||
-          !is.numeric(data[[focus_variable]])
-      )
+      (!is.character(focus_variable) ||
+        length(focus_variable) != 1L ||
+        is.na(focus_variable) ||
+        !focus_variable %in% names(data) ||
+        !is.numeric(data[[focus_variable]]))
   ) {
     abort_llw(
       "`focus_variable` must name one numeric data column.",
@@ -1197,7 +1412,8 @@ dashboard_participant_ranges <- function(
       `Date end` = max(participant_dates),
       `Measurement days` = as.integer(
         max(participant_dates) - min(participant_dates)
-      ) + 1L,
+      ) +
+        1L,
       `Observed dates` = length(unique(participant_dates)),
       `Focus start` = focus_start,
       `Focus end` = focus_end,
@@ -1420,27 +1636,30 @@ dashboard_date_chunks <- function(
   cycle_starts <- pmax(as.Date(cycle_starts), start)
   cycle_ends <- pmin(as.Date(cycle_ends), end)
 
-  rows <- unlist(lapply(seq_along(cycle_starts), function(index) {
-    chunk_starts <- seq(
-      cycle_starts[[index]],
-      cycle_ends[[index]],
-      by = days_per_page
-    )
-    lapply(chunk_starts, function(chunk_start) {
-      data.frame(
-        Start = as.Date(chunk_start),
-        End = if (identical(time_basis, "calendar")) {
-          as.Date(chunk_start) + days_per_page - 1L
-        } else {
-          min(
-            as.Date(chunk_start) + days_per_page - 1L,
-            cycle_ends[[index]]
-          )
-        },
-        stringsAsFactors = FALSE
+  rows <- unlist(
+    lapply(seq_along(cycle_starts), function(index) {
+      chunk_starts <- seq(
+        cycle_starts[[index]],
+        cycle_ends[[index]],
+        by = days_per_page
       )
-    })
-  }), recursive = FALSE)
+      lapply(chunk_starts, function(chunk_start) {
+        data.frame(
+          Start = as.Date(chunk_start),
+          End = if (identical(time_basis, "calendar")) {
+            as.Date(chunk_start) + days_per_page - 1L
+          } else {
+            min(
+              as.Date(chunk_start) + days_per_page - 1L,
+              cycle_ends[[index]]
+            )
+          },
+          stringsAsFactors = FALSE
+        )
+      })
+    }),
+    recursive = FALSE
+  )
   chunks <- do.call(rbind, rows)
   rownames(chunks) <- NULL
   span_label <- function(first, last) {
@@ -1452,22 +1671,30 @@ dashboard_date_chunks <- function(
       paste0(format(first, "%d %b %Y"), "\u2013", format(last, "%d %b %Y"))
     }
   }
-  cycle_label <- vapply(seq_len(nrow(chunks)), function(index) {
-    first <- chunks$Start[[index]]
-    last <- chunks$End[[index]]
-    switch(
-      time_basis,
-      calendar = span_label(first, last),
-      week = paste0(
-        "Week ",
-        format(first, "%V"),
-        " \u00b7 ",
-        span_label(first, last)
-      ),
-      month = paste0(format(first, "%B %Y"), " \u00b7 ", span_label(first, last)),
-      year = paste0(format(first, "%Y"), " \u00b7 ", span_label(first, last))
-    )
-  }, character(1))
+  cycle_label <- vapply(
+    seq_len(nrow(chunks)),
+    function(index) {
+      first <- chunks$Start[[index]]
+      last <- chunks$End[[index]]
+      switch(
+        time_basis,
+        calendar = span_label(first, last),
+        week = paste0(
+          "Week ",
+          format(first, "%V"),
+          " \u00b7 ",
+          span_label(first, last)
+        ),
+        month = paste0(
+          format(first, "%B %Y"),
+          " \u00b7 ",
+          span_label(first, last)
+        ),
+        year = paste0(format(first, "%Y"), " \u00b7 ", span_label(first, last))
+      )
+    },
+    character(1)
+  )
   data.frame(
     Page = seq_len(nrow(chunks)),
     Start = chunks$Start,
@@ -1476,6 +1703,57 @@ dashboard_date_chunks <- function(
     check.names = FALSE,
     stringsAsFactors = FALSE
   )
+}
+
+dashboard_nonempty_time_chunks <- function(
+  focus_view,
+  chunks,
+  participants,
+  time_basis
+) {
+  if (!inherits(focus_view, "llw_dashboard_focus_view")) {
+    abort_llw("`focus_view` must be a dashboard focus view.", type = "validation")
+  }
+  if (!is.data.frame(chunks) || nrow(chunks) == 0L) return(chunks)
+  values <- focus_view$data[[focus_view$focus_variable]]
+  observed <- !is.na(values)
+  if (is.numeric(values)) observed <- observed & is.finite(values)
+  requested <- as.character(participants)
+  keep_row <- observed & as.character(focus_view$data$Id) %in% requested
+  if (time_basis %in% c("participant", "elapsed")) {
+    time_value <- dashboard_measurement_day(
+      focus_view$data$Id,
+      focus_view$local_date,
+      focus_view$participant_ranges
+    )
+    time_value <- as.integer(time_value)
+    chunk_start <- as.integer(chunks$Start)
+    chunk_end <- as.integer(chunks$End)
+  } else {
+    time_value <- as.numeric(focus_view$local_date)
+    chunk_start <- as.numeric(chunks$Start)
+    chunk_end <- as.numeric(chunks$End)
+  }
+  has_data <- vapply(
+    seq_len(nrow(chunks)),
+    function(index) {
+      any(
+        keep_row &
+          !is.na(time_value) &
+          time_value >= chunk_start[[index]] &
+          time_value <= chunk_end[[index]]
+      )
+    },
+    logical(1)
+  )
+  if (!any(has_data)) {
+    chunks <- chunks[1L, , drop = FALSE]
+  } else {
+    chunks <- chunks[has_data, , drop = FALSE]
+  }
+  chunks$Page <- seq_len(nrow(chunks))
+  rownames(chunks) <- NULL
+  chunks
 }
 
 dashboard_selection_windows <- function(
@@ -1502,13 +1780,16 @@ dashboard_selection_windows <- function(
     ranges$`Window start` <- rep(as.Date(date_start), nrow(ranges))
     ranges$`Window end` <- rep(as.Date(date_end), nrow(ranges))
   }
-  ranges[, c(
-    "Id",
-    "Date start",
-    "Date end",
-    "Window start",
-    "Window end"
-  ), drop = FALSE]
+  ranges[,
+    c(
+      "Id",
+      "Date start",
+      "Date end",
+      "Window start",
+      "Window end"
+    ),
+    drop = FALSE
+  ]
 }
 
 dashboard_available_span <- function(focus_view, participant_windows) {
@@ -1519,19 +1800,23 @@ dashboard_available_span <- function(focus_view, participant_windows) {
   if (is.numeric(focus_values)) {
     observed <- observed & is.finite(focus_values)
   }
-  spans <- vapply(seq_len(nrow(participant_windows)), function(index) {
-    participant_id <- participant_windows$Id[[index]]
-    keep <- ids == participant_id &
-      observed &
-      focus_view$local_date >= participant_windows$`Window start`[[index]] &
-      focus_view$local_date <= participant_windows$`Window end`[[index]]
-    dates <- focus_view$local_date[keep]
-    if (length(dates) == 0L) {
-      0L
-    } else {
-      as.integer(max(dates) - min(dates)) + 1L
-    }
-  }, integer(1))
+  spans <- vapply(
+    seq_len(nrow(participant_windows)),
+    function(index) {
+      participant_id <- participant_windows$Id[[index]]
+      keep <- ids == participant_id &
+        observed &
+        focus_view$local_date >= participant_windows$`Window start`[[index]] &
+        focus_view$local_date <= participant_windows$`Window end`[[index]]
+      dates <- focus_view$local_date[keep]
+      if (length(dates) == 0L) {
+        0L
+      } else {
+        as.integer(max(dates) - min(dates)) + 1L
+      }
+    },
+    integer(1)
+  )
   as.integer(max(spans, 0L))
 }
 
@@ -1688,6 +1973,12 @@ dashboard_plot_selection <- function(
       days_per_page = days_per_page
     )
   }
+  time_chunks <- dashboard_nonempty_time_chunks(
+    focus_view,
+    time_chunks,
+    requested,
+    time_basis
+  )
   time_page_count <- nrow(time_chunks)
   time_page <- dashboard_page_number(time_page, time_page_count)
   chosen_time <- time_chunks[time_page, , drop = FALSE]
@@ -1869,6 +2160,37 @@ dashboard_page_navigator <- function(focus_view, selection) {
   }
   navigator$has_data <- navigator$observed_focus_values > 0L
   navigator
+}
+
+dashboard_nonempty_page_navigator <- function(navigator) {
+  required <- c(
+    "participant_page",
+    "time_page",
+    "observed_focus_values",
+    "has_data"
+  )
+  if (!is.data.frame(navigator) || !all(required %in% names(navigator))) {
+    abort_llw(
+      "`navigator` must be a dashboard page navigator.",
+      type = "validation"
+    )
+  }
+  keep <- !is.na(navigator$has_data) & as.logical(navigator$has_data)
+  available <- navigator[keep, , drop = FALSE]
+  if (nrow(available) == 0L && nrow(navigator) > 0L) {
+    available <- navigator[1L, , drop = FALSE]
+  }
+  rownames(available) <- NULL
+  available
+}
+
+dashboard_nearest_available_page <- function(page, available, fallback = 1L) {
+  available <- sort(unique(suppressWarnings(as.integer(available))))
+  available <- available[!is.na(available) & available >= 1L]
+  if (length(available) == 0L) return(as.integer(fallback))
+  page <- suppressWarnings(as.integer(page %||% fallback))
+  if (length(page) != 1L || is.na(page)) page <- as.integer(fallback)
+  available[[which.min(abs(available - page))]]
 }
 
 dashboard_plot_scale_value <- function(value, fallback = "symlog") {
@@ -2229,7 +2551,8 @@ dashboard_timeline_segments <- function(data, quality) {
       starts_new_segment[-1L] <- dashboard_inferred_gap_epochs(
         lag_seconds,
         epoch_seconds
-      ) > 0
+      ) >
+        0
     }
     segment_number[ordered_rows] <- cumsum(starts_new_segment) + 1L
   }
@@ -2313,7 +2636,8 @@ dashboard_measurement_day <- function(ids, local_date, participant_ranges) {
   result[matched] <- as.integer(
     local_date[matched] -
       participant_ranges$`Date start`[position[matched]]
-  ) + 1L
+  ) +
+    1L
   result
 }
 
@@ -2323,7 +2647,8 @@ dashboard_elapsed_plot_time <- function(
   timezone
 ) {
   local <- lubridate::with_tz(datetimes, tzone = timezone)
-  seconds <- lubridate::hour(local) * 3600 +
+  seconds <- lubridate::hour(local) *
+    3600 +
     lubridate::minute(local) * 60 +
     floor(lubridate::second(local))
   as.POSIXct("2000-01-01 00:00:00", tz = "UTC") +
@@ -2652,16 +2977,19 @@ dashboard_minor_breaks <- function(major_breaks, subdivisions = 10L) {
     )
   }
   if (length(major_breaks) < 2L) return(numeric())
-  unlist(lapply(
-    seq_len(length(major_breaks) - 1L),
-    function(index) {
-      seq(
-        major_breaks[[index]],
-        major_breaks[[index + 1L]],
-        length.out = subdivisions + 1L
-      )[seq.int(2L, subdivisions)]
-    }
-  ), use.names = FALSE)
+  unlist(
+    lapply(
+      seq_len(length(major_breaks) - 1L),
+      function(index) {
+        seq(
+          major_breaks[[index]],
+          major_breaks[[index + 1L]],
+          length.out = subdivisions + 1L
+        )[seq.int(2L, subdivisions)]
+      }
+    ),
+    use.names = FALSE
+  )
 }
 
 dashboard_symlog_axis <- function(
@@ -2867,13 +3195,14 @@ dashboard_y_axis_limits <- function(
   list(
     limits = unname(limits),
     active = active,
-    message = if (length(messages) == 0L) NULL else paste(messages, collapse = " ")
+    message = if (length(messages) == 0L) NULL else
+      paste(messages, collapse = " ")
   )
 }
 
 dashboard_plot_height <- function(
   preview,
-  detailed_minimum = 620L,
+  detailed_minimum = 700L,
   availability_minimum = 520L,
   maximum = 1500L
 ) {
@@ -2891,7 +3220,7 @@ dashboard_plot_height <- function(
   }
   facet_count <- max(1L, as.integer(facet_count))
   if (identical(preview$mode, "detailed")) {
-    requested <- 120L + 105L * facet_count
+    requested <- 180L + 125L * facet_count
     minimum <- as.integer(detailed_minimum)
   } else {
     requested <- 180L + 55L * facet_count
@@ -3272,9 +3601,7 @@ plot_dashboard_timeline <- function(
   }
   attr(plot, "llw_y_scope") <- y_scope
   attr(plot, "llw_facet_slots") <- facet_slots
-  attr(plot, "llw_empty_facet_anchor_ids") <- if (
-    is.null(facet_anchor_data)
-  ) {
+  attr(plot, "llw_empty_facet_anchor_ids") <- if (is.null(facet_anchor_data)) {
     character()
   } else {
     unique(as.character(facet_anchor_data$Id))
@@ -3339,13 +3666,12 @@ plot_dashboard_availability <- function(
     ,
     drop = FALSE
   ]
-  x_limits <- if (
-    preview$time_basis %in% c("participant", "elapsed")
-  ) {
-    as.Date("2000-01-01") + c(
-      chosen_time$Start[[1L]] - 1L,
-      chosen_time$End[[1L]] - 1L
-    )
+  x_limits <- if (preview$time_basis %in% c("participant", "elapsed")) {
+    as.Date("2000-01-01") +
+      c(
+        chosen_time$Start[[1L]] - 1L,
+        chosen_time$End[[1L]] - 1L
+      )
   } else {
     as.Date(c(
       chosen_time$Start[[1L]],
@@ -3367,9 +3693,13 @@ plot_dashboard_availability <- function(
       color = unname(colors[["grid"]]),
       linewidth = 0.15
     ) +
-    ggplot2::scale_fill_gradient(
-      low = unname(colors[["surface"]]),
-      high = unname(colors[["primary"]]),
+    ggplot2::scale_fill_gradientn(
+      colors = unname(c(
+        colors[["interval"]],
+        colors[["grid"]],
+        colors[["primary"]]
+      )),
+      values = c(0, 0.5, 1),
       limits = c(0, 100),
       na.value = unname(colors[["reference"]]),
       name = "Focus coverage (%)"
@@ -3399,8 +3729,8 @@ plot_dashboard_availability <- function(
         year = function(value) format(value, "%d %b"),
         function(value) format(value, "%d %b")
       ),
-      limits = x_limits,
-      expand = ggplot2::expansion(add = 0.55)
+      limits = x_limits + c(-0.5, 0.5),
+      expand = ggplot2::expansion(add = 0.05)
     ) +
     ggplot2::scale_y_discrete(
       drop = FALSE,
@@ -3436,7 +3766,7 @@ plot_dashboard_availability <- function(
       ""
     )
     plot_data[["Coverage label color"]] <- ifelse(
-      is.finite(coverage_percent) & coverage_percent >= 55,
+      is.finite(coverage_percent) & coverage_percent >= 50,
       unname(colors[["surface"]]),
       unname(colors[["text"]])
     )
@@ -3607,6 +3937,7 @@ dashboard_table_options <- function(data, column_visibility = TRUE) {
     searching = contract$search,
     paging = TRUE,
     stateSave = FALSE,
+    destroy = TRUE,
     columnDefs = column_defs,
     language = list(
       search = "Search all columns:",
@@ -3650,20 +3981,23 @@ dashboard_datatable <- function(
     ),
     class = "stripe hover row-border compact"
   )
-  integer_columns <- names(data)[vapply(
+  existing_columns <- function(columns) {
+    unique(intersect(as.character(columns), names(data)))
+  }
+  integer_columns <- existing_columns(names(data)[vapply(
     data,
     function(value) {
       is.integer(value) && !inherits(value, c("Date", "POSIXct", "difftime"))
     },
     logical(1)
-  )]
-  double_columns <- names(data)[vapply(
+  )])
+  double_columns <- existing_columns(names(data)[vapply(
     data,
     function(value) {
       is.double(value) && !inherits(value, c("Date", "POSIXct", "difftime"))
     },
     logical(1)
-  )]
+  )])
   if (length(integer_columns) > 0L) {
     widget <- DT::formatRound(
       widget,
@@ -3680,11 +4014,11 @@ dashboard_datatable <- function(
       zero.print = "0"
     )
   }
-  datetime_columns <- names(data)[vapply(
+  datetime_columns <- existing_columns(names(data)[vapply(
     data,
     function(value) inherits(value, "POSIXct"),
     logical(1)
-  )]
+  )])
   if (length(datetime_columns) > 0L) {
     widget <- DT::formatDate(
       widget,
@@ -3725,7 +4059,21 @@ dashboard_main_columns <- function(snapshot, focus_variable, data_stage) {
     names(grouping)
   grouping <- intersect(grouping[nzchar(grouping)], names(data))
   if (length(grouping) == 0L) grouping <- "Id"
-  unique(c(grouping, "Id", "Datetime", focus_variable))
+  source_lineage <- if (
+    identical(data_stage, "source") &&
+      inherits(
+        snapshot$append_sources %||% NULL,
+        "llw_dashboard_append_sources"
+      )
+  ) {
+    intersect(
+      snapshot$append_sources$row_reference_columns,
+      names(data)
+    )
+  } else {
+    character()
+  }
+  unique(c(grouping, "Id", source_lineage, "Datetime", focus_variable))
 }
 
 dashboard_format_available <- function(value, empty = "Not available") {
@@ -3763,7 +4111,7 @@ dashboard_provenance_table <- function(snapshot) {
     manifest$details$package_version %||%
     NA_character_
   files <- manifest$original_filenames
-  data.frame(
+  provenance <- data.frame(
     Field = c(
       "Source type",
       "Original source files",
@@ -3804,6 +4152,101 @@ dashboard_provenance_table <- function(snapshot) {
     check.names = FALSE,
     stringsAsFactors = FALSE
   )
+  append_sources <- snapshot$append_sources %||% NULL
+  if (inherits(append_sources, "llw_dashboard_append_sources")) {
+    namespace_labels <- vapply(
+      append_sources$sources,
+      function(source) {
+        namespaces <- source$metadata_namespaces
+        paste0(
+          source$dataset_id,
+          "=[",
+          if (length(namespaces) == 0L) {
+            "none recorded"
+          } else {
+            paste(namespaces, collapse = ", ")
+          },
+          "]"
+        )
+      },
+      character(1)
+    )
+    append_rows <- data.frame(
+      Field = c(
+        "Appended source dataset IDs",
+        "Row source cross-reference",
+        "Preserved source metadata namespaces",
+        "Source metadata policy"
+      ),
+      Value = c(
+        paste(append_sources$source_dataset_ids, collapse = ", "),
+        paste(append_sources$row_reference_columns, collapse = " + "),
+        paste(namespace_labels, collapse = "; "),
+        paste(
+          "Preserved separately by stable source dataset ID; no flattening,",
+          "semantic reconciliation, deduplication, or inferred joins."
+        )
+      ),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+    provenance <- rbind(provenance, append_rows)
+  }
+  metadata <- snapshot$glc_metadata %||% NULL
+  if (is.null(metadata)) return(provenance)
+  validate_glc_selected_metadata(metadata)
+  locations <- snapshot$record$factual_metadata$dataset_metadata %||%
+    metadata$tables$datasets[,
+      c(
+        "dataset_id",
+        "timezone",
+        "latitude",
+        "longitude"
+      ),
+      drop = FALSE
+    ]
+  complete_locations <- if (is.data.frame(locations)) {
+    sum(!is.na(locations$latitude) & !is.na(locations$longitude))
+  } else {
+    0L
+  }
+  table_rows <- vapply(metadata$tables, nrow, integer(1))
+  details <- manifest$details
+  glc_rows <- data.frame(
+    Field = c(
+      "GLC repository",
+      "Exact package revision",
+      "Compatibility ID",
+      "Final unit ID",
+      "Selected file groups",
+      "Selected output variables",
+      "Normalized metadata schema",
+      "Normalized metadata fingerprint",
+      "Selected metadata fingerprint",
+      "Dataset metadata rows",
+      "Datasets with coordinates",
+      "Metadata table row counts",
+      "Full-import fingerprint"
+    ),
+    Value = c(
+      dashboard_format_available(details$repository),
+      dashboard_format_available(details$resolved_revision),
+      dashboard_format_available(details$compatibility_id),
+      dashboard_format_available(details$unit_id),
+      dashboard_format_available(details$file_group_ids),
+      dashboard_format_available(details$selected_source_variables),
+      paste(metadata$upstream_schema, metadata$upstream_version),
+      metadata$upstream_fingerprint,
+      metadata$fingerprint,
+      format(nrow(metadata$tables$datasets), big.mark = ","),
+      format(complete_locations, big.mark = ","),
+      paste0(names(table_rows), "=", table_rows, collapse = "; "),
+      dashboard_format_available(details$full_import_fingerprint)
+    ),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  rbind(provenance, glc_rows)
 }
 
 dashboard_state_table <- function(snapshot) {

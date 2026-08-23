@@ -96,6 +96,372 @@ new_imported_dataset_record <- function(imported) {
   )
 }
 
+glc_dataset_display_name <- function(full_import) {
+  repository <- full_import$source$repository %||% "GLC package"
+  repository <- sub("^.*/", "", as.character(repository))
+  revision <- as.character(full_import$source$resolved_revision %||% "")
+  revision <- if (nzchar(revision)) substr(revision, 1L, 8L) else "revision"
+  paste0(repository, " (", revision, ")")
+}
+
+glc_dataset_source_timezone <- function(data) {
+  if (!is.data.frame(data) || !"Datetime" %in% names(data)) {
+    abort_llw(
+      "The complete GLC handoff has no canonical `Datetime` column.",
+      type = "validation",
+      public_message = paste(
+        "The collected GLC result cannot be added to the dashboard because",
+        "its canonical timestamp column is unavailable."
+      )
+    )
+  }
+  timezone <- lubridate::tz(data$Datetime)
+  if (
+    !is.character(timezone) ||
+      length(timezone) != 1L ||
+      is.na(timezone) ||
+      !nzchar(timezone) ||
+      !timezone %in% OlsonNames()
+  ) {
+    abort_llw(
+      "The complete GLC handoff has no valid IANA timestamp time zone.",
+      type = "validation",
+      public_message = paste(
+        "The collected GLC result has no unambiguous time zone for the",
+        "dashboard. No dataset was added."
+      )
+    )
+  }
+  timezone
+}
+
+glc_dataset_primary_variable <- function(data, full_import, eligibility) {
+  if (!inherits(eligibility, "llw_variable_eligibility")) {
+    abort_llw(
+      "The complete GLC handoff has invalid variable eligibility evidence.",
+      type = "validation"
+    )
+  }
+  eligible <- as.character(
+    eligibility$variable[eligibility$eligible %in% TRUE]
+  )
+  preferred <- intersect(
+    as.character(full_import$selected_source_variables),
+    eligible
+  )
+  candidates <- unique(c(preferred, eligible))
+  if (length(candidates) == 0L) {
+    abort_llw(
+      "The complete GLC handoff has no eligible numeric measurement.",
+      type = "validation",
+      public_message = paste(
+        "The complete GLC result has no finite numeric measurement that can",
+        "open as the dashboard's primary variable. Choose a numeric output",
+        "variable and apply the import again."
+      )
+    )
+  }
+  candidates[[1L]]
+}
+
+glc_dataset_column_metadata <- function(full_import, data_names) {
+  columns <- full_import$output_columns
+  declared <- full_import$metadata$tables$file_group_variables
+  if (!is.data.frame(columns) || !"name" %in% names(columns)) {
+    columns <- data.frame(name = character(), stringsAsFactors = FALSE)
+  }
+  if (!is.data.frame(declared) || !"name" %in% names(declared)) {
+    declared <- data.frame(name = character(), stringsAsFactors = FALSE)
+  }
+  columns <- columns[as.character(columns$name) %in% data_names, , drop = FALSE]
+  declared <- declared[
+    as.character(declared$name) %in% data_names,
+    ,
+    drop = FALSE
+  ]
+  variable_names <- unique(c(
+    as.character(columns$name),
+    as.character(declared$name)
+  ))
+  if (length(variable_names) == 0L) return(list())
+  first_text <- function(rows, candidates) {
+    candidate <- intersect(candidates, names(rows))
+    if (length(candidate) == 0L) return(NA_character_)
+    for (field in candidate) {
+      values <- as.character(rows[[field]])
+      values <- values[!is.na(values) & nzchar(trimws(values))]
+      if (length(values) > 0L) return(values[[1L]])
+    }
+    NA_character_
+  }
+  variables <- lapply(variable_names, function(name) {
+    output_rows <- columns[as.character(columns$name) == name, , drop = FALSE]
+    declared_rows <- declared[
+      as.character(declared$name) == name,
+      ,
+      drop = FALSE
+    ]
+    label <- first_text(
+      declared_rows,
+      c("description", "label", "display_name", "canonical_label")
+    )
+    if (is.na(label)) {
+      label <- first_text(
+        output_rows,
+        c("description", "label", "display_name", "canonical_label")
+      )
+    }
+    unit <- first_text(
+      declared_rows,
+      c("unit", "units", "declared_unit")
+    )
+    if (is.na(unit)) {
+      unit <- first_text(
+        output_rows,
+        c("unit", "units", "declared_unit")
+      )
+    }
+    calibration <- first_text(declared_rows, "calibration")
+    metadata <- list()
+    if (!is.na(label)) metadata$label <- label
+    if (!is.na(unit)) metadata$unit <- unit
+    if (!is.na(calibration)) metadata$calibration <- calibration
+    metadata
+  })
+  names(variables) <- variable_names
+  variables
+}
+
+glc_dataset_location_metadata <- function(full_import) {
+  validate_glc_selected_metadata(full_import$metadata)
+  datasets <- full_import$metadata$tables$datasets
+  context <- full_import$metadata$file_group_context
+  from_datasets <- datasets[,
+    c(
+      "dataset_id",
+      "timezone",
+      "latitude",
+      "longitude"
+    ),
+    drop = FALSE
+  ]
+  from_context <- context[,
+    c(
+      "dataset_id",
+      "dataset_timezone",
+      "dataset_latitude",
+      "dataset_longitude"
+    ),
+    drop = FALSE
+  ]
+  names(from_context) <- names(from_datasets)
+  selected_ids <- as.character(full_import$metadata$selected_ids$dataset_ids)
+  missing_ids <- setdiff(selected_ids, as.character(from_datasets$dataset_id))
+  from_context <- from_context[
+    as.character(from_context$dataset_id) %in% missing_ids,
+    ,
+    drop = FALSE
+  ]
+  locations <- rbind(from_datasets, from_context)
+  if (nrow(locations) == 0L) {
+    return(data.frame(
+      dataset_id = character(),
+      timezone = character(),
+      latitude = numeric(),
+      longitude = numeric(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  locations$dataset_id <- as.character(locations$dataset_id)
+  locations$timezone <- as.character(locations$timezone)
+  locations$latitude <- suppressWarnings(as.numeric(locations$latitude))
+  locations$longitude <- suppressWarnings(as.numeric(locations$longitude))
+  locations <- locations[!duplicated(locations$dataset_id), , drop = FALSE]
+  selected_rows <- match(selected_ids, locations$dataset_id)
+  if (anyNA(selected_rows)) {
+    abort_llw(
+      "Selected GLC dataset metadata is missing a fixed dataset identifier.",
+      type = "validation"
+    )
+  }
+  locations[selected_rows, , drop = FALSE]
+}
+
+glc_dataset_unique_location <- function(locations) {
+  if (!is.data.frame(locations) || nrow(locations) == 0L) return(NULL)
+  complete <- !is.na(locations$latitude) & !is.na(locations$longitude)
+  coordinates <- unique(locations[
+    complete,
+    c("latitude", "longitude"),
+    drop = FALSE
+  ])
+  if (nrow(coordinates) != 1L) return(NULL)
+  list(
+    latitude = as.numeric(coordinates$latitude[[1L]]),
+    longitude = as.numeric(coordinates$longitude[[1L]])
+  )
+}
+
+new_glc_dataset_record <- function(full_import, display_name = NULL) {
+  if (!inherits(full_import, "llw_glc_full_import_result")) {
+    abort_llw(
+      "Only a complete full-import handoff can enter the dataset library.",
+      type = "validation",
+      public_message = paste(
+        "Run Apply full import before adding this selection to the dataset",
+        "library. Preview rows are never promoted."
+      )
+    )
+  }
+  validate_glc_full_import_result(full_import)
+  if (
+    !isTRUE(full_import$assurance$fresh_full_read) ||
+      !identical(full_import$assurance$preview_result_used, FALSE) ||
+      !isTRUE(full_import$assurance$complete_collected_handoff)
+  ) {
+    abort_llw(
+      "The GLC handoff does not prove a fresh complete import.",
+      type = "validation",
+      public_message = paste(
+        "The result cannot enter the dataset library because it is not a",
+        "verified fresh full import. Preview rows were not accepted."
+      )
+    )
+  }
+
+  data <- full_import$data
+  timezone <- glc_dataset_source_timezone(data)
+  quality <- summarize_raw_import_quality(data, timezone)
+  eligibility <- quality$eligibility
+  primary <- glc_dataset_primary_variable(data, full_import, eligibility)
+  display_name <- display_name %||% glc_dataset_display_name(full_import)
+  display_name <- clean_dataset_display_name(display_name)
+  locations <- glc_dataset_location_metadata(full_import)
+  unique_location <- glc_dataset_unique_location(locations)
+
+  reviewed_paths <- as.character(
+    full_import$reviewed$file_membership$declared_path
+  )
+  reviewed_paths <- reviewed_paths[
+    !is.na(reviewed_paths) & nzchar(reviewed_paths)
+  ]
+  size_complete <- identical(
+    as.integer(full_import$resource$unknown_file_count),
+    0L
+  ) &&
+    is.numeric(full_import$resource$known_declared_bytes) &&
+    length(full_import$resource$known_declared_bytes) == 1L &&
+    is.finite(full_import$resource$known_declared_bytes)
+  details <- list(
+    repository = full_import$source$repository,
+    resolved_revision = full_import$source$resolved_revision,
+    registry_url = full_import$source$registry_url,
+    registry_generated_at = full_import$source$registry_generated_at,
+    validation_state = full_import$source$validation_state,
+    attestation_verified = full_import$source$attestation_verified,
+    schema_version = full_import$source$schema_version,
+    glcdp_version = full_import$source$glcdp_version,
+    compatibility_id = full_import$fixed$compatibility_id,
+    unit_id = full_import$fixed$unit_id,
+    file_group_ids = full_import$fixed$file_group_ids,
+    actual_input_membership = full_import$actual$input_membership,
+    selected_source_variables = full_import$selected_source_variables,
+    read_columns = full_import$read_columns,
+    output_columns = full_import$output_columns,
+    execution_mode = full_import$execution_mode,
+    declared_size_evidence = full_import$resource,
+    full_import_fingerprint = full_import$fingerprint,
+    metadata = list(
+      schema = full_import$metadata$metadata_schema,
+      version = full_import$metadata$metadata_version,
+      upstream_schema = full_import$metadata$upstream_schema,
+      upstream_version = full_import$metadata$upstream_version,
+      upstream_fingerprint = full_import$metadata$upstream_fingerprint,
+      selected_metadata_fingerprint = full_import$metadata$fingerprint,
+      table_rows = vapply(
+        full_import$metadata$tables,
+        nrow,
+        integer(1)
+      )
+    ),
+    units = lapply(
+      glc_dataset_column_metadata(full_import, names(data)),
+      function(metadata) metadata$unit %||% NA_character_
+    )
+  )
+  if (size_complete) {
+    details$size_bytes <- as.numeric(
+      full_import$resource$known_declared_bytes
+    )
+  }
+  manifest <- new_source_manifest(
+    source_type = if (identical(full_import$execution_mode, "runtime")) {
+      "glc_registry_full_import"
+    } else {
+      "glc_fixture_full_import"
+    },
+    original_filenames = reviewed_paths,
+    import_arguments = list(
+      selected_source_variables = full_import$selected_source_variables,
+      read_columns = full_import$read_columns,
+      output_columns = full_import$output_columns,
+      n_max = Inf,
+      problems = full_import$problems_policy,
+      progress = FALSE,
+      standardize = "lightlogr",
+      discovery_terms_applied = FALSE,
+      preview_result_used = FALSE
+    ),
+    source_timezone = timezone,
+    details = details
+  )
+
+  handoff_provenance <- full_import
+  handoff_provenance$data <- NULL
+  variables <- glc_dataset_column_metadata(full_import, names(data))
+  factual_metadata <- list(
+    source = "GLC registry full import",
+    repository = full_import$source$repository,
+    exact_revision = full_import$source$resolved_revision,
+    variables = variables,
+    glc_metadata = full_import$metadata,
+    dataset_metadata = locations
+  )
+  if (!is.null(unique_location)) {
+    factual_metadata$latitude <- unique_location$latitude
+    factual_metadata$longitude <- unique_location$longitude
+  }
+  record <- new_dataset_record(
+    raw_data = data,
+    display_name = display_name,
+    source_manifest = manifest,
+    factual_metadata = factual_metadata,
+    analysis_settings = list(
+      primary_variable = primary,
+      analysis_timezone = timezone
+    ),
+    provenance = list(
+      LightLogR_version = installed_package_version("LightLogR"),
+      glcdp = glcdp_runtime_provenance(),
+      raw_import_quality = quality,
+      primary_variable_eligibility = eligibility,
+      glc_full_import = handoff_provenance,
+      glc_library_integration = list(
+        schema = "llw-glc-library-integration",
+        version = "1.0.0",
+        source_full_import_fingerprint = full_import$fingerprint,
+        complete_handoff_used = TRUE,
+        preview_result_used = FALSE,
+        session_library_added = TRUE,
+        persisted_outside_session = FALSE,
+        promoted = FALSE,
+        downloaded = FALSE
+      )
+    )
+  )
+  validate_dataset_record(record)
+}
+
 sample_dataset_record <- function() {
   data <- LightLogR::sample.data.environment
   quality <- summarize_raw_import_quality(data, "Europe/Berlin")

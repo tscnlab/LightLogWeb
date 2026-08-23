@@ -1759,10 +1759,72 @@ glc_transfer_preview_table <- function(
   )
 }
 
+new_glc_library_add_request <- function(
+  full_import,
+  request_id = new_stable_id("glc_library_request")
+) {
+  validate_glc_full_import_result(full_import)
+  assert_scalar_string(request_id, "request_id")
+  request <- structure(
+    list(
+      request_schema = "llw-glc-library-add-request",
+      request_version = "1.0.0",
+      request_id = request_id,
+      full_import_fingerprint = full_import$fingerprint,
+      full_import = full_import
+    ),
+    class = c("llw_glc_library_add_request", "list")
+  )
+  validate_glc_library_add_request(request)
+  request
+}
+
+validate_glc_library_add_request <- function(request) {
+  if (!inherits(request, "llw_glc_library_add_request") || !is.list(request)) {
+    abort_llw(
+      "The GLC dataset-library request is invalid.",
+      type = "validation"
+    )
+  }
+  required <- c(
+    "request_schema",
+    "request_version",
+    "request_id",
+    "full_import_fingerprint",
+    "full_import"
+  )
+  if (
+    !all(required %in% names(request)) ||
+      !identical(request$request_schema, "llw-glc-library-add-request") ||
+      !identical(request$request_version, "1.0.0")
+  ) {
+    abort_llw(
+      "The GLC dataset-library request contract is unsupported.",
+      type = "validation"
+    )
+  }
+  assert_scalar_string(request$request_id, "request$request_id")
+  validate_glc_full_import_result(request$full_import)
+  if (
+    !identical(
+      request$full_import_fingerprint,
+      request$full_import$fingerprint
+    )
+  ) {
+    abort_llw(
+      "The GLC dataset-library request no longer matches its full import.",
+      type = "stale"
+    )
+  }
+  assert_serializable_value(request, "GLC dataset-library request")
+  invisible(request)
+}
+
 glc_full_import_result_ui <- function(
   result,
   retained = FALSE,
-  progress = NULL
+  progress = NULL,
+  library_action = NULL
 ) {
   if (
     !inherits(result, "llw_glc_full_import_result") ||
@@ -1816,6 +1878,9 @@ glc_full_import_result_ui <- function(
       },
       compact = TRUE
     ),
+    if (!is.null(library_action)) {
+      tags$div(class = "llw-glc-library-action", library_action)
+    },
     tags$div(
       class = "llw-glc-metrics llw-glc-transfer-metrics",
       layout_column_wrap(
@@ -2011,6 +2076,69 @@ glc_full_import_result_ui <- function(
         )
       )
     )
+  )
+}
+
+glc_library_add_action_ui <- function(
+  ns,
+  result,
+  added = NULL,
+  error = NULL,
+  status = NULL,
+  input_id = "add_to_library",
+  show_error = TRUE
+) {
+  if (!inherits(result, "llw_glc_full_import_result")) return(NULL)
+  already_added <-
+    is.list(added) &&
+    identical(added$full_import_fingerprint, result$fingerprint)
+  processing <- is.list(status) &&
+    status$state %in% c("preparing", "adding", "opening")
+  label <- if (already_added) {
+    "Added to dataset library"
+  } else if (processing) {
+    status$message %||% "Adding dataset to library..."
+  } else {
+    "Add to dataset library and open dashboard"
+  }
+  add_button <- actionButton(
+    ns(input_id),
+    label,
+    icon = if (processing) {
+      icon("spinner", class = "fa-spin")
+    } else {
+      icon(if (already_added) "circle-check" else "chart-line")
+    },
+    class = if (already_added) "btn-success" else "btn-primary",
+    `aria-disabled` = if (already_added || processing) "true" else NULL
+  )
+  if (already_added || processing) {
+    add_button <- htmltools::tagAppendAttributes(
+      add_button,
+      disabled = "disabled"
+    )
+  }
+  tagList(
+    add_button,
+    if (processing) {
+      tags$span(
+        class = "llw-glc-library-progress",
+        role = "status",
+        `aria-live` = "polite",
+        status$detail %||% "The dataset record and provenance are being prepared."
+      )
+    },
+    if (show_error && !is.null(error)) {
+      tags$div(
+        class = "llw-glc-library-error",
+        llw_status_callout(
+          "error",
+          error,
+          heading = "Dataset was not added",
+          compact = TRUE
+        )
+      )
+    }
   )
 }
 
@@ -3846,7 +3974,11 @@ glcPreviewUI <- function(id, source_ui = NULL) {
       ".llw-glc-import-stack > *, .llw-glc-preview-review > *,",
       ".llw-glc-preview-disclosure__body > * {margin-block: 0 !important;",
       "min-width: 0; max-width: 100%;}",
-      ".llw-glc-full-import-output:not(:empty) {margin-top: 0 !important;}",
+      paste(
+        ".llw-glc-apply-progress-output:not(:empty),",
+        ".llw-glc-full-import-output:not(:empty)"
+      ),
+      "{margin-top: .75rem !important;}",
       ".llw-glc-import-stack > *:not(:empty) + *:not(:empty),",
       ".llw-glc-preview-review > *:not(:empty) + *:not(:empty),",
       ".llw-glc-preview-disclosure__body > *:not(:empty) + *:not(:empty),",
@@ -3866,6 +3998,13 @@ glcPreviewUI <- function(id, source_ui = NULL) {
       ".llw-glc-import-details__body h4 {margin: 0;}",
       ".llw-glc-import-action-group, .llw-glc-preview-action-group {",
       "margin: 0 !important;}",
+      ".llw-glc-library-action {display: flex; flex-wrap: wrap;",
+      "align-items: center; gap: .65rem; margin-top: .75rem;}",
+      ".llw-glc-library-progress {color: var(--bs-secondary-color);",
+      "font-size: .9rem; overflow-wrap: anywhere;}",
+      ".llw-glc-library-error {flex-basis: 100%; margin-top: .1rem;}",
+      ".llw-glc-library-footer-action {display: flex; justify-content:",
+      "flex-end; min-width: 0;}",
       ".llw-glc-import-summary {padding: .1rem 0;}",
       ".llw-glc-preview-disclosure {border: 1px solid var(--bs-border-color);",
       "border-radius: .65rem; background: var(--bs-body-bg); overflow: clip;}",
@@ -4337,7 +4476,10 @@ glcPreviewUI <- function(id, source_ui = NULL) {
                   uiOutput(ns("cancel_apply_button"), inline = TRUE),
                   uiOutput(ns("apply_cancellation_drain"), inline = TRUE)
                 ),
-                uiOutput(ns("apply_progress_card")),
+                uiOutput(
+                  ns("apply_progress_card"),
+                  class = "llw-glc-apply-progress-output"
+                ),
                 uiOutput(
                   ns("full_import_result"),
                   class = "llw-glc-full-import-output"
@@ -4361,6 +4503,7 @@ glcPreviewUI <- function(id, source_ui = NULL) {
               icon = icon("arrow-left"),
               class = "btn-outline-secondary btn-lg"
             ),
+            uiOutput(ns("library_add_footer_action"), inline = TRUE),
             split = TRUE
           )
         )
@@ -4491,8 +4634,7 @@ glc_full_import_contract_review <- function(transfer_review) {
     transfer_review$projection,
     total_preview_rows = 1L,
     problems = "error",
-    available_session_bytes =
-      transfer_review$resource$available_session_bytes
+    available_session_bytes = transfer_review$resource$available_session_bytes
   )
 }
 
@@ -4507,7 +4649,8 @@ glcPreviewServer <- function(
   preview_worker = glcdp_transfer_preview_task_worker,
   apply_worker = glcdp_full_import_task_worker,
   refine_collection = glcdp_refine_collection,
-  task_start_timeout_seconds = 15
+  task_start_timeout_seconds = 15,
+  enable_library_integration = FALSE
 ) {
   if (!shiny::is.reactive(source_selection)) {
     abort_llw("source_selection must be reactive.", type = "validation")
@@ -4541,6 +4684,7 @@ glcPreviewServer <- function(
       type = "validation"
     )
   }
+  assert_flag(enable_library_integration, "enable_library_integration")
   if (
     !is.numeric(task_start_timeout_seconds) ||
       length(task_start_timeout_seconds) != 1L ||
@@ -4602,6 +4746,10 @@ glcPreviewServer <- function(
     transfer_task <- NULL
     apply_revision <- reactiveVal(0L)
     full_import_value <- reactiveVal(NULL)
+    library_add_request_value <- reactiveVal(NULL)
+    library_added_value <- reactiveVal(NULL)
+    library_add_error <- reactiveVal(NULL)
+    library_add_status <- reactiveVal(NULL)
     apply_attempted <- reactiveVal(FALSE)
     pending_apply_attempt <- reactiveVal(NULL)
     active_apply_attempt <- reactiveVal(NULL)
@@ -4658,6 +4806,10 @@ glcPreviewServer <- function(
         apply_terminal_override(new_task_status("glc_read"))
         apply_controller_reset_required(apply_needs_reset)
         full_import_value(NULL)
+        library_add_request_value(NULL)
+        library_added_value(NULL)
+        library_add_error(NULL)
+        library_add_status(NULL)
         apply_attempted(FALSE)
         apply_progress_path(NULL)
         apply_revision(isolate(apply_revision()) + 1L)
@@ -4942,6 +5094,10 @@ glcPreviewServer <- function(
           apply_terminal_override(NULL)
           apply_controller_reset_required(FALSE)
           full_import_value(value)
+          library_add_request_value(NULL)
+          library_added_value(NULL)
+          library_add_error(NULL)
+          library_add_status(NULL)
           invisible(NULL)
         }
       )
@@ -6071,8 +6227,7 @@ glcPreviewServer <- function(
             progress_path = progress_path,
             apply_revision = isolate(apply_revision()),
             source_key = glc_source_selection_key(isolate(source_selection())),
-            contract_fingerprint =
-              glc_full_import_contract_fingerprint(review),
+            contract_fingerprint = glc_full_import_contract_fingerprint(review),
             requested_at = Sys.time()
           ))
           submit_pending_apply()
@@ -6613,10 +6768,8 @@ glcPreviewServer <- function(
         }
         request_ready <-
           !is.null(isolate(inspection_value())) &&
-          (
-            !is.null(isolate(selected_term_value())) ||
-              !is.null(isolate(selected_modality_value()))
-          )
+          (!is.null(isolate(selected_term_value())) ||
+            !is.null(isolate(selected_modality_value())))
         busy <-
           !is.null(isolate(pending_planning_attempt())) ||
           !is.null(isolate(active_planning_attempt()))
@@ -7032,10 +7185,8 @@ glcPreviewServer <- function(
         nrow(plan_value()$compatibility_sets) > 0L
       request_ready <-
         !is.null(inspection_value()) &&
-        (
-          !is.null(selected_term_value()) ||
-            !is.null(selected_modality_value())
-        )
+        (!is.null(selected_term_value()) ||
+          !is.null(selected_modality_value()))
       busy <-
         !is.null(pending_planning_attempt()) ||
         !is.null(active_planning_attempt())
@@ -7737,20 +7888,161 @@ glcPreviewServer <- function(
       active <-
         !is.null(pending_apply_attempt()) ||
         !is.null(active_apply_attempt())
-      retained <- active || status$state %in% c(
-        "cancelled",
-        "error",
-        "stale",
-        "queued",
-        "running",
-        "finalizing"
-      )
+      retained <- active ||
+        status$state %in%
+          c(
+            "cancelled",
+            "error",
+            "stale",
+            "queued",
+            "running",
+            "finalizing"
+          )
       glc_full_import_result_ui(
         result,
         retained = retained,
-        progress = read_glc_task_progress(apply_progress_path())
+        progress = read_glc_task_progress(apply_progress_path()),
+        library_action = if (enable_library_integration) {
+          uiOutput(session$ns("library_add_action"))
+        }
       )
     })
+
+    output$library_add_action <- renderUI({
+      if (!enable_library_integration) return(NULL)
+      result <- full_import_value()
+      if (is.null(result)) return(NULL)
+      glc_library_add_action_ui(
+        session$ns,
+        result,
+        added = library_added_value(),
+        error = library_add_error(),
+        status = library_add_status(),
+        input_id = "add_to_library",
+        show_error = TRUE
+      )
+    })
+
+    output$library_add_footer_action <- renderUI({
+      if (!enable_library_integration) return(NULL)
+      result <- full_import_value()
+      if (is.null(result)) return(NULL)
+      tags$div(
+        class = "llw-glc-library-footer-action",
+        glc_library_add_action_ui(
+          session$ns,
+          result,
+          added = library_added_value(),
+          error = library_add_error(),
+          status = library_add_status(),
+          input_id = "add_to_library_footer",
+          show_error = FALSE
+        )
+      )
+    })
+
+    queue_library_add <- function() {
+      if (!enable_library_integration) return(invisible(NULL))
+      current_status <- isolate(library_add_status())
+      if (
+        is.list(current_status) &&
+          current_status$state %in% c("preparing", "adding", "opening")
+      ) {
+        return(invisible(NULL))
+      }
+      result <- isolate(full_import_value())
+      req(result)
+      library_add_status(list(
+        state = "preparing",
+        message = "Preparing dataset...",
+        detail = paste(
+          "Validating the complete handoff and its provenance before it is",
+          "added to the session library."
+        )
+      ))
+      request <- tryCatch(
+        new_glc_library_add_request(result),
+        error = identity
+      )
+      if (inherits(request, "error")) {
+        library_add_status(NULL)
+        library_add_error(llw_public_message(normalize_task_error(
+          request,
+          "preparation"
+        )))
+        return(invisible(NULL))
+      }
+      library_add_error(NULL)
+      library_add_request_value(request)
+      invisible(NULL)
+    }
+
+    observeEvent(input$add_to_library, queue_library_add(), ignoreInit = TRUE)
+    observeEvent(
+      input$add_to_library_footer,
+      queue_library_add(),
+      ignoreInit = TRUE
+    )
+
+    mark_library_add_progress <- function(request_id, state, message, detail) {
+      assert_scalar_string(request_id, "request_id")
+      assert_scalar_string(state, "state")
+      assert_scalar_string(message, "message")
+      assert_scalar_string(detail, "detail")
+      current <- isolate(library_add_request_value())
+      if (is.null(current) || !identical(current$request_id, request_id)) {
+        return(invisible(FALSE))
+      }
+      library_add_status(list(
+        state = state,
+        message = message,
+        detail = detail
+      ))
+      invisible(TRUE)
+    }
+
+    mark_library_added <- function(request_id, dataset_id) {
+      assert_scalar_string(request_id, "request_id")
+      assert_scalar_string(dataset_id, "dataset_id")
+      current <- isolate(library_add_request_value())
+      if (is.null(current) || !identical(current$request_id, request_id)) {
+        return(invisible(FALSE))
+      }
+      current_result <- isolate(full_import_value())
+      if (
+        is.null(current_result) ||
+          !identical(
+            current$full_import_fingerprint,
+            current_result$fingerprint
+          )
+      ) {
+        return(invisible(FALSE))
+      }
+      library_added_value(list(
+        request_id = request_id,
+        dataset_id = dataset_id,
+        full_import_fingerprint = current$full_import_fingerprint
+      ))
+      library_add_error(NULL)
+      library_add_status(list(
+        state = "added",
+        message = "Added to dataset library",
+        detail = "The dashboard is opening with the newly added dataset."
+      ))
+      invisible(TRUE)
+    }
+
+    mark_library_add_failed <- function(request_id, message) {
+      assert_scalar_string(request_id, "request_id")
+      assert_scalar_string(message, "message")
+      current <- isolate(library_add_request_value())
+      if (is.null(current) || !identical(current$request_id, request_id)) {
+        return(invisible(FALSE))
+      }
+      library_add_error(message)
+      library_add_status(NULL)
+      invisible(TRUE)
+    }
 
     # These uiOutput containers are intentionally empty until their review,
     # task, or result is available. The app stylesheet hides empty outputs, so
@@ -7764,7 +8056,9 @@ glcPreviewServer <- function(
       "transfer_preview_result",
       "apply_cancellation_drain",
       "apply_progress_card",
-      "full_import_result"
+      "full_import_result",
+      "library_add_action",
+      "library_add_footer_action"
     )) {
       outputOptions(output, output_id, suspendWhenHidden = FALSE)
     }
@@ -7874,6 +8168,12 @@ glcPreviewServer <- function(
       transfer_pending = reactive(!is.null(pending_transfer_attempt())),
       transfer_active = reactive(!is.null(active_transfer_attempt())),
       full_import = reactive(full_import_value()),
+      library_add_request = reactive(library_add_request_value()),
+      library_added = reactive(library_added_value()),
+      library_add_status = reactive(library_add_status()),
+      mark_library_add_progress = mark_library_add_progress,
+      mark_library_added = mark_library_added,
+      mark_library_add_failed = mark_library_add_failed,
       apply_status = reactive({
         if (apply_attempted()) {
           apply_display_status()

@@ -72,16 +72,127 @@ test_that("dataset manager returns explicit stable-ID events", {
   )
 })
 
+test_that("dataset manager keeps one stable selector across record updates", {
+  first <- m1_record("First")
+  second <- m1_record("Second")
+  appended <- m1_record("Appended")
+  records <- shiny::reactiveVal(list())
+  selected <- shiny::reactiveVal(NULL)
+
+  shiny::testServer(
+    datasetManagerServer,
+    args = list(datasets = records, selected_dataset_id = selected),
+    {
+      returned <- session$getReturned()
+      session$flushReact()
+      expect_null(returned$event())
+      expect_length(returned$resync_selection(), 0L)
+      session$flushReact()
+
+      current <- stats::setNames(list(first), first$id)
+      records(current)
+      selected(first$id)
+      session$flushReact()
+      expect_identical(returned$resync_selection(), first$id)
+      session$flushReact()
+      expect_null(returned$event())
+
+      current[[second$id]] <- second
+      records(current)
+      session$flushReact()
+      expect_identical(returned$resync_selection(), first$id)
+      session$flushReact()
+      expect_null(returned$event())
+
+      current[[appended$id]] <- appended
+      records(current)
+      selected(appended$id)
+      session$flushReact()
+      expect_identical(returned$resync_selection(), appended$id)
+      session$flushReact()
+      expect_null(returned$event())
+
+      session$setInputs(dataset_select = first$id)
+      first_choice <- returned$event()
+      expect_identical(first_choice$type, "select")
+      expect_identical(first_choice$dataset_id, first$id)
+
+      session$flushReact()
+      returned$resync_selection()
+      session$flushReact()
+      expect_identical(returned$event()$id, first_choice$id)
+      expect_identical(returned$resync_selection(), appended$id)
+      session$flushReact()
+
+      selected(first$id)
+      session$flushReact()
+      session$setInputs(dataset_select = first$id)
+      session$flushReact()
+      expect_identical(returned$event()$id, first_choice$id)
+      expect_identical(returned$resync_selection(), first$id)
+      session$flushReact()
+
+      session$setInputs(dataset_select = second$id)
+      failed_choice <- returned$event()
+      expect_identical(failed_choice$dataset_id, second$id)
+      expect_false(identical(failed_choice$id, first_choice$id))
+
+      returned$resync_selection()
+      session$flushReact()
+      session$setInputs(dataset_select = first$id)
+      session$flushReact()
+      expect_identical(returned$event()$id, failed_choice$id)
+      expect_identical(returned$resync_selection(), first$id)
+      session$flushReact()
+
+      session$setInputs(dataset_select = appended$id)
+      stale_choice <- returned$event()
+      expect_identical(stale_choice$dataset_id, appended$id)
+      current[[appended$id]] <- NULL
+      records(current)
+      selected(first$id)
+      session$flushReact()
+      session$setInputs(dataset_select = appended$id)
+      session$flushReact()
+      expect_identical(returned$event()$id, stale_choice$id)
+      expect_identical(returned$resync_selection(), first$id)
+      session$flushReact()
+
+      current[[first$id]]$display_name <- "First renamed"
+      records(current)
+      session$flushReact()
+      expect_identical(returned$event()$id, stale_choice$id)
+      expect_identical(returned$resync_selection(), first$id)
+    }
+  )
+})
+
 test_that("append module returns a new record only after a current safe preview", {
   records <- m4_records()
   ids <- names(records)
   datasets <- shiny::reactiveVal(records)
   selected <- shiny::reactiveVal(ids[[1L]])
   original_checksums <- vapply(records, `[[`, character(1), "raw_checksum")
+  scheduled <- list()
+  scheduler <- function(callback) {
+    scheduled[[length(scheduled) + 1L]] <<- callback
+    invisible(NULL)
+  }
+  run_next <- function() {
+    stopifnot(length(scheduled) > 0L)
+    callback <- scheduled[[1L]]
+    scheduled <<- scheduled[-1L]
+    callback()
+    invisible(NULL)
+  }
 
   shiny::testServer(
     append_merge_server,
-    args = list(datasets = datasets, selected_dataset_id = selected),
+    args = list(
+      datasets = datasets,
+      selected_dataset_id = selected,
+      action_scheduler = scheduler
+    ),
     {
       returned <- session$getReturned()
       values <- list(
@@ -114,6 +225,19 @@ test_that("append module returns a new record only after a current safe preview"
       expect_null(returned$add_dataset())
       session$setInputs(preview = 1)
       session$flushReact()
+      expect_identical(returned$action_state(), "preview")
+      expect_identical(length(scheduled), 1L)
+      expect_match(
+        paste(as.character(output$preview_status), collapse = ""),
+        "Building append preview",
+        fixed = TRUE
+      )
+      session$setInputs(preview = 2)
+      session$flushReact()
+      expect_identical(length(scheduled), 1L)
+      run_next()
+      session$flushReact()
+      expect_null(returned$action_state())
       expect_s3_class(returned$preview(), "llw_append_preview")
       expect_true(returned$preview()$can_apply)
       expect_true(returned$is_current())
@@ -125,14 +249,29 @@ test_that("append module returns a new record only after a current safe preview"
 
       session$setInputs(apply = 1)
       session$flushReact()
+      expect_identical(returned$action_state(), "create")
+      run_next()
+      session$flushReact()
+      expect_null(returned$action_state())
       expect_null(returned$add_dataset())
 
-      session$setInputs(display_name = "Module append", preview = 2)
+      session$setInputs(display_name = "Module append", preview = 3)
+      session$flushReact()
+      expect_identical(returned$action_state(), "preview")
+      run_next()
       session$flushReact()
       expect_true(returned$is_current())
 
       session$setInputs(apply = 2)
       session$flushReact()
+      expect_identical(returned$action_state(), "create")
+      expect_identical(length(scheduled), 1L)
+      session$setInputs(apply = 3)
+      session$flushReact()
+      expect_identical(length(scheduled), 1L)
+      run_next()
+      session$flushReact()
+      expect_null(returned$action_state())
       result <- returned$add_dataset()
       expect_s3_class(result, "llw_dataset_record")
       expect_identical(result$source_manifest$source_type, "append_merge")
@@ -143,7 +282,10 @@ test_that("append module returns a new record only after a current safe preview"
         original_checksums
       )
 
-      session$setInputs(apply = 3)
+      session$setInputs(apply = 4)
+      session$flushReact()
+      expect_identical(returned$action_state(), "create")
+      run_next()
       session$flushReact()
       expect_identical(returned$add_dataset()$id, result$id)
     }
@@ -159,6 +301,12 @@ test_that("dataset and append UIs expose ready examples and a guided append", {
   expect_match(sidebar_html, "Ready-to-use example", fixed = TRUE)
   expect_match(sidebar_html, "Start new import", fixed = TRUE)
   expect_match(sidebar_html, "Append datasets", fixed = TRUE)
+  expect_identical(
+    stringr::str_count(sidebar_html, 'id="datasets-dataset_select"'),
+    1L
+  )
+  expect_match(sidebar_html, "datasets-dataset_empty", fixed = TRUE)
+  expect_false(grepl("datasets-dataset_list", sidebar_html, fixed = TRUE))
   expect_match(append_html, "llw-append-wizard", fixed = TRUE)
   expect_false(grepl(
     "Within-source duplicate policy",

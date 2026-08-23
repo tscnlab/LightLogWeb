@@ -11,7 +11,14 @@ datasetSidebarUI <- function(id, example_choices = dataset_example_choices()) {
     title = "Session datasets",
     class = "llw-dataset-sidebar",
     h2(class = "h5", "Session datasets"),
-    uiOutput(ns("dataset_list")),
+    uiOutput(ns("dataset_empty")),
+    radioButtons(
+      ns("dataset_select"),
+      label = NULL,
+      choices = character(),
+      selected = character(),
+      width = "100%"
+    ),
     hr(),
     h3(class = "h6", "Add datasets"),
     tags$div(
@@ -260,6 +267,37 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
       event_value(new_dataset_manager_event(type, dataset_id, value))
     }
 
+    sync_dataset_selection <- function() {
+      records <- isolate(datasets())
+      ids <- names(records)
+      if (is.null(ids)) ids <- character()
+      labels <- if (length(records) == 0L) {
+        character()
+      } else {
+        vapply(records, `[[`, character(1), "display_name")
+      }
+      authoritative_id <- isolate(selected_dataset_id())
+      selected <- if (
+        length(authoritative_id) == 1L &&
+          !is.na(authoritative_id) &&
+          nzchar(authoritative_id) &&
+          authoritative_id %in% ids
+      ) {
+        authoritative_id
+      } else {
+        character()
+      }
+
+      freezeReactiveValue(input, "dataset_select")
+      updateRadioButtons(
+        session,
+        "dataset_select",
+        choices = stats::setNames(ids, labels),
+        selected = selected
+      )
+      invisible(selected)
+    }
+
     show_rename_dialog <- function(
       record,
       value = record$display_name,
@@ -299,25 +337,21 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
       ))
     }
 
-    output$dataset_list <- renderUI({
+    output$dataset_empty <- renderUI({
       records <- datasets()
-      if (length(records) == 0L) {
-        return(llw_status_callout(
-          "idle",
-          "Import files or load test data to begin.",
-          heading = "No datasets in this session",
-          compact = TRUE
-        ))
-      }
-      ids <- names(records)
-      labels <- vapply(records, `[[`, character(1), "display_name")
-      radioButtons(
-        session$ns("dataset_select"),
-        label = NULL,
-        choices = stats::setNames(ids, labels),
-        selected = selected_dataset_id(),
-        width = "100%"
+      if (length(records) != 0L) return(NULL)
+      llw_status_callout(
+        "idle",
+        "Import files or load test data to begin.",
+        heading = "No datasets in this session",
+        compact = TRUE
       )
+    })
+
+    observe({
+      datasets()
+      selected_dataset_id()
+      sync_dataset_selection()
     })
 
     output$selected_summary <- renderUI({
@@ -358,12 +392,21 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
     })
 
     observe({
-      req(input$dataset_select)
-      if (!identical(input$dataset_select, selected_dataset_id())) {
-        emit("select", dataset_id = input$dataset_select)
+      candidate_id <- input$dataset_select
+      req(
+        length(candidate_id) == 1L,
+        !is.na(candidate_id),
+        nzchar(candidate_id)
+      )
+      records <- datasets()
+      if (!candidate_id %in% names(records)) {
+        sync_dataset_selection()
+        return()
       }
+      if (identical(candidate_id, selected_dataset_id())) return()
+      emit("select", dataset_id = candidate_id)
     }) |>
-      bindEvent(input$dataset_select, ignoreInit = TRUE)
+      bindEvent(input$dataset_select, ignoreInit = FALSE)
 
     observe({
       emit("open_import")
@@ -533,7 +576,10 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
     }) |>
       bindEvent(input$delete_dataset_real, ignoreInit = TRUE)
 
-    list(event = reactive(event_value()))
+    list(
+      event = reactive(event_value()),
+      resync_selection = sync_dataset_selection
+    )
   })
 }
 

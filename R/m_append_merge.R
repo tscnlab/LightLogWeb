@@ -23,9 +23,42 @@ append_mapping_input_id <- function(dataset_id, field, column = NULL) {
   }
 }
 
-append_record_column_choices <- function(record) {
-  record <- validate_dataset_record(record)
-  data <- dataset_raw_data(record)
+append_ui_record_signature <- function(record) {
+  if (!inherits(record, "llw_dataset_record") || !is.list(record)) {
+    abort_llw(
+      "Append sources must be immutable dataset records.",
+      type = "validation"
+    )
+  }
+  required <- c(
+    "id", "display_name", "revision", "raw_checksum", "source_manifest",
+    "factual_metadata", "analysis_settings"
+  )
+  if (!all(required %in% names(record))) {
+    abort_llw("The append source contract is incomplete.", type = "validation")
+  }
+  paste0(
+    "sha256:",
+    digest::digest(
+      list(
+        id = record$id,
+        display_name = record$display_name,
+        revision = record$revision,
+        raw_checksum = record$raw_checksum,
+        source_manifest = record$source_manifest,
+        factual_metadata = record$factual_metadata,
+        analysis_settings = record$analysis_settings
+      ),
+      algo = "sha256",
+      serialize = TRUE
+    )
+  )
+}
+
+append_record_column_choices_from_data <- function(record, data) {
+  if (!is.data.frame(data)) {
+    abort_llw("Append column choices require a data frame.", type = "validation")
+  }
   data <- data[append_user_column_names(data)]
   atomic <- names(data)[vapply(
     data,
@@ -69,7 +102,179 @@ append_record_column_choices <- function(record) {
   )
 }
 
-append_common_measurement_candidates <- function(records, source_ids) {
+append_record_column_choices <- function(record) {
+  record <- validate_dataset_record(record)
+  append_record_column_choices_from_data(record, unserialize(record$raw_payload))
+}
+
+append_record_variable_metadata_unchecked <- function(record, variable) {
+  metadata <- record$factual_metadata$variables[[variable]] %||% list()
+  manifest_unit <- record$source_manifest$details$units[[variable]] %||%
+    NA_character_
+  label <- metadata$label %||% NA_character_
+  unit <- metadata$unit %||% manifest_unit
+  calibration <- metadata$calibration %||%
+    record$source_manifest$details$calibration[[variable]] %||%
+    NA_character_
+  list(
+    label = if (is.character(label) && length(label) == 1L) label else
+      NA_character_,
+    unit = if (is.character(unit) && length(unit) == 1L) unit else
+      NA_character_,
+    calibration = if (is.character(calibration) && length(calibration) == 1L)
+      calibration else NA_character_
+  )
+}
+
+append_ui_record_contract <- function(record) {
+  signature <- append_ui_record_signature(record)
+  record <- validate_dataset_record(record)
+  data <- unserialize(record$raw_payload)
+  choices <- append_record_column_choices_from_data(record, data)
+  metadata_columns <- unique(c(
+    choices$participant,
+    choices$datetime,
+    choices$measurement,
+    choices$optional
+  ))
+  variable_metadata <- stats::setNames(
+    lapply(
+      metadata_columns,
+      function(column) append_record_variable_metadata_unchecked(record, column)
+    ),
+    metadata_columns
+  )
+  datetime_zones <- if (length(choices$datetime) == 0L) {
+    stats::setNames(character(), character())
+  } else {
+    stats::setNames(
+      vapply(
+        choices$datetime,
+        function(column) lubridate::tz(data[[column]]),
+        character(1)
+      ),
+      choices$datetime
+    )
+  }
+  list(
+    signature = signature,
+    dataset_id = record$id,
+    display_name = record$display_name,
+    rows = nrow(data),
+    source_timezone = record$source_manifest$source_timezone,
+    choices = choices,
+    datetime_zones = datetime_zones,
+    variable_metadata = variable_metadata
+  )
+}
+
+new_append_ui_cache <- function(
+  max_entries = 12L,
+  max_bytes = 24 * 1024^2
+) {
+  if (
+    !is.numeric(max_entries) || length(max_entries) != 1L ||
+      is.na(max_entries) || max_entries < 1 || max_entries != floor(max_entries)
+  ) {
+    abort_llw("`max_entries` must be a positive whole number.", type = "validation")
+  }
+  if (
+    !is.numeric(max_bytes) || length(max_bytes) != 1L || is.na(max_bytes) ||
+      !is.finite(max_bytes) || max_bytes < 1
+  ) {
+    abort_llw("`max_bytes` must be positive and finite.", type = "validation")
+  }
+  values <- new.env(parent = emptyenv())
+  sizes <- new.env(parent = emptyenv())
+  touched <- new.env(parent = emptyenv())
+  clock <- 0L
+  builds <- 0L
+  hits <- 0L
+  keys <- function() ls(values, all.names = TRUE)
+  total_bytes <- function() {
+    present <- keys()
+    if (length(present) == 0L) return(0)
+    sum(vapply(present, function(key) get(key, sizes), numeric(1)))
+  }
+  touch <- function(key) {
+    clock <<- clock + 1L
+    assign(key, clock, envir = touched)
+  }
+  remove_key <- function(key) {
+    for (where in list(values, sizes, touched)) {
+      if (exists(key, envir = where, inherits = FALSE)) {
+        rm(list = key, envir = where)
+      }
+    }
+  }
+  prune <- function(protect = character()) {
+    repeat {
+      present <- keys()
+      if (
+        length(present) <= as.integer(max_entries) &&
+          total_bytes() <= as.numeric(max_bytes)
+      ) break
+      candidates <- setdiff(present, protect)
+      if (length(candidates) == 0L) break
+      ages <- vapply(candidates, function(key) get(key, touched), integer(1))
+      remove_key(candidates[[which.min(ages)]])
+    }
+    invisible(NULL)
+  }
+  get_value <- function(key, builder) {
+    assert_scalar_string(key, "key")
+    if (!is.function(builder)) {
+      abort_llw("`builder` must be a function.", type = "validation")
+    }
+    if (exists(key, envir = values, inherits = FALSE)) {
+      hits <<- hits + 1L
+      touch(key)
+      return(get(key, envir = values, inherits = FALSE))
+    }
+    builds <<- builds + 1L
+    value <- builder()
+    size <- as.numeric(utils::object.size(value))
+    if (size <= as.numeric(max_bytes)) {
+      assign(key, value, envir = values)
+      assign(key, size, envir = sizes)
+      touch(key)
+      prune(protect = key)
+    }
+    value
+  }
+  clear <- function() {
+    present <- keys()
+    if (length(present) > 0L) {
+      for (key in present) remove_key(key)
+    }
+    invisible(NULL)
+  }
+  stats <- function() {
+    list(
+      entries = length(keys()),
+      bytes = total_bytes(),
+      max_entries = as.integer(max_entries),
+      max_bytes = as.numeric(max_bytes),
+      builds = builds,
+      hits = hits,
+      keys = keys()
+    )
+  }
+  list(get = get_value, clear = clear, stats = stats, keys = keys)
+}
+
+append_contract_value <- function(records, dataset_id, contracts = NULL) {
+  if (!is.null(contracts) && dataset_id %in% names(contracts)) {
+    return(contracts[[dataset_id]])
+  }
+  append_ui_record_contract(records[[dataset_id]])
+}
+
+append_common_measurement_candidates <- function(
+  records,
+  source_ids,
+  contracts = NULL
+) {
   source_ids <- intersect(source_ids, names(records))
   if (length(source_ids) < 2L) {
     return(data.frame(column = character(), unit = character()))
@@ -77,14 +282,18 @@ append_common_measurement_candidates <- function(records, source_ids) {
   common <- Reduce(
     intersect,
     lapply(source_ids, function(dataset_id) {
-      append_record_column_choices(records[[dataset_id]])$measurement
+      append_contract_value(records, dataset_id, contracts)$choices$measurement
     })
   )
   rows <- lapply(common, function(column) {
     units <- vapply(
       source_ids,
       function(dataset_id) {
-        dataset_record_variable_metadata(records[[dataset_id]], column)$unit
+        append_contract_value(
+          records,
+          dataset_id,
+          contracts
+        )$variable_metadata[[column]]$unit
       },
       character(1)
     )
@@ -105,10 +314,16 @@ append_common_measurement_candidates <- function(records, source_ids) {
   do.call(rbind, rows)
 }
 
-append_selected_measurement_details <- function(records, source_ids, input) {
+append_selected_measurement_details <- function(
+  records,
+  source_ids,
+  input,
+  contracts = NULL
+) {
   rows <- lapply(source_ids, function(dataset_id) {
     record <- records[[dataset_id]]
-    choices <- append_record_column_choices(record)
+    contract <- append_contract_value(records, dataset_id, contracts)
+    choices <- contract$choices
     if (length(choices$measurement) == 0L) return(NULL)
     column <- input[[append_mapping_input_id(
       dataset_id,
@@ -118,7 +333,7 @@ append_selected_measurement_details <- function(records, source_ids, input) {
     data.frame(
       dataset_id = dataset_id,
       column = column,
-      unit = dataset_record_variable_metadata(record, column)$unit,
+      unit = contract$variable_metadata[[column]]$unit,
       stringsAsFactors = FALSE
     )
   })
@@ -230,15 +445,15 @@ append_measurement_strategy_ui <- function(ns, selected, candidates) {
   )
 }
 
-append_time_selection <- function(input, records, source_ids) {
+append_time_selection <- function(input, records, source_ids, contracts = NULL) {
   zones <- vapply(
     source_ids,
     function(dataset_id) {
-      record <- records[[dataset_id]]
-      choices <- append_record_column_choices(record)
+      contract <- append_contract_value(records, dataset_id, contracts)
+      choices <- contract$choices
       datetime <- input[[append_mapping_input_id(dataset_id, "datetime")]] %||%
         choices$datetime[[1L]]
-      lubridate::tz(dataset_raw_data(record)[[datetime]])
+      contract$datetime_zones[[datetime]]
     },
     character(1)
   )
@@ -274,12 +489,17 @@ append_time_selection <- function(input, records, source_ids) {
   )
 }
 
-append_time_plan_from_inputs <- function(input, records, source_ids) {
-  selection <- append_time_selection(input, records, source_ids)
+append_time_plan_from_inputs <- function(
+  input,
+  records,
+  source_ids,
+  contracts = NULL
+) {
+  selection <- append_time_selection(input, records, source_ids, contracts)
   rows <- lapply(seq_along(source_ids), function(index) {
     dataset_id <- source_ids[[index]]
     record <- records[[dataset_id]]
-    choices <- append_record_column_choices(record)
+    choices <- append_contract_value(records, dataset_id, contracts)$choices
     datetime <- input[[append_mapping_input_id(dataset_id, "datetime")]] %||%
       choices$datetime[[1L]]
     data.frame(
@@ -299,23 +519,29 @@ append_time_plan_from_inputs <- function(input, records, source_ids) {
   do.call(rbind, rows)
 }
 
-append_time_controls_ui <- function(ns, input, records, source_ids) {
+append_time_controls_ui <- function(
+  ns,
+  input,
+  records,
+  source_ids,
+  contracts = NULL
+) {
   selection <- tryCatch(
-    append_time_selection(input, records, source_ids),
+    append_time_selection(input, records, source_ids, contracts),
     error = identity
   )
   if (inherits(selection, "error")) {
     zones <- vapply(
       source_ids,
       function(dataset_id) {
-        record <- records[[dataset_id]]
-        choices <- append_record_column_choices(record)
+        contract <- append_contract_value(records, dataset_id, contracts)
+        choices <- contract$choices
         datetime <- input[[append_mapping_input_id(
           dataset_id,
           "datetime"
         )]] %||%
           choices$datetime[[1L]]
-        lubridate::tz(dataset_raw_data(record)[[datetime]])
+        contract$datetime_zones[[datetime]]
       },
       character(1)
     )
@@ -424,20 +650,20 @@ append_default_source_ids <- function(records, selected_dataset_id = NULL) {
   }
 }
 
-append_source_choice_labels <- function(records) {
+append_source_choice_labels <- function(records, contracts = NULL) {
   labels <- vapply(
-    records,
-    function(record) {
-      inventory <- dataset_record_inventory(record)
-      timezone <- if (is.na(inventory$source_timezone)) {
+    names(records),
+    function(dataset_id) {
+      contract <- append_contract_value(records, dataset_id, contracts)
+      timezone <- if (is.na(contract$source_timezone)) {
         "timezone unknown"
       } else {
-        inventory$source_timezone
+        contract$source_timezone
       }
       paste0(
-        inventory$display_name,
+        contract$display_name,
         " - ",
-        format(inventory$rows, big.mark = ","),
+        format(contract$rows, big.mark = ","),
         " rows, ",
         timezone
       )
@@ -558,9 +784,10 @@ append_identity_card_ui <- function(
   index,
   input,
   session,
-  participant_policy
+  participant_policy,
+  choices = NULL
 ) {
-  choices <- append_record_column_choices(record)
+  choices <- choices %||% append_record_column_choices(record)
   if (length(choices$participant) == 0L) {
     return(card(
       card_header(record$display_name),
@@ -621,9 +848,10 @@ append_mapping_card_ui <- function(
   input,
   session,
   strategy,
-  identical_measurement = NULL
+  identical_measurement = NULL,
+  choices = NULL
 ) {
-  choices <- append_record_column_choices(record)
+  choices <- choices %||% append_record_column_choices(record)
   if (
     length(choices$datetime) == 0L ||
       length(choices$measurement) == 0L
@@ -857,7 +1085,10 @@ append_sources_step_ui <- function(ns) {
         heights_equal = "row",
         fillable = FALSE,
         tags$section(
-          class = "llw-wizard-field-group",
+          class = paste(
+            "llw-wizard-field-group",
+            "llw-append-measurement-layout"
+          ),
           tags$h4(bsicons::bs_icon("database"), " Source datasets"),
           uiOutput(ns("source_selector")),
           uiOutput(ns("source_selection_status"))
@@ -1100,10 +1331,20 @@ append_review_step_ui <- function(ns) {
   )
 }
 
-append_preview_actions_ui <- function(ns, preview_exists, current, can_apply) {
+append_preview_actions_ui <- function(
+  ns,
+  preview_exists,
+  current,
+  can_apply,
+  busy_action = NULL
+) {
+  busy <- identical(busy_action, "preview") ||
+    identical(busy_action, "create")
   needs_update <- isTRUE(preview_exists) && !isTRUE(current)
   preview_prominent <- !isTRUE(preview_exists) || needs_update
-  preview_label <- if (needs_update) {
+  preview_label <- if (identical(busy_action, "preview")) {
+    "Building preview..."
+  } else if (needs_update) {
     "Update preview"
   } else if (isTRUE(preview_exists)) {
     "Preview again"
@@ -1120,10 +1361,21 @@ append_preview_actions_ui <- function(ns, preview_exists, current, can_apply) {
       "btn-outline-primary"
     }
   )
-  apply_ready <- isTRUE(current) && isTRUE(can_apply)
+  if (busy) {
+    preview_button <- htmltools::tagAppendAttributes(
+      preview_button,
+      disabled = "disabled",
+      `aria-disabled` = "true"
+    )
+  }
+  apply_ready <- isTRUE(current) && isTRUE(can_apply) && !busy
   apply_button <- actionButton(
     ns("apply"),
-    "Create new immutable dataset",
+    if (identical(busy_action, "create")) {
+      "Creating dataset..."
+    } else {
+      "Create new immutable dataset"
+    },
     icon = icon("code-merge"),
     class = if (apply_ready) "btn-primary btn-lg" else "btn-outline-secondary",
     title = if (apply_ready) {
@@ -1145,6 +1397,7 @@ append_preview_actions_ui <- function(ns, preview_exists, current, can_apply) {
       if (preview_prominent) "llw-append-actions--preview" else
         "llw-append-actions--create"
     ),
+    `aria-busy` = if (busy) "true" else "false",
     preview_button,
     apply_button
   )
@@ -1305,7 +1558,7 @@ append_input_value <- function(input, id, default = NULL) {
   if (is.null(value) || length(value) == 0L) default else value
 }
 
-append_spec_from_inputs <- function(input, records) {
+append_spec_from_inputs <- function(input, records, contracts = NULL) {
   source_ids <- input$source_ids %||% character()
   if (length(source_ids) < 2L) {
     abort_llw(
@@ -1324,7 +1577,8 @@ append_spec_from_inputs <- function(input, records) {
   participant_policy <- input$participant_policy %||% "prefix_source"
   identical_candidates <- append_common_measurement_candidates(
     records,
-    source_ids
+    source_ids,
+    contracts
   )
   if (identical(strategy, "identical") && nrow(identical_candidates) == 0L) {
     abort_llw(
@@ -1364,7 +1618,7 @@ append_spec_from_inputs <- function(input, records) {
   mappings <- lapply(seq_along(source_ids), function(index) {
     dataset_id <- source_ids[[index]]
     record <- records[[dataset_id]]
-    choices <- append_record_column_choices(record)
+    choices <- append_contract_value(records, dataset_id, contracts)$choices
     if (
       length(choices$participant) == 0L ||
         length(choices$datetime) == 0L ||
@@ -1464,7 +1718,12 @@ append_spec_from_inputs <- function(input, records) {
       optional_coercions = optional_coercions
     )
   })
-  time_selection <- append_time_selection(input, records, source_ids)
+  time_selection <- append_time_selection(
+    input,
+    records,
+    source_ids,
+    contracts
+  )
   overlap_policy <- if (identical(participant_policy, "preserve")) {
     input$overlap_policy %||% "error"
   } else {
@@ -1489,7 +1748,12 @@ append_spec_from_inputs <- function(input, records) {
   )
 }
 
-append_merge_server <- function(id, datasets, selected_dataset_id) {
+append_merge_server <- function(
+  id,
+  datasets,
+  selected_dataset_id,
+  action_scheduler = NULL
+) {
   if (
     !shiny::is.reactive(datasets) || !shiny::is.reactive(selected_dataset_id)
   ) {
@@ -1498,12 +1762,110 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
       type = "validation"
     )
   }
+  if (!is.null(action_scheduler) && !is.function(action_scheduler)) {
+    abort_llw(
+      "`action_scheduler` must be NULL or a function.",
+      type = "validation"
+    )
+  }
   moduleServer(id, function(input, output, session) {
     preview_value <- reactiveVal(NULL)
     preview_error <- reactiveVal(NULL)
     added_dataset_value <- reactiveVal(NULL)
+    append_action_state <- reactiveVal(NULL)
     wizard_step <- reactiveVal("sources")
     wizard_completed <- reactiveVal(character())
+    contract_cache <- new_append_ui_cache(
+      max_entries = 12L,
+      max_bytes = 24 * 1024^2
+    )
+    profile_cache <- new_append_ui_cache(
+      max_entries = 24L,
+      max_bytes = 24 * 1024^2
+    )
+
+    schedule_append_action <- function(callback) {
+      run <- function() {
+        shiny::withReactiveDomain(session, shiny::isolate(callback()))
+      }
+      if (is.null(action_scheduler)) {
+        session$onFlushed(run, once = TRUE)
+      } else {
+        action_scheduler(run)
+      }
+      invisible(TRUE)
+    }
+
+    start_append_action <- function(action, callback) {
+      if (!is.null(shiny::isolate(append_action_state()))) {
+        return(invisible(FALSE))
+      }
+      append_action_state(action)
+      scheduled <- tryCatch(
+        {
+          schedule_append_action(function() {
+            on.exit(append_action_state(NULL), add = TRUE)
+            callback()
+          })
+          TRUE
+        },
+        error = identity
+      )
+      if (inherits(scheduled, "error")) {
+        append_action_state(NULL)
+        preview_error(scheduled)
+        return(invisible(FALSE))
+      }
+      invisible(TRUE)
+    }
+
+    contract_for <- function(record) {
+      signature <- append_ui_record_signature(record)
+      contract_cache$get(
+        paste0("contract:", signature),
+        function() append_ui_record_contract(record)
+      )
+    }
+
+    contracts_for <- function(records, source_ids = names(records)) {
+      source_ids <- intersect(source_ids, names(records))
+      stats::setNames(
+        lapply(source_ids, function(dataset_id) {
+          contract_for(records[[dataset_id]])
+        }),
+        source_ids
+      )
+    }
+
+    cached_spec_from_inputs <- function(records = datasets()) {
+      source_ids <- intersect(input$source_ids %||% character(), names(records))
+      append_spec_from_inputs(
+        input,
+        records,
+        contracts = contracts_for(records, source_ids)
+      )
+    }
+
+    cached_source_profile <- function(records, mapping) {
+      record <- records[[mapping$dataset_id]]
+      key <- paste0(
+        "profile:",
+        digest::digest(
+          list(
+            record = append_ui_record_signature(record),
+            mapping = mapping
+          ),
+          algo = "sha256",
+          serialize = TRUE
+        )
+      )
+      profile_cache$get(key, function() append_source_profile(records, mapping))
+    }
+
+    session$onSessionEnded(function() {
+      contract_cache$clear()
+      profile_cache$clear()
+    })
 
     selected_source_ids <- reactive({
       intersect(input$source_ids %||% character(), names(datasets()))
@@ -1517,7 +1879,7 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
       mapped <- vapply(
         source_ids,
         function(dataset_id) {
-          choices <- append_record_column_choices(records[[dataset_id]])
+          choices <- contract_for(records[[dataset_id]])$choices
           if (length(choices$participant) == 0L) return(FALSE)
           selected <- input[[append_mapping_input_id(
             dataset_id,
@@ -1546,7 +1908,7 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
     mapping_ready <- reactive({
       if (!identity_ready()) return(FALSE)
       spec <- tryCatch(
-        append_spec_from_inputs(input, datasets()),
+        cached_spec_from_inputs(),
         error = identity
       )
       !inherits(spec, "error")
@@ -1555,13 +1917,13 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
     time_ready <- reactive({
       if (!mapping_ready()) return(FALSE)
       spec <- tryCatch(
-        append_spec_from_inputs(input, datasets()),
+        cached_spec_from_inputs(),
         error = identity
       )
       if (inherits(spec, "error")) return(FALSE)
       profiles <- lapply(
         spec$mappings,
-        function(mapping) append_source_profile(datasets(), mapping)
+        function(mapping) cached_source_profile(datasets(), mapping)
       )
       length(append_time_issues(profiles, spec)$errors) == 0L
     })
@@ -1589,7 +1951,7 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
       preview <- preview_value()
       if (is.null(preview)) return(FALSE)
       current_spec <- tryCatch(
-        append_spec_from_inputs(input, datasets()),
+        cached_spec_from_inputs(),
         error = identity
       )
       if (inherits(current_spec, "error")) return(FALSE)
@@ -1625,57 +1987,82 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
     }
 
     open_mapping_step <- function() {
-      if (!identity_ready()) {
-        notify_append(
-          paste(
-            "Choose at least two sources, a valid ID column for each source,",
-            "and unique non-empty prefixes when prefixing IDs."
-          )
-        )
-        return()
-      }
-      wizard_completed(unique(c(wizard_completed(), "sources")))
-      select_wizard_step("mapping")
+      withProgress(
+        message = "Preparing measurement mappings",
+        value = 0,
+        {
+          incProgress(0.5, detail = "Validating source identities")
+          if (!identity_ready()) {
+            notify_append(
+              paste(
+                "Choose at least two sources, a valid ID column for each source,",
+                "and unique non-empty prefixes when prefixing IDs."
+              )
+            )
+            return()
+          }
+          incProgress(0.5, detail = "Opening time and measurement mapping")
+          wizard_completed(unique(c(wizard_completed(), "sources")))
+          select_wizard_step("mapping")
+        }
+      )
     }
 
     open_time_step <- function() {
-      spec <- tryCatch(
-        append_spec_from_inputs(input, datasets()),
-        error = identity
+      withProgress(
+        message = "Preparing the output-time step",
+        value = 0,
+        {
+          incProgress(0.35, detail = "Validating measurement mappings")
+          spec <- tryCatch(
+            cached_spec_from_inputs(),
+            error = identity
+          )
+          if (inherits(spec, "error")) {
+            notify_append(llw_public_message(spec), type = "error")
+            return()
+          }
+          incProgress(0.65, detail = "Opening output-time controls")
+          wizard_completed(unique(c(wizard_completed(), "sources", "mapping")))
+          select_wizard_step("time")
+        }
       )
-      if (inherits(spec, "error")) {
-        notify_append(llw_public_message(spec), type = "error")
-        return()
-      }
-      wizard_completed(unique(c(wizard_completed(), "sources", "mapping")))
-      select_wizard_step("time")
     }
 
     open_review_step <- function() {
-      spec <- tryCatch(
-        append_spec_from_inputs(input, datasets()),
-        error = identity
+      withProgress(
+        message = "Preparing append review",
+        value = 0,
+        {
+          incProgress(0.25, detail = "Validating the append contract")
+          spec <- tryCatch(
+            cached_spec_from_inputs(),
+            error = identity
+          )
+          if (inherits(spec, "error")) {
+            notify_append(llw_public_message(spec), type = "error")
+            return()
+          }
+          incProgress(0.35, detail = "Comparing source time contracts")
+          profiles <- lapply(
+            spec$mappings,
+            function(mapping) cached_source_profile(datasets(), mapping)
+          )
+          time_issues <- append_time_issues(profiles, spec)
+          if (length(time_issues$errors) > 0L) {
+            notify_append(paste(time_issues$errors, collapse = " "), type = "error")
+            return()
+          }
+          incProgress(0.4, detail = "Opening the review step")
+          wizard_completed(unique(c(
+            wizard_completed(),
+            "sources",
+            "mapping",
+            "time"
+          )))
+          select_wizard_step("review")
+        }
       )
-      if (inherits(spec, "error")) {
-        notify_append(llw_public_message(spec), type = "error")
-        return()
-      }
-      profiles <- lapply(
-        spec$mappings,
-        function(mapping) append_source_profile(datasets(), mapping)
-      )
-      time_issues <- append_time_issues(profiles, spec)
-      if (length(time_issues$errors) > 0L) {
-        notify_append(paste(time_issues$errors, collapse = " "), type = "error")
-        return()
-      }
-      wizard_completed(unique(c(
-        wizard_completed(),
-        "sources",
-        "mapping",
-        "time"
-      )))
-      select_wizard_step("review")
     }
 
     output$wizard_stepper <- renderUI({
@@ -1734,7 +2121,10 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
       checkboxGroupInput(
         session$ns("source_ids"),
         "Datasets to append",
-        choices = append_source_choice_labels(records),
+        choices = append_source_choice_labels(
+          records,
+          contracts_for(records)
+        ),
         selected = selected,
         width = "100%"
       )
@@ -1770,21 +2160,27 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
       source_ids <- selected_source_ids()
       if (length(source_ids) < 2L) return(NULL)
       policy <- input$participant_policy %||% "prefix_source"
+      contracts <- contracts_for(records, source_ids)
       tagList(lapply(seq_along(source_ids), function(index) {
+        dataset_id <- source_ids[[index]]
         append_identity_card_ui(
-          records[[source_ids[[index]]]],
+          records[[dataset_id]],
           index,
           input,
           session,
-          policy
+          policy,
+          choices = contracts[[dataset_id]]$choices
         )
       }))
     })
 
     output$measurement_strategy_control <- renderUI({
+      records <- datasets()
+      source_ids <- selected_source_ids()
       candidates <- append_common_measurement_candidates(
-        datasets(),
-        selected_source_ids()
+        records,
+        source_ids,
+        contracts_for(records, source_ids)
       )
       append_measurement_strategy_ui(
         session$ns,
@@ -1798,7 +2194,12 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
       source_ids <- selected_source_ids()
       if (length(source_ids) < 2L) return(NULL)
       strategy <- input$measurement_strategy %||% "separate"
-      candidates <- append_common_measurement_candidates(records, source_ids)
+      contracts <- contracts_for(records, source_ids)
+      candidates <- append_common_measurement_candidates(
+        records,
+        source_ids,
+        contracts
+      )
       identical_measurement <- if (
         identical(strategy, "identical") && nrow(candidates) > 0L
       ) {
@@ -1819,7 +2220,8 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
           input,
           session,
           strategy,
-          identical_measurement = identical_measurement
+          identical_measurement = identical_measurement,
+          choices = contracts[[dataset_id]]$choices
         )
       }))
     })
@@ -1858,7 +2260,12 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
         )
       )
       if (identical(strategy, "identical")) {
-        candidates <- append_common_measurement_candidates(records, source_ids)
+        contracts <- contracts_for(records, source_ids)
+        candidates <- append_common_measurement_candidates(
+          records,
+          source_ids,
+          contracts
+        )
         if (nrow(candidates) == 0L) {
           return(llw_status_callout(
             "error",
@@ -1897,7 +2304,12 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
           quantity_and_device
         ))
       }
-      details <- append_selected_measurement_details(records, source_ids, input)
+      details <- append_selected_measurement_details(
+        records,
+        source_ids,
+        input,
+        contracts_for(records, source_ids)
+      )
       defaults <- append_combined_measurement_defaults(details)
       current_name <- isolate(input$output_measurement) %||% ""
       output_name <- if (
@@ -1969,7 +2381,8 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
         session$ns,
         input,
         datasets(),
-        source_ids
+        source_ids,
+        contracts_for(datasets(), source_ids)
       )
     })
 
@@ -1981,7 +2394,12 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
           "Select at least two source datasets."
         ))
         plan <- tryCatch(
-          append_time_plan_from_inputs(input, datasets(), source_ids),
+          append_time_plan_from_inputs(
+            input,
+            datasets(),
+            source_ids,
+            contracts_for(datasets(), source_ids)
+          ),
           error = identity
         )
         validate(need(
@@ -2001,7 +2419,8 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
         session$ns,
         preview_exists = !is.null(preview),
         current = preview_is_current(),
-        can_apply = !is.null(preview) && isTRUE(preview$can_apply)
+        can_apply = !is.null(preview) && isTRUE(preview$can_apply),
+        busy_action = append_action_state()
       )
     })
 
@@ -2011,74 +2430,128 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
 
     observe({
       req(input$preview > 0)
-      result <- tryCatch(
-        {
-          spec <- append_spec_from_inputs(input, datasets())
-          preview_append_merge(datasets(), spec)
-        },
-        error = identity
-      )
-      if (inherits(result, "error")) {
-        preview_value(NULL)
-        preview_error(result)
-      } else {
-        preview_value(result)
+      start_append_action("preview", function() {
         preview_error(NULL)
-      }
+        result <- withProgress(
+          message = "Building append preview",
+          value = 0,
+          {
+            incProgress(0.2, detail = "Validating mappings and time settings")
+            result <- tryCatch(
+              {
+                spec <- append_spec_from_inputs(input, datasets())
+                incProgress(0.35, detail = "Preparing source records")
+                result <- preview_append_merge(datasets(), spec)
+                incProgress(0.45, detail = "Finalizing the bounded preview")
+                result
+              },
+              error = identity
+            )
+            result
+          }
+        )
+        if (inherits(result, "error")) {
+          preview_value(NULL)
+          preview_error(result)
+        } else {
+          preview_value(result)
+          preview_error(NULL)
+        }
+      })
     }) |>
       bindEvent(input$preview, ignoreInit = TRUE)
 
     observe({
       req(input$apply > 0)
-      preview <- preview_value()
-      if (is.null(preview)) {
-        showNotification(
-          "Create a successful, current append preview first.",
-          type = "error",
-          duration = 8
+      start_append_action("create", function() {
+        preview <- preview_value()
+        if (is.null(preview)) {
+          showNotification(
+            "Create a successful, current append preview first.",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        current_spec <- tryCatch(
+          append_spec_from_inputs(input, datasets()),
+          error = identity
         )
-        return()
-      }
-      current_spec <- tryCatch(
-        append_spec_from_inputs(input, datasets()),
-        error = identity
-      )
-      if (inherits(current_spec, "error")) {
-        showNotification(
-          llw_public_message(current_spec),
-          type = "error",
-          duration = 8
+        if (inherits(current_spec, "error")) {
+          showNotification(
+            llw_public_message(current_spec),
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        current_fingerprint <- append_source_fingerprint(
+          datasets(),
+          current_spec
         )
-        return()
-      }
-      current_fingerprint <- append_source_fingerprint(datasets(), current_spec)
-      if (!identical(current_fingerprint, preview$fingerprint)) {
-        showNotification(
-          paste(
-            "The sources or mappings changed after preview.",
-            "Update the preview before creating the dataset."
-          ),
-          type = "error",
-          duration = 8
+        if (!identical(current_fingerprint, preview$fingerprint)) {
+          showNotification(
+            paste(
+              "The sources or mappings changed after preview.",
+              "Update the preview before creating the dataset."
+            ),
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        record <- withProgress(
+          message = "Creating appended dataset",
+          value = 0,
+          {
+            incProgress(0.35, detail = "Validating the current append preview")
+            record <- tryCatch(
+              new_appended_dataset_record(preview),
+              error = identity
+            )
+            incProgress(0.65, detail = "Preserving data and source metadata")
+            record
+          }
         )
-        return()
-      }
-      record <- tryCatch(new_appended_dataset_record(preview), error = identity)
-      if (inherits(record, "error")) {
-        showNotification(
-          llw_public_message(record),
-          type = "error",
-          duration = 8
-        )
-        return()
-      }
-      added_dataset_value(record)
-      preview_value(NULL)
-      preview_error(NULL)
+        if (inherits(record, "error")) {
+          showNotification(
+            llw_public_message(record),
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        added_dataset_value(record)
+        preview_value(NULL)
+        preview_error(NULL)
+      })
     }) |>
       bindEvent(input$apply, ignoreInit = TRUE)
 
     output$preview_status <- renderUI({
+      action <- append_action_state()
+      if (identical(action, "preview")) {
+        return(llw_status_callout(
+          "running",
+          paste(
+            "Validating the current mappings and constructing the append",
+            "preview. Source datasets remain unchanged."
+          ),
+          heading = "Building append preview",
+          live = TRUE
+        ))
+      }
+      if (identical(action, "create")) {
+        return(llw_status_callout(
+          "running",
+          paste(
+            "Preserving the validated rows, source metadata, and lineage",
+            "while every source dataset remains unchanged."
+          ),
+          heading = "Creating new immutable dataset",
+          live = TRUE
+        ))
+      }
       error <- preview_error()
       if (inherits(error, "error")) {
         return(llw_status_callout(
@@ -2206,7 +2679,12 @@ append_merge_server <- function(id, datasets, selected_dataset_id) {
       preview = reactive(preview_value()),
       error = reactive(preview_error()),
       is_current = reactive(preview_is_current()),
-      add_dataset = reactive(added_dataset_value())
+      add_dataset = reactive(added_dataset_value()),
+      action_state = reactive(append_action_state()),
+      cache_stats = function() list(
+        contracts = contract_cache$stats(),
+        profiles = profile_cache$stats()
+      )
     )
   })
 }

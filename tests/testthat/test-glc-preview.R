@@ -307,6 +307,9 @@ glc_preview_test_plan <- function(
   groups$device_link_status <- c("resolved", "resolved", "not_applicable")
   groups$device_location <- c("wrist", "chest", NA_character_)
   groups$device_location_type <- c("body_worn", "body_worn", NA_character_)
+  groups$dataset_timezone <- "UTC"
+  groups$dataset_latitude <- c(48.1372, 48.2082, 48.1372)
+  groups$dataset_longitude <- c(11.5756, 16.3738, 11.5756)
   groups$description <- c(
     "Wrist light recording",
     "Chest light recording",
@@ -464,6 +467,25 @@ glc_preview_test_plan <- function(
     list(schema = "glc-package-metadata", version = "1.0.0"),
     lapply(glc_collection_plan_metadata_tables(), glc_preview_empty_table)
   )
+  metadata$datasets <- glc_preview_empty_table(
+    glc_collection_plan_metadata_tables()$datasets,
+    2L
+  )
+  metadata$datasets$dataset_id <- c("dataset-a", "dataset-b")
+  metadata$datasets$schema_version <- "3.0.2"
+  metadata$datasets$study_id <- "study-a"
+  metadata$datasets$study_link_status <- "resolved"
+  metadata$datasets$participant_id <- c("participant-a", "participant-b")
+  metadata$datasets$participant_associated <- TRUE
+  metadata$datasets$participant_link_status <- "resolved"
+  metadata$datasets$timezone <- "UTC"
+  metadata$datasets$latitude <- c(48.1372, 48.2082)
+  metadata$datasets$longitude <- c(11.5756, 16.3738)
+  metadata$datasets$file_group_count <- c(2L, 1L)
+  metadata$datasets$file_count <- c(2L, 1L)
+  metadata$datasets$modalities <- list(c("light", "activity"), "light")
+  metadata$datasets$device_ids <- list("device-a", "device-b")
+  metadata$datasets$primary_variables <- rep(list("MEDI"), 2L)
   metadata$participants <- glc_preview_empty_table(
     glc_collection_plan_metadata_tables()$participants,
     2L
@@ -1098,9 +1120,15 @@ test_that("Slice 2C-B UI separates optional preview from fresh full Apply", {
     fixed = TRUE
   )
   expect_match(html, "llw-glc-full-import-output", fixed = TRUE)
+  expect_match(html, "llw-glc-apply-progress-output", fixed = TRUE)
   expect_match(
     html,
     ".llw-glc-full-import-output:not(:empty)",
+    fixed = TRUE
+  )
+  expect_match(
+    html,
+    ".llw-glc-apply-progress-output:not(:empty)",
     fixed = TRUE
   )
   expect_match(
@@ -3596,6 +3624,7 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       refine_collection = glc_preview_test_refinement,
       preview_worker = glc_preview_test_preview_worker(calls),
       apply_worker = glc_preview_test_full_import_worker(calls),
+      enable_library_integration = TRUE,
       task_start_timeout_seconds = 1
     ),
     {
@@ -3853,6 +3882,96 @@ test_that("variable projection preserves the fixed Slice 2A structure", {
       expect_match(
         full_import_html,
         "No. Apply performed a fresh full read.",
+        fixed = TRUE
+      )
+      library_action_html <- htmltools::renderTags(
+        output$library_add_action
+      )$html
+      expect_match(
+        library_action_html,
+        "Add to dataset library and open dashboard",
+        fixed = TRUE
+      )
+      expect_false(grepl(
+        'disabled="disabled"',
+        library_action_html,
+        fixed = TRUE
+      ))
+      library_footer_html <- htmltools::renderTags(
+        output$library_add_footer_action
+      )$html
+      expect_match(
+        library_footer_html,
+        "Add to dataset library and open dashboard",
+        fixed = TRUE
+      )
+      session$setInputs(add_to_library = 1L, .priority = "event")
+      session$flushReact()
+      library_request <- returned$library_add_request()
+      expect_s3_class(
+        library_request,
+        "llw_glc_library_add_request"
+      )
+      expect_identical(
+        library_request$full_import_fingerprint,
+        first_full_import$fingerprint
+      )
+      expect_identical(library_request$full_import, first_full_import)
+      expect_null(nonserializable_path(library_request))
+      expect_identical(returned$library_add_status()$state, "preparing")
+      library_preparing_html <- htmltools::renderTags(
+        output$library_add_action
+      )$html
+      expect_match(
+        library_preparing_html,
+        "Preparing dataset",
+        fixed = TRUE
+      )
+      expect_true(returned$mark_library_add_progress(
+        library_request$request_id,
+        "adding",
+        "Adding to session library\u2026",
+        "Preserving measurements, metadata, and exact provenance."
+      ))
+      session$flushReact()
+      library_adding_html <- htmltools::renderTags(
+        output$library_add_footer_action
+      )$html
+      expect_match(
+        library_adding_html,
+        "Adding to session library",
+        fixed = TRUE
+      )
+      expect_match(
+        library_adding_html,
+        "Preserving measurements, metadata, and exact provenance",
+        fixed = TRUE
+      )
+      expect_true(returned$mark_library_added(
+        library_request$request_id,
+        "glc-dataset-record"
+      ))
+      session$flushReact()
+      expect_identical(
+        returned$library_added()$dataset_id,
+        "glc-dataset-record"
+      )
+      library_added_html <- htmltools::renderTags(
+        output$library_add_action
+      )$html
+      expect_match(
+        library_added_html,
+        "Added to dataset library",
+        fixed = TRUE
+      )
+      expect_match(
+        library_added_html,
+        'disabled="disabled"',
+        fixed = TRUE
+      )
+      expect_match(
+        htmltools::renderTags(output$library_add_footer_action)$html,
+        "Added to dataset library",
         fixed = TRUE
       )
       completed_apply_button <- htmltools::renderTags(

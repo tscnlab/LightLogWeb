@@ -88,6 +88,22 @@ test_that("page navigator counts finite focus values including exact zero", {
   )
   expect_identical(navigator$observed_focus_values, c(2L, 0L, 0L, 1L))
   expect_identical(navigator$has_data, c(TRUE, FALSE, FALSE, TRUE))
+  available <- dashboard_nonempty_page_navigator(navigator)
+  expect_equal(
+    available[c("participant_page", "time_page")],
+    data.frame(
+      participant_page = c(1L, 2L),
+      time_page = c(1L, 2L)
+    )
+  )
+  expect_identical(
+    dashboard_nearest_available_page(2L, c(1L, 3L)),
+    1L
+  )
+  expect_identical(
+    dashboard_nearest_available_page(4L, c(1L, 3L)),
+    3L
+  )
 })
 
 test_that("dashboard exposes the compact navigation control contracts", {

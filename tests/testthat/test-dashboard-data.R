@@ -25,6 +25,285 @@ test_that("dashboard snapshot keeps source and pre-processed states explicit", {
   )
 })
 
+test_that("dashboard snapshot cache is bounded and invalidates exact record contracts", {
+  first <- dashboard_showcase_record(display_name = "First cached dashboard")
+  second <- dashboard_showcase_record(display_name = "Second cached dashboard")
+  builds <- 0L
+  cache <- new_dashboard_snapshot_cache(
+    max_entries = 1L,
+    max_bytes = 8 * 1024^2,
+    builder = function(record) {
+      builds <<- builds + 1L
+      list(dataset_id = record$id, revision = record$revision)
+    }
+  )
+
+  first_cold <- cache$get(first)
+  first_warm <- cache$get(first)
+  expect_false(first_cold$cache_hit)
+  expect_true(first_warm$cache_hit)
+  expect_identical(first_cold$signature, first_warm$signature)
+  expect_identical(builds, 1L)
+  expect_identical(cache$stats()$hits, 1L)
+
+  second_cold <- cache$get(second)
+  expect_false(second_cold$cache_hit)
+  expect_identical(builds, 2L)
+  expect_identical(cache$stats()$entries, 1L)
+  expect_lte(cache$stats()$bytes, cache$stats()$max_bytes)
+
+  first_again <- cache$get(first)
+  expect_false(first_again$cache_hit)
+  expect_identical(builds, 3L)
+
+  revised <- first
+  revised$revision <- revised$revision + 1L
+  expect_false(identical(
+    dashboard_record_signature(first),
+    dashboard_record_signature(revised)
+  ))
+
+  cache$clear()
+  expect_identical(cache$stats()$entries, 0L)
+  expect_identical(cache$stats()$bytes, 0)
+})
+
+test_that("dashboard switch is staged, cached, recoverable, and schema-isolated", {
+  first <- new_dataset_record(
+    raw_data = data.frame(
+      Id = "P01",
+      Datetime = as.POSIXct("2026-01-01 00:00:00", tz = "UTC"),
+      CAP_SENS_1 = 1,
+      stringsAsFactors = FALSE
+    ),
+    display_name = "Capacitive sensor source",
+    source_manifest = new_source_manifest(
+      source_type = "test",
+      source_timezone = "UTC"
+    ),
+    analysis_settings = list(
+      primary_variable = "CAP_SENS_1",
+      analysis_timezone = "UTC"
+    )
+  )
+  second <- new_dataset_record(
+    raw_data = data.frame(
+      Id = "P02",
+      Datetime = as.POSIXct("2026-02-01 00:00:00", tz = "UTC"),
+      MEDI = 2,
+      stringsAsFactors = FALSE
+    ),
+    display_name = "Melanopic source",
+    source_manifest = new_source_manifest(
+      source_type = "test",
+      source_timezone = "UTC"
+    ),
+    analysis_settings = list(
+      primary_variable = "MEDI",
+      analysis_timezone = "UTC"
+    )
+  )
+  current <- shiny::reactiveVal(first)
+  builds <- 0L
+  builder <- function(record) {
+    builds <<- builds + 1L
+    dashboard_dataset_snapshot(record)
+  }
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = current,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light"),
+      snapshot_cache_max_entries = 2L,
+      snapshot_builder = builder
+    ),
+    {
+      session$flushReact()
+      returned <- session$getReturned()
+      expect_identical(returned$ready()$dataset_id, first$id)
+      expect_identical(builds, 1L)
+
+      session$setInputs(
+        source_main_only = FALSE,
+        source_columns = "CAP_SENS_1"
+      )
+      session$flushReact()
+
+      switched <- returned$request_switch(
+        second,
+        on_success = function() {
+          current(second)
+          TRUE
+        }
+      )
+      expect_true(switched)
+      expect_true(returned$switching())
+      expect_false(returned$request_switch(first))
+      expect_identical(returned$ready()$dataset_id, first$id)
+
+      session$flushReact()
+      expect_false(returned$switching())
+      expect_identical(returned$ready()$dataset_id, second$id)
+      expect_identical(builds, 2L)
+      expect_error(output$raw_table, NA)
+
+      expect_true(returned$request_switch(
+        first,
+        on_success = function() {
+          current(first)
+          TRUE
+        }
+      ))
+      session$flushReact()
+      expect_identical(returned$ready()$dataset_id, first$id)
+      expect_identical(builds, 2L)
+      expect_gte(returned$cache_stats()$hits, 1L)
+      expect_error(output$raw_table, NA)
+
+      current(second)
+      session$flushReact()
+      expect_identical(returned$ready()$dataset_id, second$id)
+      expect_identical(builds, 2L)
+      expect_false(grepl(
+        "Dashboard ready",
+        paste(as.character(output$dashboard_switch_status), collapse = ""),
+        fixed = TRUE
+      ))
+    }
+  )
+
+  current <- shiny::reactiveVal(first)
+  failures <- 0L
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = current,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light"),
+      snapshot_builder = function(record) {
+        if (identical(record$id, second$id)) {
+          stop("Injected snapshot failure")
+        }
+        dashboard_dataset_snapshot(record)
+      }
+    ),
+    {
+      session$flushReact()
+      returned <- session$getReturned()
+      expect_true(returned$request_switch(
+        second,
+        on_error = function(condition) {
+          failures <<- failures + 1L
+        }
+      ))
+      session$flushReact()
+      session$flushReact()
+      expect_false(returned$switching())
+      expect_identical(returned$ready()$dataset_id, first$id)
+      expect_identical(failures, 1L)
+      expect_match(
+        paste(as.character(output$dashboard_switch_status), collapse = ""),
+        "previous dashboard is unchanged",
+        ignore.case = TRUE
+      )
+    }
+  )
+})
+
+test_that("separate append outputs and source metadata remain dashboard-visible", {
+  records <- m4_records()
+  ids <- names(records)
+  records[[ids[[1L]]]]$factual_metadata$locations <- data.frame(
+    Id = c("P01", "P02"),
+    latitude = c(48.15, 48.16),
+    longitude = c(11.57, 11.58),
+    stringsAsFactors = FALSE
+  )
+  records[[ids[[2L]]]]$factual_metadata$participants <- data.frame(
+    Participant = c("P01", "P02"),
+    age = c(31L, 32L),
+    stringsAsFactors = FALSE
+  )
+  preview <- preview_append_merge(records, m4_separate_spec(records))
+  appended <- new_appended_dataset_record(preview)
+  snapshot <- dashboard_dataset_snapshot(appended)
+
+  expect_identical(snapshot$primary_variable, "first_MEDI")
+  expect_true(all(c("first_MEDI", "second_light") %in%
+    snapshot$focus_variables))
+  expect_false("MEDI" %in% snapshot$focus_variables)
+  expect_s3_class(snapshot$append_sources, "llw_dashboard_append_sources")
+  expect_identical(snapshot$append_sources$source_dataset_ids, ids)
+  expect_identical(
+    snapshot$append_sources$row_reference_columns,
+    c("llw_source_dataset_id", "llw_source_row")
+  )
+  expect_identical(snapshot$append_sources$reconciliation, "none")
+  expect_identical(
+    snapshot$append_sources$sources[[ids[[1L]]]]$factual_metadata,
+    records[[ids[[1L]]]]$factual_metadata
+  )
+  expect_identical(
+    snapshot$append_sources$sources[[ids[[2L]]]]$provenance,
+    records[[ids[[2L]]]]$provenance
+  )
+  expect_setequal(
+    dashboard_main_columns(snapshot, "first_MEDI", "source"),
+    c(
+      "Id",
+      "llw_source_dataset_id",
+      "llw_source_row",
+      "Datetime",
+      "first_MEDI"
+    )
+  )
+
+  provenance <- dashboard_provenance_table(snapshot)
+  expect_match(
+    provenance$Value[provenance$Field == "Appended source dataset IDs"],
+    ids[[1L]],
+    fixed = TRUE
+  )
+  expect_identical(
+    provenance$Value[provenance$Field == "Row source cross-reference"],
+    "llw_source_dataset_id + llw_source_row"
+  )
+  expect_match(
+    provenance$Value[provenance$Field == "Source metadata policy"],
+    "no flattening",
+    fixed = TRUE
+  )
+
+  html <- htmltools::renderTags(dashboard_appended_source_metadata_ui(
+    snapshot$append_sources,
+    heading_id = "fixture_appended_sources_heading"
+  ))$html
+  expect_match(html, "fixture_appended_sources_heading", fixed = TRUE)
+  expect_match(html, "Preserved source metadata and row lineage", fixed = TRUE)
+  expect_match(
+    html,
+    "factual_metadata$source_metadata[[source_dataset_id]]",
+    fixed = TRUE
+  )
+  expect_match(html, "llw_source_dataset_id", fixed = TRUE)
+  expect_match(html, "llw_source_row", fixed = TRUE)
+  expect_match(html, ids[[1L]], fixed = TRUE)
+  expect_match(html, ids[[2L]], fixed = TRUE)
+  expect_match(html, "locations", fixed = TRUE)
+  expect_match(html, "participants", fixed = TRUE)
+  expect_match(html, "No metadata values are flattened", fixed = TRUE)
+
+  tampered <- appended
+  tampered$factual_metadata$source_metadata[[ids[[1L]]]]$device <-
+    "Changed after append"
+  expect_error(
+    dashboard_append_source_inventory(tampered, dataset_raw_data(tampered)),
+    "Append source metadata changed"
+  )
+})
+
 test_that("focus metric and data stage drive dashboard semantics", {
   record <- dashboard_showcase_record(
     participants = 1L,
@@ -253,7 +532,11 @@ test_that("participant recordings and calendar scope remain distinct", {
   )
   expect_identical(calendar$available_span_days, 3L)
   expect_identical(calendar$mode, "detailed")
-  expect_gt(calendar$time_pages, 20L)
+  expect_identical(calendar$time_pages, 2L)
+  expect_identical(
+    calendar$time_chunks$Label,
+    c("05 Jan\u201311 Jan 2026", "15 Jun\u201321 Jun 2026")
+  )
 
   participant <- dashboard_plot_selection(
     snapshot,
@@ -620,10 +903,15 @@ test_that("time pages retain width without exceeding the justified span", {
   preview <- dashboard_plot_preview(snapshot, selection)
   plot <- plot_dashboard_availability(snapshot, preview)
   x_limits <- plot$scales$get_scales("x")$limits
-  expect_identical(
-    as.Date(x_limits, origin = "1970-01-01"),
-    as.Date(c("2000-01-08", "2000-01-14"))
+  expect_equal(
+    as.numeric(x_limits),
+    as.numeric(as.Date(c("2000-01-08", "2000-01-14"))) + c(-0.5, 0.5)
   )
+  fill_scale <- plot$scales$get_scales("fill")
+  expect_false(identical(
+    fill_scale$palette(0.29),
+    fill_scale$palette(0)
+  ))
 
   capped_selection <- dashboard_plot_selection(
     snapshot,
@@ -1112,8 +1400,8 @@ test_that("plot height grows with visible participant slots", {
   four_preview <- dashboard_plot_preview(snapshot, four_selection)
   eight_preview <- dashboard_plot_preview(snapshot, eight_selection)
 
-  expect_identical(dashboard_plot_height(four_preview), 620L)
-  expect_identical(dashboard_plot_height(eight_preview), 960L)
+  expect_identical(dashboard_plot_height(four_preview), 700L)
+  expect_identical(dashboard_plot_height(eight_preview), 1180L)
   expect_gt(
     dashboard_plot_height(eight_preview),
     dashboard_plot_height(four_preview)
@@ -1329,6 +1617,7 @@ test_that("active-data tables declare the scalable server-side contract", {
   expect_true(options$searching)
   expect_true(options$ordering)
   expect_true(options$paging)
+  expect_true(options$destroy)
   expect_identical(options$pageLength, 10L)
   expect_identical(options$buttons[[1L]]$extend, "colvis")
   expect_null(options$lengthMenu)
@@ -1346,6 +1635,25 @@ test_that("active-data tables declare the scalable server-side contract", {
   )
   expect_identical(compact$x$options$dom, "ftip")
   expect_null(compact$x$extensions)
+
+  cap_schema <- data.frame(
+    Id = "P01",
+    CAP_SENS_1 = 1,
+    stringsAsFactors = FALSE
+  )
+  other_schema <- data.frame(
+    Id = "P02",
+    MEDI = 2,
+    stringsAsFactors = FALSE
+  )
+  expect_error(
+    dashboard_datatable(cap_schema, "Capacitive schema"),
+    NA
+  )
+  expect_error(
+    dashboard_datatable(other_schema, "Schema without CAP_SENS_1"),
+    NA
+  )
 
   snapshot <- dashboard_dataset_snapshot(dashboard_showcase_record())
   expect_identical(
@@ -1379,6 +1687,7 @@ test_that("dashboard UI distinguishes pre-processed and source views", {
   expect_match(html, "llw-dashboard-data-view--source", fixed = TRUE)
   expect_match(html, "Pre-processed data", fixed = TRUE)
   expect_match(html, "Source data", fixed = TRUE)
+  expect_match(html, "dashboard-appended_source_metadata", fixed = TRUE)
   expect_match(html, "compact or full column view", fixed = TRUE)
   expect_match(html, "Missing values and exact measured zeros", fixed = TRUE)
   expect_match(html, "Source import checks", fixed = TRUE)

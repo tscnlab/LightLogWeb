@@ -2,6 +2,15 @@ glc_deep_link_states <- function() {
   c("absent", "valid", "matched", "unmatched", "invalid")
 }
 
+glc_default_registry_url <- function() {
+  configured <- getOption(
+    "LightLogWeb.glc_registry_url",
+    "https://tscnlab.github.io/glc-registry/registry.json"
+  )
+  assert_scalar_string(configured, "GLC registry URL")
+  configured
+}
+
 new_glc_deep_link <- function(
   state = glc_deep_link_states(),
   repository = NULL,
@@ -42,7 +51,9 @@ decode_glc_query_component <- function(value) {
 }
 
 parse_glc_repository_query <- function(raw_query) {
-  if (is.null(raw_query) || identical(raw_query, "") || identical(raw_query, "?")) {
+  if (
+    is.null(raw_query) || identical(raw_query, "") || identical(raw_query, "?")
+  ) {
     return(new_glc_deep_link("absent"))
   }
   if (
@@ -369,18 +380,22 @@ glc_registry_table_tag <- function(
       tags$td(repository),
       tags$td(glc_display_value(packages$id[[index]])),
       tags$td(glc_display_value(packages$current_status[[index]])),
-      tags$td(if (has_latest_pass) {
-        paste0(substr(revision, 1L, 12L), "\u2026")
-      } else {
-        "None recorded"
-      }),
-      tags$td(if (is.na(packages$attestation_verified[[index]])) {
-        "Unknown"
-      } else if (packages$attestation_verified[[index]]) {
-        "Verified"
-      } else {
-        "Not verified"
-      }),
+      tags$td(
+        if (has_latest_pass) {
+          paste0(substr(revision, 1L, 12L), "\u2026")
+        } else {
+          "None recorded"
+        }
+      ),
+      tags$td(
+        if (is.na(packages$attestation_verified[[index]])) {
+          "Unknown"
+        } else if (packages$attestation_verified[[index]]) {
+          "Verified"
+        } else {
+          "Not verified"
+        }
+      ),
       tags$td(glc_display_value(packages$latest_pass_validated_at[[index]]))
     )
   })
@@ -586,16 +601,20 @@ glcSourceServer <- function(
         observers[[index]] <- local({
           repository <- packages$repository[[index]]
           action_id <- glc_registry_select_action_id(repository)
-          observeEvent(input[[action_id]], {
-            current <- registry_value()
-            if (
-              is.null(current) ||
-                !repository %in% current$repository
-            ) {
-              return(invisible(NULL))
-            }
-            select_repository(current, repository)
-          }, ignoreInit = TRUE)
+          observeEvent(
+            input[[action_id]],
+            {
+              current <- registry_value()
+              if (
+                is.null(current) ||
+                  !repository %in% current$repository
+              ) {
+                return(invisible(NULL))
+              }
+              select_repository(current, repository)
+            },
+            ignoreInit = TRUE
+          )
         })
       }
       selection_observers <<- observers
@@ -707,9 +726,13 @@ glcSourceServer <- function(
 
     session$onFlushed(initialize_registry, once = TRUE)
 
-    observeEvent(input$refresh, {
-      load_registry_now(refresh = TRUE, apply_deep_link = FALSE)
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$refresh,
+      {
+        load_registry_now(refresh = TRUE, apply_deep_link = FALSE)
+      },
+      ignoreInit = TRUE
+    )
 
     filtered_registry <- reactive({
       packages <- registry_value()
