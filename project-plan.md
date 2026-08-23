@@ -280,11 +280,13 @@ The adapter is implemented only with glc_packages, glc_search_packages,
 glc_open, glc_schema_versions, glc_summary, glc_datasets, glc_files,
 glc_variables, glc_resources, glc_metadata, glc_search_metadata, glc_read,
 glc_collect, glc_download, extract_metadata, and add_metadata. The metadata
-helpers enter the production adapter with Milestone 7. If exact provenance or
-future write support cannot be obtained through documented outputs, adding the
-required public accessor to glcdp is a prerequisite; LightLogWeb must not reach
-into package internals. glc_explore is a package-owned reference application,
-not an embedded LightLogWeb dependency.
+helpers enter the production adapter with Milestone 7. glc_download enters the
+user-facing production workflow only through Milestone 13's shared
+reproducibility, export, project-bundle, report, and LightLogR-handoff
+workflow. If exact provenance or future write support cannot be obtained
+through documented outputs, adding the required public accessor to glcdp is a
+prerequisite; LightLogWeb must not reach into package internals. glc_explore is
+a package-owned reference application, not an embedded LightLogWeb dependency.
 
 Background tasks receive a source specification and reopen the immutable
 package revision inside the worker. They do not serialize a live glc_package
@@ -725,7 +727,7 @@ Milestone evidence:
 - dev/milestone-5-scalable-dashboard.md
 - dev/run-milestone-5-scale-acceptance.R
 
-### Milestone 6 — GLC discovery, selective import, and package download
+### Milestone 6: GLC discovery, selective import, and library integration
 
 1. Upgrade the historical optional glcdp 0.90.0 dependency to glcdp 1.0.0 at
    exact submitted-source commit
@@ -790,10 +792,11 @@ Milestone evidence:
 12. Integrate committed GLC datasets with the existing dataset library and
     dashboard. Add GLC-specific source, validation, revision, and provenance
     views without changing their source-agnostic module contracts.
-13. Offer download of the selected source package subset through glc_download,
-    including its metadata closure, hashes, immutable revision, and
-    glcdp-manifest.json. Clarify that this preserves the validated source
-    metadata and does not incorporate a LightLogWeb metadata overlay.
+13. Defer validated-source subset export to Milestone 13. Do not add a
+    standalone GLC-only download surface in Milestone 6. Milestone 13 owns the
+    public glc_download workflow, including metadata closure, hashes, immutable
+    revision, glcdp-manifest.json, and separation from any LightLogWeb metadata
+    overlay.
 14. Map no-passing-revision, non-passing revision, limited legacy schema,
     root/profile or package/dataset schema declaration mismatch, unsupported
     future schema, malformed registry, missing resource/path, unsupported
@@ -810,9 +813,10 @@ Milestone evidence:
 Acceptance gate: normal discovery, registry refresh failure, the validated
 Schema 3.0.2 IZTECH deep link, malformed/repeated queries, no passing revision,
 offline access, metadata preview, bounded typed preview, partial and full
-import, incompatible selections, Git-LFS failure, subset download, and
-dataset-library/dashboard integration are safe and reproducible; no data
-transfer or dataset creation occurs without the relevant confirmation.
+import, incompatible selections, Git-LFS failure, and dataset-library/dashboard
+integration are safe and reproducible; no data transfer or dataset creation
+occurs without the relevant confirmation. Validated-source subset export is a
+Milestone 13 acceptance item.
 
 ### Milestone 7 — Metadata essentials and settings separation
 
@@ -983,10 +987,11 @@ code as distinct instances.
 4. Export metrics as CSV/XLSX; plots as PNG/JPEG/PDF/SVG where supported;
    metadata as nested LightLogWeb JSON and flattened CSV; prepared data as CSV
    and RDS; and projects with optional original files.
-5. For GLC sources, let users include the serializable source specification,
-   original metadata, LightLogWeb overlay, and optional glc_download subset
-   with glcdp-manifest.json in the project. Keep the immutable source package
-   and overlay as separate artifacts.
+5. Within the shared reproducibility, export, project-bundle, report, and
+   LightLogR-handoff workflow, let users include the GLC serializable source
+   specification, original metadata, LightLogWeb overlay, and optional
+   glc_download subset with glcdp-manifest.json. Keep the immutable source
+   package and overlay as separate artifacts.
 6. Provide one parameterized Quarto report with selectable provenance,
    metadata, quality, preparation, grouping, dashboard, summary, metrics,
    plots, and session sections.
@@ -995,9 +1000,12 @@ code as distinct instances.
 8. Default to HTML; explain missing PDF tooling precisely.
 9. Run generated scripts in clean R processes and compare data, metrics, and
    plot data with the interactive session.
-10. Offer validated-source GLC subset export through glc_download. Do not label
-    a metadata-overlay export as a GLC package or fold it into the downloaded
-    source subset until glcdp exposes and validates a public writer workflow.
+10. Implement the validated-source GLC subset export deferred from Milestone 6
+    through glc_download. Integrate it into the shared workflow rather than a
+    separate GLC-only surface. Include exact revision and selection, metadata
+    closure, hashes, and glcdp-manifest.json. Do not label a metadata-overlay
+    export as a GLC package or fold it into the downloaded source subset until
+    glcdp exposes and validates a public writer workflow.
 
 Acceptance gate: project reload is equivalent; generated scripts reproduce
 core outputs outside Shiny; and report failure leaves the analysis intact.
@@ -1113,8 +1121,9 @@ requirement.
   CRAN, its one explicit exception is an immutable reviewed GitHub commit.
 - Single-measurement-variable metrics and safe row-wise append are v1.
 - Time-aligned streams and multi-input metrics are post-v1.
-- GLC registry discovery, validated-revision preview, selective import, source
-  subset download, and metadata exploration are v1.
+- GLC registry discovery, validated-revision preview, selective import,
+  metadata exploration, and Milestone 13's integrated validated-source subset
+  export are v1.
 - Schema 3.0.2 is the primary GLC contract for v1. Stable 3.0.0 and 3.0.1
   packages remain reproducible compatibility paths; 1.0.0 and 2.0.0 receive
   only explicitly tested legacy support.
