@@ -457,7 +457,8 @@ new_glc_dataset_record <- function(full_import, display_name = NULL) {
         promoted = FALSE,
         downloaded = FALSE
       )
-    )
+    ),
+    metadata_bundle = full_import$source_metadata_snapshot$bundle
   )
   validate_dataset_record(record)
 }

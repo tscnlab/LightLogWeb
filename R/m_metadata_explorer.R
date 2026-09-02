@@ -1,0 +1,2489 @@
+metadata_state_label <- function(state) {
+  switch(
+    state,
+    complete = "Complete retained source",
+    partial = "Partial source metadata",
+    absent = "Optional metadata absent",
+    "Unknown metadata state"
+  )
+}
+
+metadata_state_callout <- function(bundle) {
+  states <- vapply(bundle$sources, `[[`, character(1), "state")
+  if (all(states == "absent")) {
+    return(llw_status_callout(
+      "warning",
+      paste(
+        "No optional metadata were supplied. This dataset remains fully",
+        "usable with raw names and the fallback `unit not specified`."
+      ),
+      heading = "Optional metadata absent",
+      compact = TRUE
+    ))
+  }
+  if (any(states != "complete")) {
+    return(llw_status_callout(
+      "warning",
+      paste(
+        "Some optional metadata are unavailable or incomplete. Retained",
+        "values remain searchable, and missing values are not inferred."
+      ),
+      heading = "Partial metadata",
+      compact = TRUE
+    ))
+  }
+  llw_status_callout(
+    "complete",
+    paste(
+      "All metadata resources retained for this import are available in",
+      "memory. This status does not revalidate the source package."
+    ),
+    heading = "Retained source metadata ready",
+    compact = TRUE
+  )
+}
+
+metadata_source_choices <- function(bundle) {
+  ids <- names(bundle$sources)
+  labels <- vapply(
+    bundle$sources,
+    function(source) {
+      paste0(source$label, " (", metadata_state_label(source$state), ")")
+    },
+    character(1)
+  )
+  c("All source datasets" = "all", stats::setNames(ids, labels))
+}
+
+metadata_layer_choices <- function(bundle) {
+  overlay_rows <- bundle$index$entries$namespace_id ==
+    metadata_overlay_namespace_id()
+  if (!any(overlay_rows)) return(c("All metadata" = "all"))
+  c(
+    "All metadata" = "all",
+    "Source metadata" = "Immutable source",
+    "LightLogWeb overlay" = "LightLogWeb overlay"
+  )
+}
+
+metadata_resource_choices <- function(
+  index,
+  namespace_id = "all",
+  layer = "all"
+) {
+  nodes <- index$nodes
+  keep <- nodes$kind == "resource"
+  if (!identical(namespace_id, "all")) {
+    keep <- keep & nodes$namespace_id == namespace_id
+  }
+  if (!identical(layer, "all")) {
+    keep <- keep & nodes$layer == layer
+  }
+  resources <- sort(unique(nodes$resource[keep]), method = "radix")
+  resources <- resources[!is.na(resources) & nzchar(resources)]
+  labels <- gsub("[_-]+", " ", resources)
+  labels <- tools::toTitleCase(labels)
+  labels[resources == "metadata_bundle"] <- "Retained Source Metadata"
+  labels[resources == "factual_metadata"] <- "Record Summary"
+  c("All sections" = "all", stats::setNames(resources, labels))
+}
+
+metadata_entry_choice_label <- function(row, max_value = 72L) {
+  value <- row$value[[1L]]
+  if (is.na(value) || !nzchar(value)) value <- "not specified"
+  if (nchar(value, type = "width") > max_value) {
+    value <- paste0(substr(value, 1L, max_value - 1L), "...")
+  }
+  paste0("[", row$resource[[1L]], "] ", row$field[[1L]], ": ", value)
+}
+
+metadata_result_choices <- function(rows) {
+  if (!is.data.frame(rows) || nrow(rows) == 0L) return(character())
+  labels <- vapply(
+    seq_len(nrow(rows)),
+    function(index) {
+      metadata_entry_choice_label(rows[index, , drop = FALSE])
+    },
+    character(1)
+  )
+  stats::setNames(rows$entry_id, labels)
+}
+
+metadata_result_table_ui <- function(rows, max_rows = 25L) {
+  shown <- utils::head(rows, max_rows)
+  if (nrow(shown) == 0L) return(NULL)
+  value <- shown$value
+  value[is.na(value) | !nzchar(value)] <- "not specified"
+  body <- lapply(seq_len(nrow(shown)), function(index) {
+    provenance_class <- if (
+      identical(shown$layer[[index]], "LightLogWeb overlay")
+    ) {
+      "llw-metadata-provenance--overlay"
+    } else {
+      "llw-metadata-provenance--source"
+    }
+    tags$tr(
+      tags$td(shown$source_label[[index]]),
+      tags$td(shown$resource[[index]]),
+      tags$td(tags$code(shown$field[[index]])),
+      tags$td(value[[index]]),
+      tags$td(tags$span(
+        class = paste("llw-metadata-provenance", provenance_class),
+        shown$layer[[index]]
+      ))
+    )
+  })
+  tags$div(
+    class = "table-responsive llw-metadata-results-table",
+    tags$table(
+      class = "table table-hover table-sm align-middle mb-0",
+      tags$caption(
+        class = "visually-hidden",
+        "Filtered metadata entries"
+      ),
+      tags$thead(tags$tr(
+        tags$th(scope = "col", "Source"),
+        tags$th(scope = "col", "Section"),
+        tags$th(scope = "col", "Field"),
+        tags$th(scope = "col", "Value"),
+        tags$th(scope = "col", "Provenance")
+      )),
+      tags$tbody(body)
+    )
+  )
+}
+
+metadata_friendly_name <- function(value) {
+  value <- gsub("[_-]+", " ", value)
+  tools::toTitleCase(value)
+}
+
+metadata_group_path_segments <- function(group) {
+  prefix <- paste0(group$namespace_id[[1L]], "/", group$resource[[1L]])
+  path <- group$group_path[[1L]]
+  relative <- if (startsWith(path, prefix)) {
+    substring(path, nchar(prefix) + 1L)
+  } else {
+    path
+  }
+  relative <- sub("^/", "", relative)
+  nested <- if (nzchar(relative)) {
+    strsplit(relative, "/", fixed = TRUE)[[1L]]
+  } else {
+    character()
+  }
+  segments <- c(group$resource[[1L]], nested)
+  if (
+    length(segments) >= 5L &&
+      identical(segments[[1L]], "metadata_bundle") &&
+      identical(segments[[2L]], "sources")
+  ) {
+    records_boundary <- which(segments == "records")
+    records_boundary <- records_boundary[records_boundary > 2L]
+    if (
+      length(records_boundary) > 0L &&
+        records_boundary[[1L]] < length(segments)
+    ) {
+      segments <- segments[-seq_len(records_boundary[[1L]])]
+    }
+  }
+  if (
+    length(segments) == 0L ||
+      !identical(utils::tail(segments, 1L), group$field[[1L]])
+  ) {
+    segments <- c(segments, group$field[[1L]])
+  }
+  context <- metadata_nonempty_text(group$group_context[[1L]])
+  if (length(context) > 0L && length(segments) > 0L) {
+    segments <- append(segments, context[[1L]], after = length(segments) - 1L)
+  }
+  segments
+}
+
+metadata_group_location_text <- function(group) {
+  segments <- metadata_group_path_segments(group)
+  paste(
+    vapply(segments, metadata_friendly_name, character(1)),
+    collapse = " / "
+  )
+}
+
+metadata_group_choice_ui <- function(group, show_source = FALSE) {
+  provenance_class <- if (identical(group$layer[[1L]], "LightLogWeb overlay")) {
+    "llw-metadata-provenance--overlay"
+  } else {
+    "llw-metadata-provenance--source"
+  }
+  count_label <- if (group$record_count[[1L]] > 1L) {
+    paste(format(group$record_count[[1L]], big.mark = ","), "records")
+  } else if (group$entry_count[[1L]] > 1L) {
+    paste(format(group$entry_count[[1L]], big.mark = ","), "values")
+  } else {
+    "1 value"
+  }
+  tags$div(
+    class = "llw-metadata-result-option",
+    tags$div(
+      class = "llw-metadata-result-option__heading",
+      tags$code(group$field[[1L]]),
+      tags$span(class = "llw-metadata-result-option__count", count_label)
+    ),
+    tags$div(
+      class = "llw-metadata-result-option__location",
+      metadata_group_location_text(group)
+    ),
+    tags$div(
+      class = "llw-metadata-result-option__value",
+      group$value_preview[[1L]]
+    ),
+    tags$div(
+      class = "llw-metadata-result-option__provenance",
+      tags$span(
+        class = paste("llw-metadata-provenance", provenance_class),
+        if (identical(group$layer[[1L]], "LightLogWeb overlay")) {
+          "Overlay"
+        } else {
+          "Source metadata"
+        }
+      ),
+      if (isTRUE(show_source)) tags$span(group$source_label[[1L]])
+    )
+  )
+}
+
+metadata_result_list_ui <- function(
+  rows,
+  input_id,
+  selected = NULL,
+  show_source = FALSE
+) {
+  if (!is.data.frame(rows) || nrow(rows) == 0L) return(NULL)
+  if (is.null(selected) || !selected %in% rows$group_id) {
+    selected <- rows$group_id[[1L]]
+  }
+  tags$div(
+    class = "llw-metadata-result-list",
+    radioButtons(
+      input_id,
+      tags$span(class = "visually-hidden", "Matching metadata fields"),
+      choiceNames = lapply(
+        seq_len(nrow(rows)),
+        function(index) {
+          metadata_group_choice_ui(
+            rows[index, , drop = FALSE],
+            show_source = show_source
+          )
+        }
+      ),
+      choiceValues = rows$group_id,
+      selected = selected,
+      width = "100%"
+    )
+  )
+}
+
+metadata_group_location_ui <- function(group, show_source = FALSE) {
+  segments <- metadata_group_path_segments(group)
+  levels <- c(
+    "Section",
+    rep("Subsection", max(length(segments) - 2L, 0L)),
+    if (length(segments) > 1L) "Field" else character()
+  )
+  context <- metadata_nonempty_text(group$group_context[[1L]])
+  if (length(context) > 0L && length(levels) >= 2L) {
+    levels[[length(levels) - 1L]] <- "Metadata item"
+  }
+  if (length(levels) != length(segments)) {
+    levels <- c(rep("Subsection", length(segments) - 1L), "Field")
+  }
+  items <- lapply(seq_along(segments), function(index) {
+    tags$li(
+      class = if (index == length(segments)) "is-current" else NULL,
+      `aria-current` = if (index == length(segments)) "page" else NULL,
+      tags$span(
+        class = "llw-metadata-location__level",
+        levels[[index]]
+      ),
+      tags$strong(metadata_friendly_name(segments[[index]])),
+      tags$code(segments[[index]])
+    )
+  })
+  if (isTRUE(show_source)) {
+    items <- c(
+      list(tags$li(
+        tags$span(class = "llw-metadata-location__level", "Source dataset"),
+        tags$strong(group$source_label[[1L]]),
+        tags$code(group$namespace_id[[1L]])
+      )),
+      items
+    )
+  }
+  tags$section(
+    class = "llw-metadata-location",
+    tags$h4("Where this field lives"),
+    tags$nav(
+      `aria-label` = "Metadata hierarchy",
+      tags$ol(items)
+    )
+  )
+}
+
+metadata_property_choice_ui <- function(group) {
+  count <- if (group$record_count[[1L]] > 1L) {
+    paste(format(group$record_count[[1L]], big.mark = ","), "records")
+  } else if (group$entry_count[[1L]] > 1L) {
+    paste(format(group$entry_count[[1L]], big.mark = ","), "values")
+  } else {
+    "1 value"
+  }
+  preview <- group$value_preview[[1L]]
+  if (is.na(preview) || !nzchar(preview)) preview <- "not specified"
+  tags$div(
+    class = "llw-metadata-property-option",
+    tags$div(
+      class = "llw-metadata-property-option__heading",
+      tags$strong(metadata_friendly_name(group$field[[1L]])),
+      tags$span(count)
+    ),
+    tags$code(group$field[[1L]]),
+    tags$span(class = "llw-metadata-property-option__preview", preview)
+  )
+}
+
+metadata_property_group_list_ui <- function(
+  groups,
+  input_id,
+  selected_group_id,
+  class = NULL,
+  label = "Metadata item properties"
+) {
+  if (!is.data.frame(groups) || nrow(groups) == 0L) return(NULL)
+  selected <- selected_group_id
+  if (
+    is.null(selected) ||
+      length(selected) != 1L ||
+      is.na(selected) ||
+      !selected %in% groups$group_id
+  ) {
+    selected <- groups$group_id[[1L]]
+  }
+  tags$div(
+    class = paste("llw-metadata-property-list", class),
+    radioButtons(
+      input_id,
+      tags$span(class = "visually-hidden", label),
+      choiceNames = lapply(seq_len(nrow(groups)), function(index) {
+        metadata_property_choice_ui(groups[index, , drop = FALSE])
+      }),
+      choiceValues = groups$group_id,
+      selected = selected,
+      width = "100%"
+    )
+  )
+}
+
+metadata_item_properties_ui <- function(
+  neighborhood,
+  input_id,
+  selected_group_id
+) {
+  if (
+    is.null(neighborhood) ||
+      !inherits(neighborhood, "llw_metadata_neighborhood") ||
+      nrow(neighborhood$property_groups) == 0L
+  ) {
+    return(NULL)
+  }
+  instance_count <- nrow(neighborhood$item_nodes)
+  tags$section(
+    class = "llw-metadata-item-properties",
+    tags$div(
+      class = "llw-metadata-section-heading",
+      tags$div(
+        tags$h4("Explore this metadata item"),
+        tags$p(
+          class = "llw-secondary mb-0",
+          paste(
+            "Choose any retained property to inspect its values. Fields are",
+            "joined only when they belong to the same exact source item."
+          )
+        )
+      ),
+      tags$span(
+        class = "llw-metadata-relationship-badge",
+        paste(
+          format(instance_count, big.mark = ","),
+          if (instance_count == 1L) "item instance" else "item instances"
+        )
+      )
+    ),
+    metadata_property_group_list_ui(
+      neighborhood$property_groups,
+      input_id,
+      selected_group_id
+    )
+  )
+}
+
+metadata_hierarchy_kind_label <- function(kind) {
+  switch(
+    kind,
+    source = "Source dataset",
+    resource = "Section",
+    group = "Metadata group",
+    table = "Collection",
+    record = "Metadata item",
+    "Hierarchy node"
+  )
+}
+
+metadata_hierarchy_node_choice_ui <- function(
+  node,
+  show_anchor = FALSE,
+  show_instance = FALSE
+) {
+  label <- node$label[[1L]]
+  if (is.na(label) || !nzchar(label)) label <- "Unnamed metadata node"
+  facts <- character()
+  if (node$direct_value_count[[1L]] > 0L) {
+    facts <- c(
+      facts,
+      paste(
+        format(node$direct_value_count[[1L]], big.mark = ","),
+        if (node$direct_value_count[[1L]] == 1L) "value" else "values"
+      )
+    )
+  }
+  if (node$child_node_count[[1L]] > 0L) {
+    facts <- c(
+      facts,
+      paste(
+        format(node$child_node_count[[1L]], big.mark = ","),
+        if (node$child_node_count[[1L]] == 1L) "child" else "children"
+      )
+    )
+  }
+  tags$div(
+    class = "llw-metadata-node-option",
+    if (isTRUE(show_anchor)) {
+      tags$span(
+        class = "llw-metadata-node-option__anchor",
+        paste("Nearby under", node$anchor_label[[1L]])
+      )
+    },
+    if (isTRUE(show_instance) && "instance_record" %in% names(node)) {
+      tags$span(
+        class = "llw-metadata-node-option__anchor",
+        paste("Retained record", node$instance_record[[1L]])
+      )
+    },
+    tags$div(
+      class = "llw-metadata-node-option__heading",
+      tags$strong(metadata_friendly_name(label)),
+      tags$span(metadata_hierarchy_kind_label(node$kind[[1L]]))
+    ),
+    if (length(facts) > 0L) {
+      tags$span(
+        class = "llw-metadata-node-option__counts",
+        paste(facts, collapse = " | ")
+      )
+    }
+  )
+}
+
+metadata_hierarchy_node_list_ui <- function(
+  nodes,
+  input_id,
+  label,
+  selected = character(),
+  class = NULL,
+  show_anchor = FALSE,
+  show_instance = FALSE
+) {
+  if (!is.data.frame(nodes) || nrow(nodes) == 0L) return(NULL)
+  if (
+    length(selected) != 1L ||
+      is.na(selected) ||
+      !selected %in% nodes$node_id
+  ) {
+    selected <- character()
+  }
+  tags$div(
+    class = paste("llw-metadata-node-list", class),
+    radioButtons(
+      input_id,
+      tags$span(class = "visually-hidden", label),
+      choiceNames = lapply(seq_len(nrow(nodes)), function(index) {
+        metadata_hierarchy_node_choice_ui(
+          nodes[index, , drop = FALSE],
+          show_anchor = show_anchor,
+          show_instance = show_instance
+        )
+      }),
+      choiceValues = nodes$node_id,
+      selected = selected,
+      width = "100%"
+    )
+  )
+}
+
+metadata_hierarchy_context_ui <- function(
+  context,
+  neighborhood,
+  input_ids,
+  selected_group_id
+) {
+  if (
+    is.null(context) ||
+      !inherits(context, "llw_metadata_node_context")
+  ) {
+    return(NULL)
+  }
+  node <- context$node
+  is_overlay <- identical(
+    node$namespace_id[[1L]],
+    metadata_overlay_namespace_id()
+  )
+  provenance_class <- if (is_overlay) {
+    "llw-metadata-provenance--overlay"
+  } else {
+    "llw-metadata-provenance--source"
+  }
+  on_item <- !is.null(neighborhood) &&
+    node$node_id[[1L]] %in% neighborhood$item_nodes$node_id
+  tags$section(
+    class = "llw-metadata-hierarchy-explorer",
+    tags$div(
+      class = "llw-metadata-section-heading",
+      tags$div(
+        tags$h4("Explore the metadata hierarchy"),
+        tags$p(
+          class = "llw-secondary mb-0",
+          paste(
+            "Move to a broader level, open contained metadata, or inspect a",
+            "nearby structural branch. Containment is not semantic equivalence."
+          )
+        )
+      ),
+      tags$span(
+        class = paste("llw-metadata-provenance", provenance_class),
+        if (is_overlay) "Overlay hierarchy" else "Source hierarchy"
+      )
+    ),
+    tags$div(
+      class = "llw-metadata-hierarchy-focus",
+      tags$span(
+        class = "llw-metadata-location__level",
+        "Hierarchy focus"
+      ),
+      tags$strong(metadata_friendly_name(node$label[[1L]])),
+      tags$span(metadata_hierarchy_kind_label(node$kind[[1L]]))
+    ),
+    if (!is.null(neighborhood) && nrow(neighborhood$item_nodes) > 1L) {
+      tags$div(
+        class = "llw-metadata-hierarchy-block",
+        tags$h5("Choose an exact item instance"),
+        tags$p(
+          class = "llw-secondary small",
+          paste(
+            "Properties stay grouped across repeated records above. Choose",
+            "one retained instance to inspect its exact surrounding path."
+          )
+        ),
+        metadata_hierarchy_node_list_ui(
+          neighborhood$item_nodes,
+          input_ids$instance,
+          "Exact metadata item instances",
+          selected = if (on_item) node$node_id[[1L]] else character(),
+          class = "llw-metadata-node-list--instances",
+          show_instance = TRUE
+        )
+      )
+    },
+    tags$div(
+      class = "llw-metadata-hierarchy-block",
+      tags$h5("Path to this focus"),
+      metadata_hierarchy_node_list_ui(
+        context$ancestors,
+        input_ids$path,
+        "Path to hierarchy focus",
+        selected = node$node_id[[1L]],
+        class = "llw-metadata-node-list--path"
+      )
+    ),
+    if (!on_item && nrow(context$groups) > 0L) {
+      tags$div(
+        class = "llw-metadata-hierarchy-block",
+        tags$h5("Fields at this level"),
+        tags$p(
+          class = "llw-secondary small",
+          "Select a field to make it the active metadata result."
+        ),
+        metadata_property_group_list_ui(
+          context$groups,
+          input_ids$field,
+          selected_group_id,
+          class = "llw-metadata-property-list--hierarchy",
+          label = "Fields at hierarchy focus"
+        )
+      )
+    },
+    if (nrow(context$children) > 0L) {
+      tags$div(
+        class = "llw-metadata-hierarchy-block",
+        tags$h5("Contained metadata"),
+        metadata_hierarchy_node_list_ui(
+          context$children,
+          input_ids$child,
+          "Contained metadata",
+          class = "llw-metadata-node-list--children"
+        )
+      )
+    },
+    if (nrow(context$nearby) > 0L) {
+      tags$div(
+        class = "llw-metadata-hierarchy-block",
+        tags$h5("Nearby structural branches"),
+        tags$p(
+          class = "llw-secondary small",
+          paste(
+            "These branches share a retained ancestor with the selected",
+            "item. No scientific relationship is inferred."
+          )
+        ),
+        metadata_hierarchy_node_list_ui(
+          context$nearby,
+          input_ids$nearby,
+          "Nearby structural branches",
+          class = "llw-metadata-node-list--nearby",
+          show_anchor = TRUE
+        )
+      )
+    },
+    tags$details(
+      class = "llw-metadata-group-path",
+      tags$summary("Exact hierarchy focus path"),
+      tags$dl(
+        class = "llw-metadata-focus-path",
+        if (
+          "record_identity" %in%
+            names(node) &&
+            nzchar(node$record_identity[[1L]])
+        ) {
+          tags$div(
+            tags$dt("Retained record identity"),
+            tags$dd(tags$code(node$record_identity[[1L]]))
+          )
+        },
+        tags$div(
+          tags$dt("Exact source path"),
+          tags$dd(tags$code(node$path[[1L]]))
+        )
+      )
+    )
+  )
+}
+
+metadata_hierarchy_summary_ui <- function(group, context) {
+  if (
+    is.null(group) ||
+      !inherits(group, "llw_metadata_group") ||
+      is.null(context) ||
+      !inherits(context, "llw_metadata_node_context")
+  ) {
+    return(tags$span(
+      class = "llw-metadata-hierarchy-summary__empty",
+      "Choose a matching field first"
+    ))
+  }
+  row <- group$group
+  node <- context$node
+  tags$span(
+    class = "llw-metadata-hierarchy-summary__state",
+    tags$span(
+      paste("Selected field:", metadata_friendly_name(row$field[[1L]]))
+    ),
+    tags$span(
+      paste("Hierarchy focus:", metadata_friendly_name(node$label[[1L]]))
+    )
+  )
+}
+
+metadata_hierarchy_shell_ui <- function(ns) {
+  accordion(
+    id = ns("hierarchy_accordion"),
+    open = FALSE,
+    multiple = FALSE,
+    class = "llw-metadata-hierarchy-accordion",
+    accordion_panel(
+      title = tags$div(
+        class = "llw-metadata-hierarchy-accordion__title",
+        tags$span(
+          class = "llw-metadata-hierarchy-accordion__label",
+          "Explore metadata structure"
+        ),
+        uiOutput(ns("hierarchy_summary"), inline = TRUE)
+      ),
+      value = "metadata_structure",
+      uiOutput(ns("hierarchy_content"))
+    )
+  )
+}
+
+metadata_hierarchy_panel_ui <- function(
+  group,
+  context,
+  neighborhood,
+  input_ids = NULL
+) {
+  if (
+    is.null(group) ||
+      !inherits(group, "llw_metadata_group") ||
+      is.null(context) ||
+      !inherits(context, "llw_metadata_node_context") ||
+      is.null(neighborhood) ||
+      !inherits(neighborhood, "llw_metadata_neighborhood")
+  ) {
+    return(llw_status_callout(
+      "idle",
+      paste(
+        "Choose a matching field first. You can then browse its containing",
+        "metadata and choose a related retained field."
+      ),
+      heading = "No metadata structure selected",
+      compact = TRUE
+    ))
+  }
+  input_ids <- utils::modifyList(
+    list(
+      property = "metadata_neighborhood_group_id",
+      instance = "metadata_hierarchy_instance_node_id",
+      path = "metadata_hierarchy_path_node_id",
+      field = "metadata_hierarchy_field_group_id",
+      child = "metadata_hierarchy_child_node_id",
+      nearby = "metadata_hierarchy_nearby_node_id"
+    ),
+    input_ids %||% list()
+  )
+  row <- group$group
+  node <- context$node
+  tags$div(
+    class = "llw-metadata-hierarchy-panel",
+    tags$div(
+      class = "llw-metadata-hierarchy-direction",
+      role = "status",
+      `aria-live` = "polite",
+      `aria-atomic` = "true",
+      tags$strong("This panel controls the selected metadata field below."),
+      tags$p(
+        class = "mb-0",
+        paste(
+          "Choose a branch to change the hierarchy focus. Choose a field to",
+          "replace the selected field below. Search and result order above",
+          "stay unchanged."
+        )
+      )
+    ),
+    tags$dl(
+      class = "llw-metadata-hierarchy-selection-state",
+      tags$div(
+        tags$dt("Selected field below"),
+        tags$dd(
+          tags$strong(metadata_friendly_name(row$field[[1L]])),
+          tags$code(row$field[[1L]])
+        )
+      ),
+      tags$div(
+        tags$dt("Current hierarchy focus"),
+        tags$dd(
+          tags$strong(metadata_friendly_name(node$label[[1L]])),
+          tags$span(metadata_hierarchy_kind_label(node$kind[[1L]]))
+        )
+      )
+    ),
+    metadata_item_properties_ui(
+      neighborhood,
+      input_ids$property,
+      row$group_id[[1L]]
+    ),
+    metadata_hierarchy_context_ui(
+      context,
+      neighborhood,
+      input_ids,
+      row$group_id[[1L]]
+    )
+  )
+}
+
+metadata_group_values_ui <- function(group) {
+  entries <- group$entries
+  values <- entries$value
+  values[is.na(values) | !nzchar(values)] <- "not specified"
+  semantic_items <- entries$group_context
+  semantic_items[is.na(semantic_items)] <- ""
+  show_semantic_item <- any(nzchar(semantic_items))
+  record_heading <- if (
+    any(grepl("/dataset_file", entries$path, fixed = TRUE)) ||
+      any(grepl("^[^:]+:[^:]+$", entries$record))
+  ) {
+    "Dataset / file group"
+  } else {
+    "Record"
+  }
+  rows <- lapply(seq_len(nrow(entries)), function(index) {
+    cells <- list(tags$td(tags$code(entries$record[[index]])))
+    if (show_semantic_item) {
+      cells <- c(
+        cells,
+        list(tags$td(
+          if (nzchar(semantic_items[[index]])) {
+            tags$code(semantic_items[[index]])
+          } else {
+            "not specified"
+          }
+        ))
+      )
+    }
+    cells <- c(
+      cells,
+      list(
+        tags$td(values[[index]]),
+        tags$td(entries$value_type[[index]])
+      )
+    )
+    do.call(tags$tr, cells)
+  })
+  headings <- list(tags$th(scope = "col", record_heading))
+  if (show_semantic_item) {
+    headings <- c(
+      headings,
+      list(tags$th(scope = "col", "Semantic item"))
+    )
+  }
+  headings <- c(
+    headings,
+    list(
+      tags$th(scope = "col", "Value"),
+      tags$th(scope = "col", "Type")
+    )
+  )
+  tagList(
+    tags$div(
+      class = "table-responsive llw-metadata-group-values",
+      tags$table(
+        class = "table table-hover table-sm align-middle mb-0",
+        tags$caption(
+          class = "visually-hidden",
+          paste(
+            "All retained record identities and values for the selected",
+            "metadata field"
+          )
+        ),
+        tags$thead(do.call(tags$tr, headings)),
+        tags$tbody(rows)
+      )
+    ),
+    tags$details(
+      class = "llw-metadata-exact-paths",
+      tags$summary(
+        paste(
+          "Exact retained paths",
+          paste0("(", format(nrow(entries), big.mark = ","), ")")
+        )
+      ),
+      tags$ul(lapply(seq_len(nrow(entries)), function(index) {
+        tags$li(
+          tags$span(entries$record[[index]]),
+          tags$code(entries$path[[index]])
+        )
+      }))
+    )
+  )
+}
+
+metadata_group_detail_ui <- function(
+  group,
+  bundle,
+  show_source = FALSE
+) {
+  if (is.null(group) || !inherits(group, "llw_metadata_group")) {
+    return(llw_status_callout(
+      "idle",
+      "Choose a field in the matching-results list to inspect it.",
+      heading = "No metadata field selected",
+      compact = TRUE
+    ))
+  }
+  row <- group$group
+  is_overlay <- identical(
+    row$namespace_id[[1L]],
+    metadata_overlay_namespace_id()
+  )
+  fingerprint <- if (is_overlay) {
+    bundle$overlay$source_fingerprint
+  } else {
+    bundle$sources[[row$namespace_id[[1L]]]]$fingerprint
+  }
+  provenance_class <- if (is_overlay) {
+    "llw-metadata-provenance--overlay"
+  } else {
+    "llw-metadata-provenance--source"
+  }
+  provenance_label <- if (is_overlay) {
+    paste("LightLogWeb overlay revision", bundle$overlay$revision)
+  } else {
+    "Immutable source metadata"
+  }
+  card(
+    class = "llw-metadata-detail-card",
+    card_header("Selected metadata field"),
+    metadata_group_location_ui(row, show_source = show_source),
+    tags$dl(
+      class = "llw-metadata-detail-list",
+      tags$div(tags$dt("Field"), tags$dd(tags$code(row$field[[1L]]))),
+      tags$div(
+        tags$dt("Retained values"),
+        tags$dd(format(row$entry_count[[1L]], big.mark = ","))
+      ),
+      tags$div(
+        tags$dt("Records represented"),
+        tags$dd(format(row$record_count[[1L]], big.mark = ","))
+      ),
+      tags$div(tags$dt("Value type"), tags$dd(row$value_type[[1L]])),
+      tags$div(
+        tags$dt("Provenance"),
+        tags$dd(tags$span(
+          class = paste("llw-metadata-provenance", provenance_class),
+          provenance_label
+        ))
+      ),
+      tags$div(
+        tags$dt(
+          if (is_overlay) "Bound source fingerprint" else "Source fingerprint"
+        ),
+        tags$dd(tags$code(paste0(substr(fingerprint, 1L, 23L), "...")))
+      )
+    ),
+    tags$section(
+      class = "llw-metadata-values-section",
+      tags$h4("Values in this field"),
+      tags$p(
+        class = "llw-secondary",
+        paste(
+          "Repeated records are kept together here rather than shown as",
+          "duplicate search results. No values are reconciled or inferred."
+        )
+      ),
+      metadata_group_values_ui(group)
+    ),
+    tags$details(
+      class = "llw-metadata-group-path",
+      tags$summary("Exact grouped location"),
+      tags$code(row$group_path[[1L]])
+    ),
+    tags$p(
+      class = "llw-secondary small mb-0",
+      if (is_overlay) {
+        paste(
+          "This versioned LightLogWeb value is separate from the immutable",
+          "source and does not change or revalidate its package."
+        )
+      } else {
+        paste(
+          "LightLogWeb displays these retained values without changing or",
+          "revalidating the source package."
+        )
+      }
+    )
+  )
+}
+
+metadata_entry_breadcrumb_ui <- function(entry) {
+  parts <- data.frame(
+    level = c("Source", "Section", "Record", "Field"),
+    value = c(
+      entry$source_label[[1L]],
+      entry$resource[[1L]],
+      entry$record[[1L]],
+      entry$field[[1L]]
+    ),
+    stringsAsFactors = FALSE
+  )
+  parts <- parts[!is.na(parts$value) & nzchar(parts$value), , drop = FALSE]
+  tags$nav(
+    class = "llw-metadata-breadcrumb",
+    `aria-label` = "Metadata location",
+    tags$ol(lapply(seq_len(nrow(parts)), function(index) {
+      attributes <- list(
+        class = if (index == nrow(parts)) "is-current" else NULL
+      )
+      if (index == nrow(parts)) attributes$`aria-current` <- "page"
+      do.call(
+        tags$li,
+        c(
+          attributes,
+          list(
+            tags$span(
+              class = "llw-metadata-breadcrumb__level",
+              paste0(parts$level[[index]], ":")
+            ),
+            tags$code(parts$value[[index]])
+          )
+        )
+      )
+    }))
+  )
+}
+
+metadata_entry_detail_ui <- function(entry, bundle) {
+  if (is.null(entry) || nrow(entry) == 0L) {
+    return(llw_status_callout(
+      "idle",
+      "Choose a result to see its full source path and provenance.",
+      heading = "No metadata result selected",
+      compact = TRUE
+    ))
+  }
+  value <- entry$value[[1L]]
+  if (is.na(value) || !nzchar(value)) value <- "not specified"
+  is_overlay <- identical(
+    entry$namespace_id[[1L]],
+    metadata_overlay_namespace_id()
+  )
+  fingerprint <- if (is_overlay) {
+    bundle$overlay$source_fingerprint
+  } else {
+    bundle$sources[[entry$namespace_id[[1L]]]]$fingerprint
+  }
+  provenance_class <- if (is_overlay) {
+    "llw-metadata-provenance--overlay"
+  } else {
+    "llw-metadata-provenance--source"
+  }
+  provenance_label <- if (is_overlay) {
+    paste("LightLogWeb overlay revision", bundle$overlay$revision)
+  } else {
+    "Immutable source"
+  }
+  contract_label <- if (is_overlay) {
+    paste("Overlay contract", bundle$overlay$overlay_version)
+  } else {
+    metadata_state_label(entry$state[[1L]])
+  }
+  card(
+    class = "llw-metadata-detail-card",
+    card_header("Selected metadata value"),
+    metadata_entry_breadcrumb_ui(entry),
+    tags$dl(
+      class = "llw-metadata-detail-list",
+      tags$div(tags$dt("Field"), tags$dd(tags$code(entry$field[[1L]]))),
+      tags$div(tags$dt("Value"), tags$dd(value)),
+      tags$div(tags$dt("Value type"), tags$dd(entry$value_type[[1L]])),
+      tags$div(
+        tags$dt("Exact source path"),
+        tags$dd(tags$code(entry$path[[1L]]))
+      ),
+      tags$div(
+        tags$dt(if (is_overlay) "Overlay contract" else "Source state"),
+        tags$dd(contract_label)
+      ),
+      tags$div(
+        tags$dt("Provenance"),
+        tags$dd(
+          tags$span(
+            class = paste("llw-metadata-provenance", provenance_class),
+            provenance_label
+          )
+        )
+      ),
+      tags$div(
+        tags$dt(
+          if (is_overlay) {
+            "Bound source fingerprint"
+          } else {
+            "Source fingerprint"
+          }
+        ),
+        tags$dd(tags$code(paste0(substr(fingerprint, 1L, 23L), "...")))
+      )
+    ),
+    tags$p(
+      class = "llw-secondary small mb-0",
+      if (is_overlay) {
+        paste(
+          "This versioned LightLogWeb value is separate from the immutable",
+          "source and does not change or revalidate its package."
+        )
+      } else {
+        paste(
+          "LightLogWeb displays this retained value without changing or",
+          "revalidating the source package."
+        )
+      }
+    )
+  )
+}
+
+metadata_fixture_contract_label <- function(selection) {
+  if (!is.list(selection)) return(NULL)
+  variables <- metadata_nonempty_text(selection$requested_variables)
+  if (identical(selection$request_mode %||% NULL, "all")) {
+    return(paste(
+      "All variables from the selected compatible unit",
+      paste0("(", length(variables), " source variables)")
+    ))
+  }
+  if (identical(variables, "MEDI")) {
+    return("MEDI only (exact source variable: MEDI)")
+  }
+  if (length(variables) > 0L) {
+    return(paste0("Explicit subset: ", paste(variables, collapse = ", ")))
+  }
+  NULL
+}
+
+metadata_fixture_dataset_record_id <- function(fixture_id) {
+  assert_scalar_string(fixture_id, "fixture_id")
+  ids <- c(
+    `tum-medi-only` = "dataset_m7tummedionly",
+    `iztech-light-subset` = "dataset_m7iztechlightsubset",
+    `ucr-all-light-variables` = "dataset_m7ucrallvariables"
+  )
+  id <- unname(ids[fixture_id])
+  if (length(id) != 1L || is.na(id)) {
+    abort_llw(
+      paste0("Unknown Milestone 7 fixture identity `", fixture_id, "`."),
+      type = "validation"
+    )
+  }
+  id
+}
+
+metadata_append_review_contract <- function(sources) {
+  if (!is.list(sources) || length(sources) != 2L) {
+    abort_llw(
+      "The offline append review state requires exactly two fixture sources.",
+      type = "validation"
+    )
+  }
+  required <- c(
+    "fixture_id",
+    "label",
+    "dataset_record_id",
+    "package_dataset_ids",
+    "retained_rows",
+    "citation",
+    "repository",
+    "exact_revision",
+    "license",
+    "package_schema_version"
+  )
+  scalar_text_fields <- setdiff(
+    required,
+    c("package_dataset_ids", "retained_rows")
+  )
+  sources <- lapply(sources, function(source) {
+    if (!is.list(source) || !all(required %in% names(source))) {
+      abort_llw(
+        "An offline append review source descriptor is incomplete.",
+        type = "validation"
+      )
+    }
+    for (field in scalar_text_fields) {
+      assert_scalar_string(source[[field]], paste0("source$", field))
+    }
+    dataset_ids <- metadata_nonempty_text(source$package_dataset_ids)
+    if (length(dataset_ids) != 5L || anyDuplicated(dataset_ids)) {
+      abort_llw(
+        "An offline review source must retain five source dataset identities.",
+        type = "validation"
+      )
+    }
+    if (
+      !is.numeric(source$retained_rows) ||
+        length(source$retained_rows) != 1L ||
+        is.na(source$retained_rows) ||
+        source$retained_rows < 1L
+    ) {
+      abort_llw(
+        "An offline review source retained-row count is invalid.",
+        type = "validation"
+      )
+    }
+    source$package_dataset_ids <- dataset_ids
+    source$retained_rows <- as.integer(source$retained_rows)
+    source[required]
+  })
+  fixture_ids <- unname(vapply(
+    sources,
+    function(source) source$fixture_id,
+    character(1)
+  ))
+  if (!identical(fixture_ids, c("tum-medi-only", "iztech-light-subset"))) {
+    abort_llw(
+      "The offline append review state must retain the TUM and IZTECH fixtures in contract order.",
+      type = "validation"
+    )
+  }
+  list(
+    review_state_id = "tum-iztech-appended",
+    label = "TUM and IZTECH appended offline metadata review",
+    derived_fixture = TRUE,
+    generated_data_file = NULL,
+    construction = paste(
+      "Constructed in memory from two frozen offline RDS fixtures through",
+      "LightLogWeb's append contract. No source package is reopened."
+    ),
+    sources = sources,
+    source_variable_mappings = list(
+      list(
+        fixture_id = "tum-medi-only",
+        source_variable = "MEDI",
+        result_column = "tum_MEDI"
+      ),
+      list(
+        fixture_id = "iztech-light-subset",
+        source_variable = "MEDI",
+        result_column = "iztech_MEDI"
+      ),
+      list(
+        fixture_id = "iztech-light-subset",
+        source_variable = "LIGHT",
+        result_column = "iztech_LIGHT"
+      )
+    ),
+    retained_rows = sum(vapply(
+      sources,
+      function(source) source$retained_rows,
+      integer(1)
+    )),
+    participant_policy = "prefix_source",
+    time_alignment = "preserve_instant",
+    lineage_column = "llw_source_dataset_id",
+    namespace_policy = paste(
+      "One exact namespace per immediate source dataset. Source fields and",
+      "measurement columns are not flattened or semantically reconciled."
+    ),
+    overlay = list(
+      revision = 1L,
+      source_bound = TRUE,
+      table = "datasets",
+      key = "dataset_m7appendedreview",
+      field = "title",
+      value = "Offline appended metadata review",
+      source_mutated = FALSE
+    ),
+    offline_test_policy = list(
+      source_package_reopen = FALSE,
+      retained_public_measurement_values = TRUE,
+      privacy_filtering = FALSE
+    )
+  )
+}
+metadata_append_review_source <- function(record) {
+  record <- validate_dataset_record(record)
+  details <- record$source_manifest$details %||% list()
+  source <- details$source %||% list()
+  selection <- details$selection %||% list()
+  repository <- source$repository %||% ""
+  if (nzchar(repository) && !grepl("^https?://", repository)) {
+    repository <- paste0("https://github.com/", repository)
+  }
+  citation <- source$citation_doi %||% ""
+  if (nzchar(citation) && !grepl("^https?://", citation)) {
+    citation <- paste0("https://doi.org/", citation)
+  }
+  list(
+    fixture_id = details$fixture_id %||% "",
+    label = record$display_name,
+    dataset_record_id = record$id,
+    package_dataset_ids = selection$dataset_ids %||%
+      selection$dataset_id %||%
+      character(),
+    retained_rows = nrow(dataset_raw_data(record)),
+    citation = citation,
+    repository = repository,
+    exact_revision = source$revision %||% "",
+    license = source$license %||% "",
+    package_schema_version = source$schema_version %||% ""
+  )
+}
+
+metadata_explorer_append_review_record <- function(records) {
+  if (!is.list(records) || is.null(names(records))) {
+    abort_llw(
+      "Offline append review sources must be named dataset records.",
+      type = "validation"
+    )
+  }
+  source_ids <- vapply(
+    c("tum-medi-only", "iztech-light-subset"),
+    metadata_fixture_dataset_record_id,
+    character(1)
+  )
+  if (!all(source_ids %in% names(records))) {
+    abort_llw(
+      "The TUM and IZTECH offline fixtures are required for append review.",
+      type = "validation"
+    )
+  }
+  source_records <- records[source_ids]
+  source_records <- lapply(source_records, validate_dataset_record)
+  names(source_records) <- source_ids
+  mappings <- list(
+    new_append_source_mapping(
+      dataset_id = source_ids[[1L]],
+      participant_column = "participant_Id",
+      datetime_column = "Datetime",
+      measurement_column = "MEDI",
+      measurement_target = "tum_MEDI",
+      participant_prefix = "TUM"
+    ),
+    new_append_source_mapping(
+      dataset_id = source_ids[[2L]],
+      participant_column = "participant_Id",
+      datetime_column = "Datetime",
+      measurement_column = "MEDI",
+      measurement_target = "iztech_MEDI",
+      participant_prefix = "IZTECH",
+      optional_columns = "LIGHT",
+      optional_targets = "iztech_LIGHT"
+    )
+  )
+  spec <- new_append_spec(
+    mappings = mappings,
+    display_name = "TUM and IZTECH appended metadata review",
+    participant_policy = "prefix_source",
+    measurement_strategy = "separate",
+    time_alignment = "preserve_instant",
+    output_timezone = "UTC"
+  )
+  preview <- preview_append_merge(source_records, spec)
+  if (!isTRUE(preview$can_apply)) {
+    abort_llw(
+      paste(
+        "The deterministic offline append review state could not be built:",
+        paste(preview$errors, collapse = " ")
+      ),
+      type = "validation"
+    )
+  }
+  record <- new_appended_dataset_record(preview)
+  record$id <- "dataset_m7appendedreview"
+  review_contract <- metadata_append_review_contract(
+    lapply(source_records, metadata_append_review_source)
+  )
+
+  source_bundle <- record$metadata_bundle
+  overlay_tables <- metadata_empty_overlay_tables()
+  overlay_tables$datasets <- data.frame(
+    dataset_id = record$id,
+    title = review_contract$overlay$value,
+    stringsAsFactors = FALSE
+  )
+  record$metadata_bundle <- new_metadata_bundle(
+    source_bundle$sources,
+    overlay = new_metadata_overlay(
+      source_bundle$source_fingerprint,
+      tables = overlay_tables,
+      revision = review_contract$overlay$revision
+    )
+  )
+
+  manifest <- record$source_manifest
+  details <- manifest$details
+  details$derived_fixture <- TRUE
+  details$fixture_id <- review_contract$review_state_id
+  details$fixture_contract <- paste(
+    "Separate mappings: TUM MEDI to tum_MEDI; IZTECH MEDI to",
+    "iztech_MEDI; IZTECH LIGHT to iztech_LIGHT"
+  )
+  details$review_state <- review_contract
+  details$disclaimer <- paste(
+    "This review state is constructed offline from two bounded public-data",
+    "fixtures. It is not either complete published dataset and is not fresh",
+    "or live measurement evidence. Exact retained source values remain",
+    "separated by lineage and namespace."
+  )
+  source_times <- vapply(
+    source_records,
+    function(source_record) {
+      as.numeric(source_record$source_manifest$imported_at)
+    },
+    numeric(1)
+  )
+  record$source_manifest <- new_source_manifest(
+    source_type = manifest$source_type,
+    original_filenames = unname(manifest$original_filenames),
+    hashes = unname(manifest$hashes),
+    import_arguments = manifest$import_arguments,
+    source_timezone = manifest$source_timezone,
+    imported_at = as.POSIXct(
+      max(source_times),
+      origin = "1970-01-01",
+      tz = "UTC"
+    ),
+    details = details
+  )
+  record$factual_metadata$derived_fixture <- review_contract$label
+  record$factual_metadata$review_state_id <- review_contract$review_state_id
+  record$provenance$offline_review_state <- review_contract
+  validate_dataset_record(record)
+}
+
+metadata_record_identity_ui <- function(record) {
+  if (is.null(record)) return(NULL)
+  if (!is.list(record)) {
+    abort_llw("Selected dataset context is invalid.", type = "validation")
+  }
+  details <- record$source_manifest$details %||% list()
+  source <- details$source %||% list()
+  selection <- details$selection %||% list()
+  bundle <- metadata_bundle_for_record(record)
+  first_source <- bundle$sources[[1L]]
+  provenance <- first_source$provenance %||% list()
+  review_state <- details$review_state %||% NULL
+  repository <- source$repository %||% provenance$repository %||% NULL
+  revision <- source$revision %||%
+    source$resolved_revision %||%
+    provenance$resolved_revision %||%
+    NULL
+  contract <- details$fixture_contract %||%
+    metadata_fixture_contract_label(selection)
+  derived <- isTRUE(details$derived_fixture)
+
+  facts <- list(
+    tags$div(
+      tags$dt("Record source"),
+      tags$dd(record$source_manifest$source_type)
+    )
+  )
+  if (!is.null(contract)) {
+    facts <- c(
+      facts,
+      list(tags$div(tags$dt("Variable contract"), tags$dd(contract)))
+    )
+  }
+  if (is.list(review_state)) {
+    source_items <- lapply(review_state$sources, function(review_source) {
+      tags$li(
+        tags$strong(review_source$label),
+        tags$div(
+          "Namespace ",
+          tags$code(review_source$dataset_record_id)
+        ),
+        tags$div(
+          "Public package ",
+          tags$code(sub(
+            "^https://github.com/",
+            "",
+            review_source$repository
+          ))
+        ),
+        tags$div(
+          "Exact revision ",
+          tags$code(review_source$exact_revision)
+        ),
+        tags$div(
+          "License ",
+          tags$code(review_source$license),
+          "; package datasets ",
+          tags$code(paste(
+            review_source$package_dataset_ids,
+            collapse = ", "
+          ))
+        )
+      )
+    })
+    facts <- c(
+      facts,
+      list(tags$div(
+        tags$dt("Source metadata namespaces"),
+        tags$dd(tags$ul(
+          class = "llw-metadata-source-list",
+          source_items
+        ))
+      )),
+      list(tags$div(
+        tags$dt("Row lineage"),
+        tags$dd(tags$code(review_state$lineage_column))
+      )),
+      list(tags$div(
+        tags$dt("Conflict handling"),
+        tags$dd(review_state$namespace_policy)
+      )),
+      list(tags$div(
+        tags$dt("Review overlay"),
+        tags$dd(paste(
+          "Revision",
+          review_state$overlay$revision,
+          "is bound to the combined source fingerprint and remains separate."
+        ))
+      ))
+    )
+  }
+  if (is.null(review_state) && !is.null(repository)) {
+    facts <- c(
+      facts,
+      list(tags$div(
+        tags$dt("Public source package"),
+        tags$dd(tags$code(repository))
+      ))
+    )
+  }
+  if (is.null(review_state) && !is.null(revision)) {
+    facts <- c(
+      facts,
+      list(tags$div(
+        tags$dt("Exact source revision"),
+        tags$dd(tags$code(revision))
+      ))
+    )
+  }
+  dataset_ids <- metadata_nonempty_text(
+    selection$dataset_ids %||% selection$dataset_id
+  )
+  if (is.null(review_state) && length(dataset_ids) > 0L) {
+    facts <- c(
+      facts,
+      list(tags$div(
+        tags$dt("Selected source datasets"),
+        tags$dd(tags$code(paste(dataset_ids, collapse = ", ")))
+      ))
+    )
+  }
+  file_groups <- metadata_nonempty_text(selection$file_group_ids)
+  if (length(file_groups) > 0L) {
+    facts <- c(
+      facts,
+      list(tags$div(
+        tags$dt("Selected file group"),
+        tags$dd(tags$code(paste(file_groups, collapse = ", ")))
+      ))
+    )
+  }
+
+  card(
+    class = "llw-metadata-record-card",
+    card_header("Selected dataset context"),
+    tags$div(
+      class = "llw-metadata-record-heading",
+      tags$h3(record$display_name),
+      if (derived) {
+        tags$span(
+          class = "llw-metadata-provenance llw-metadata-provenance--fixture",
+          if (is.list(review_state)) {
+            "Derived offline append"
+          } else {
+            "Derived offline fixture"
+          }
+        )
+      }
+    ),
+    tags$dl(class = "llw-metadata-detail-list", facts),
+    if (derived) {
+      tags$p(
+        class = "llw-secondary small mb-0",
+        details$disclaimer %||%
+          paste(
+            "This bounded fixture is not the complete published dataset and",
+            "is not fresh or live measurement evidence. It is loaded offline."
+          )
+      )
+    }
+  )
+}
+
+metadata_result_summary_message <- function(bundle, result) {
+  if (nrow(bundle$index$entries) == 0L) {
+    return(paste(
+      "This dataset contains no retained optional metadata.",
+      "It remains fully usable with raw variable names and the fallback",
+      "`unit not specified`."
+    ))
+  }
+  shown <- nrow(result$rows)
+  if (result$total == 0L) {
+    return(paste(
+      "No retained metadata match the current search and filters.",
+      "Clear or broaden them to recover the full context."
+    ))
+  }
+  if (isTRUE(result$limited)) {
+    return(paste(
+      format(result$total, big.mark = ","),
+      "matching fields.",
+      format(shown, big.mark = ","),
+      "are listed to keep this view responsive. Narrow the search to find",
+      "a specific field or value."
+    ))
+  }
+  paste(format(result$total, big.mark = ","), "matching fields.")
+}
+
+metadata_source_overlay_ui <- function(bundle) {
+  source_count <- length(bundle$sources)
+  overlay_rows <- sum(vapply(
+    bundle$overlay$tables,
+    nrow,
+    integer(1)
+  ))
+  layout_columns(
+    col_widths = c(6, 6),
+    fill = FALSE,
+    card(
+      class = "llw-metadata-layer-card llw-metadata-layer-card--source",
+      card_header("Source metadata"),
+      tags$div(
+        class = "llw-metadata-layer-heading",
+        tags$span(
+          class = "llw-metadata-provenance llw-metadata-provenance--source",
+          "Immutable source"
+        ),
+        tags$strong(paste(source_count, "source namespace(s)"))
+      ),
+      tags$p(
+        class = "llw-secondary mb-0",
+        paste(
+          "Retained exactly by namespace. Appended sources are never",
+          "flattened or silently reconciled."
+        )
+      )
+    ),
+    card(
+      class = "llw-metadata-layer-card llw-metadata-layer-card--overlay",
+      card_header("LightLogWeb overlay"),
+      tags$div(
+        class = "llw-metadata-layer-heading",
+        tags$span(
+          class = "llw-metadata-provenance llw-metadata-provenance--overlay",
+          paste("Overlay revision", bundle$overlay$revision)
+        ),
+        tags$strong(paste(overlay_rows, "overlay value(s)"))
+      ),
+      tags$p(
+        class = "llw-secondary mb-0",
+        paste(
+          "The versioned overlay is separate from the source. Editing and",
+          "export are intentionally unavailable in this read-only slice."
+        )
+      )
+    )
+  )
+}
+
+metadata_filter_grid_ui <- function(
+  bundle,
+  ns,
+  selected_namespace = "all",
+  selected_layer = "all",
+  selected_sort = "path"
+) {
+  if (!is.function(ns)) {
+    abort_llw("`ns` must be a namespace function.", type = "validation")
+  }
+  controls <- list()
+  if (!is.null(bundle)) {
+    bundle <- validate_metadata_bundle(bundle)
+  }
+  if (!is.null(bundle) && length(bundle$sources) > 1L) {
+    source_choices <- metadata_source_choices(bundle)
+    if (!selected_namespace %in% unname(source_choices)) {
+      selected_namespace <- "all"
+    }
+    controls <- c(
+      controls,
+      list(selectInput(
+        ns("namespace"),
+        "Source dataset",
+        choices = source_choices,
+        selected = selected_namespace,
+        selectize = FALSE,
+        width = "100%"
+      ))
+    )
+  }
+  if (!is.null(bundle)) {
+    layer_choices <- metadata_layer_choices(bundle)
+    if (length(layer_choices) > 1L) {
+      if (!selected_layer %in% unname(layer_choices)) {
+        selected_layer <- "all"
+      }
+      controls <- c(
+        controls,
+        list(selectInput(
+          ns("layer"),
+          "Metadata layer",
+          choices = layer_choices,
+          selected = selected_layer,
+          selectize = FALSE,
+          width = "100%"
+        ))
+      )
+    }
+  }
+  controls <- c(
+    controls,
+    list(selectInput(
+      ns("resource"),
+      "Section",
+      choices = c("All sections" = "all"),
+      selectize = FALSE,
+      width = "100%"
+    ))
+  )
+  sort_choices <- c(
+    "Metadata location" = "path",
+    "Field name" = "field",
+    "Value" = "value"
+  )
+  if (!is.null(bundle) && length(bundle$sources) > 1L) {
+    sort_choices <- c(sort_choices, "Source dataset" = "source")
+  }
+  if (!selected_sort %in% unname(sort_choices)) selected_sort <- "path"
+  controls <- c(
+    controls,
+    list(selectInput(
+      ns("sort_by"),
+      "Sort results by",
+      choices = sort_choices,
+      selected = selected_sort,
+      selectize = FALSE,
+      width = "100%"
+    ))
+  )
+  do.call(
+    layout_columns,
+    c(
+      list(
+        col_widths = rep(12 / length(controls), length(controls)),
+        fill = FALSE
+      ),
+      controls
+    )
+  )
+}
+
+metadata_explorer_ui <- function(id) {
+  ns <- NS(id)
+  tags$section(
+    class = "llw-metadata-explorer",
+    `aria-labelledby` = ns("heading"),
+    tags$div(
+      class = "llw-metadata-explorer__heading",
+      tags$h2(id = ns("heading"), "Explore metadata"),
+      tags$p(
+        class = "llw-secondary",
+        paste(
+          "Search retained field names and values, select a match, then",
+          "explore its properties, exact hierarchy, and nearby source context."
+        )
+      )
+    ),
+    uiOutput(ns("dataset_state")),
+    uiOutput(ns("dataset_identity")),
+    uiOutput(ns("layer_summary")),
+    card(
+      class = "llw-metadata-search-card",
+      card_header("Find metadata"),
+      layout_columns(
+        col_widths = c(8, 4),
+        fill = FALSE,
+        textInput(
+          ns("query"),
+          "Search field names and values",
+          placeholder = "For example: melanopic, timezone, calibration",
+          width = "100%"
+        ),
+        tags$div(
+          class = "llw-metadata-clear-wrap",
+          actionButton(
+            ns("clear_query"),
+            "Clear search",
+            icon = icon("circle-xmark"),
+            class = "btn-outline-secondary",
+            width = "100%"
+          )
+        )
+      ),
+      uiOutput(ns("filter_grid")),
+      checkboxInput(
+        ns("descending"),
+        "Reverse sort order",
+        value = FALSE
+      )
+    ),
+    uiOutput(ns("result_summary")),
+    uiOutput(ns("result_list")),
+    uiOutput(ns("hierarchy_shell")),
+    uiOutput(ns("entry_detail"))
+  )
+}
+
+metadata_explorer_server <- function(id, dataset) {
+  if (!shiny::is.reactive(dataset)) {
+    abort_llw("`dataset` must be a reactive input.", type = "validation")
+  }
+
+  moduleServer(id, function(input, output, session) {
+    record <- reactive({
+      dataset()
+    })
+
+    bundle <- reactive({
+      value <- record()
+      if (is.null(value)) return(NULL)
+      metadata_bundle_for_record(value)
+    })
+
+    index <- reactive({
+      value <- bundle()
+      if (is.null(value)) return(NULL)
+      value$index
+    })
+
+    output$filter_grid <- renderUI({
+      metadata_filter_grid_ui(
+        bundle(),
+        session$ns,
+        selected_namespace = isolate(input$namespace %||% "all"),
+        selected_layer = isolate(input$layer %||% "all"),
+        selected_sort = isolate(input$sort_by %||% "path")
+      )
+    })
+
+    selected_namespace <- reactive({
+      value <- bundle()
+      if (is.null(value) || length(value$sources) <= 1L) return("all")
+      choices <- unname(metadata_source_choices(value))
+      selected <- input$namespace %||% "all"
+      if (selected %in% choices) selected else "all"
+    })
+
+    selected_layer <- reactive({
+      value <- bundle()
+      if (is.null(value)) return("all")
+      choices <- unname(metadata_layer_choices(value))
+      selected <- input$layer %||% "all"
+      if (selected %in% choices) selected else "all"
+    })
+
+    observe({
+      value <- index()
+      choices <- if (is.null(value)) {
+        c("All sections" = "all")
+      } else {
+        metadata_resource_choices(
+          value,
+          namespace_id = selected_namespace(),
+          layer = selected_layer()
+        )
+      }
+      selected <- isolate(input$resource %||% "all")
+      if (!selected %in% unname(choices)) selected <- "all"
+      updateSelectInput(
+        session,
+        "resource",
+        choices = choices,
+        selected = selected
+      )
+    })
+
+    observeEvent(
+      input$clear_query,
+      {
+        updateTextInput(session, "query", value = "")
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      record(),
+      {
+        updateTextInput(session, "query", value = "")
+        updateSelectInput(session, "namespace", selected = "all")
+        updateSelectInput(session, "layer", selected = "all")
+        updateSelectInput(session, "resource", selected = "all")
+      },
+      ignoreInit = TRUE
+    )
+
+    query_result <- reactive({
+      value <- index()
+      if (is.null(value)) {
+        return(structure(
+          list(rows = data.frame(), total = 0L, limited = FALSE),
+          class = c("llw_metadata_group_query", "list")
+        ))
+      }
+      metadata_index_query_groups(
+        value,
+        query = input$query %||% "",
+        namespace_id = selected_namespace(),
+        resource = input$resource %||% "all",
+        layer = selected_layer(),
+        sort_by = input$sort_by %||% "path",
+        descending = isTRUE(input$descending),
+        limit = 40L
+      )
+    })
+
+    output$dataset_state <- renderUI({
+      value <- bundle()
+      if (is.null(value)) {
+        return(llw_status_callout(
+          "idle",
+          paste(
+            "Select a dataset in the library, or import one first.",
+            "Metadata-free datasets remain available in every other view."
+          ),
+          heading = "No dataset selected"
+        ))
+      }
+      metadata_state_callout(value)
+    })
+
+    output$dataset_identity <- renderUI({
+      metadata_record_identity_ui(record())
+    })
+
+    output$layer_summary <- renderUI({
+      value <- bundle()
+      if (is.null(value)) return(NULL)
+      metadata_source_overlay_ui(value)
+    })
+
+    output$result_summary <- renderUI({
+      value <- bundle()
+      if (is.null(value)) return(NULL)
+      result <- query_result()
+      tags$div(
+        class = "llw-metadata-result-summary",
+        role = "status",
+        `aria-live` = "polite",
+        `aria-atomic` = "true",
+        metadata_result_summary_message(value, result)
+      )
+    })
+
+    output$result_list <- renderUI({
+      value <- bundle()
+      if (is.null(value)) return(NULL)
+      result <- query_result()
+      current <- isolate(input$group_id %||% "")
+      metadata_result_list_ui(
+        result$rows,
+        input_id = session$ns("group_id"),
+        selected = current,
+        show_source = length(value$sources) > 1L
+      )
+    })
+
+    output$hierarchy_shell <- renderUI({
+      value <- bundle()
+      if (
+        is.null(value) ||
+          !inherits(value$index, "llw_metadata_index") ||
+          nrow(value$index$groups) == 0L
+      ) {
+        return(NULL)
+      }
+      metadata_hierarchy_shell_ui(session$ns)
+    })
+
+    search_group_id <- reactive({
+      result <- query_result()
+      if (nrow(result$rows) == 0L) return(NULL)
+      group_id <- input$group_id %||% ""
+      if (!nzchar(group_id) || !group_id %in% result$rows$group_id) {
+        group_id <- result$rows$group_id[[1L]]
+      }
+      group_id
+    })
+
+    active_group_id <- reactiveVal(NULL)
+    focused_node_id <- reactiveVal(NULL)
+
+    selected_group <- reactive({
+      value <- index()
+      group_id <- active_group_id()
+      if (
+        is.null(value) ||
+          is.null(group_id) ||
+          length(group_id) != 1L ||
+          is.na(group_id) ||
+          !nzchar(group_id)
+      ) {
+        return(NULL)
+      }
+      metadata_index_group(value, group_id)
+    })
+
+    selected_neighborhood <- reactive({
+      value <- index()
+      group <- selected_group()
+      if (is.null(value) || is.null(group)) return(NULL)
+      metadata_index_group_neighborhood(value, group)
+    })
+
+    hierarchy_context <- reactive({
+      value <- index()
+      group <- selected_group()
+      neighborhood <- selected_neighborhood()
+      if (is.null(value) || is.null(group) || is.null(neighborhood)) {
+        return(NULL)
+      }
+      node_id <- focused_node_id()
+      if (
+        is.null(node_id) ||
+          length(node_id) != 1L ||
+          is.na(node_id) ||
+          !nzchar(node_id)
+      ) {
+        node_id <- neighborhood$representative_node_id
+      }
+      node <- metadata_index_node(value, node_id)
+      row <- group$group
+      if (
+        is.null(node) ||
+          !identical(node$namespace_id[[1L]], row$namespace_id[[1L]]) ||
+          !identical(node$layer[[1L]], row$layer[[1L]])
+      ) {
+        node_id <- neighborhood$representative_node_id
+      }
+      metadata_index_node_context(value, node_id)
+    })
+
+    activate_group <- function(group_id, reset_focus = TRUE) {
+      value <- index()
+      if (
+        is.null(value) ||
+          is.null(group_id) ||
+          length(group_id) != 1L ||
+          is.na(group_id) ||
+          !nzchar(group_id)
+      ) {
+        active_group_id(NULL)
+        if (isTRUE(reset_focus)) focused_node_id(NULL)
+        return(invisible(FALSE))
+      }
+      group <- metadata_index_group(value, group_id)
+      if (is.null(group)) return(invisible(FALSE))
+      active_group_id(group_id)
+      if (isTRUE(reset_focus)) {
+        neighborhood <- metadata_index_group_neighborhood(value, group)
+        focused_node_id(neighborhood$representative_node_id)
+      }
+      invisible(TRUE)
+    }
+
+    set_hierarchy_focus <- function(node_id) {
+      value <- index()
+      group <- selected_group()
+      if (
+        is.null(value) ||
+          is.null(group) ||
+          is.null(node_id) ||
+          length(node_id) != 1L ||
+          is.na(node_id) ||
+          !nzchar(node_id)
+      ) {
+        return(invisible(FALSE))
+      }
+      node <- metadata_index_node(value, node_id)
+      row <- group$group
+      if (
+        is.null(node) ||
+          !identical(node$namespace_id[[1L]], row$namespace_id[[1L]]) ||
+          !identical(node$layer[[1L]], row$layer[[1L]])
+      ) {
+        return(invisible(FALSE))
+      }
+      focused_node_id(node_id)
+      invisible(TRUE)
+    }
+
+    observeEvent(
+      search_group_id(),
+      {
+        activate_group(search_group_id(), reset_focus = TRUE)
+      },
+      ignoreInit = FALSE,
+      ignoreNULL = FALSE
+    )
+
+    observeEvent(
+      input$neighborhood_group_id,
+      {
+        neighborhood <- selected_neighborhood()
+        selected <- input$neighborhood_group_id %||% ""
+        if (
+          !is.null(neighborhood) &&
+            selected %in% neighborhood$property_groups$group_id
+        ) {
+          activate_group(selected, reset_focus = TRUE)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$hierarchy_field_group_id,
+      {
+        context <- hierarchy_context()
+        selected <- input$hierarchy_field_group_id %||% ""
+        if (!is.null(context) && selected %in% context$groups$group_id) {
+          activate_group(selected, reset_focus = TRUE)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$hierarchy_instance_node_id,
+      {
+        neighborhood <- selected_neighborhood()
+        selected <- input$hierarchy_instance_node_id %||% ""
+        if (
+          !is.null(neighborhood) &&
+            selected %in% neighborhood$item_nodes$node_id
+        ) {
+          set_hierarchy_focus(selected)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$hierarchy_path_node_id,
+      {
+        set_hierarchy_focus(input$hierarchy_path_node_id)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$hierarchy_child_node_id,
+      {
+        context <- hierarchy_context()
+        selected <- input$hierarchy_child_node_id %||% ""
+        if (!is.null(context) && selected %in% context$children$node_id) {
+          set_hierarchy_focus(selected)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$hierarchy_nearby_node_id,
+      {
+        context <- hierarchy_context()
+        selected <- input$hierarchy_nearby_node_id %||% ""
+        if (!is.null(context) && selected %in% context$nearby$node_id) {
+          set_hierarchy_focus(selected)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    selected_entry <- reactive({
+      value <- selected_group()
+      if (is.null(value) || nrow(value$entries) == 0L) return(NULL)
+      value$entries[1L, , drop = FALSE]
+    })
+
+    output$hierarchy_summary <- renderUI({
+      metadata_hierarchy_summary_ui(
+        selected_group(),
+        hierarchy_context()
+      )
+    })
+
+    output$hierarchy_content <- renderUI({
+      metadata_hierarchy_panel_ui(
+        selected_group(),
+        hierarchy_context(),
+        selected_neighborhood(),
+        input_ids = list(
+          property = session$ns("neighborhood_group_id"),
+          instance = session$ns("hierarchy_instance_node_id"),
+          path = session$ns("hierarchy_path_node_id"),
+          field = session$ns("hierarchy_field_group_id"),
+          child = session$ns("hierarchy_child_node_id"),
+          nearby = session$ns("hierarchy_nearby_node_id")
+        )
+      )
+    })
+
+    output$entry_detail <- renderUI({
+      value <- bundle()
+      if (is.null(value)) return(NULL)
+      result <- query_result()
+      if (nrow(value$index$groups) == 0L) return(NULL)
+      if (result$total == 0L) {
+        return(llw_status_callout(
+          "idle",
+          paste(
+            "No current result is selected. Clear or broaden the search",
+            "and filters to inspect a retained field."
+          ),
+          heading = "No current metadata selection",
+          compact = TRUE
+        ))
+      }
+      metadata_group_detail_ui(
+        selected_group(),
+        value,
+        show_source = length(value$sources) > 1L
+      )
+    })
+
+    status <- reactive({
+      value <- bundle()
+      result <- query_result()
+      list(
+        ready = !is.null(value),
+        source_count = if (is.null(value)) 0L else length(value$sources),
+        match_count = result$total,
+        shown_count = nrow(result$rows),
+        selected_group_id = selected_group()$group$group_id %||% NULL,
+        selected_entry_id = selected_entry()$entry_id %||% NULL,
+        focused_node_id = hierarchy_context()$node$node_id %||% NULL
+      )
+    })
+
+    list(
+      bundle = bundle,
+      query = query_result,
+      selected_group = selected_group,
+      selected_entry = selected_entry,
+      selected_neighborhood = selected_neighborhood,
+      hierarchy_context = hierarchy_context,
+      status = status
+    )
+  })
+}
+
+metadata_explorer_showcase_records <- function() {
+  data <- data.frame(
+    Id = "P01",
+    Datetime = as.POSIXct("2026-01-01 08:00:00", tz = "UTC"),
+    MEDI = 125,
+    stringsAsFactors = FALSE
+  )
+  manifest <- new_source_manifest(
+    "metadata_showcase",
+    source_timezone = "UTC"
+  )
+  complete <- new_dataset_record(
+    data,
+    "Complete metadata",
+    manifest,
+    factual_metadata = list(
+      study = list(title = "Circadian field study"),
+      device = list(manufacturer = "Example", model = "Logger A"),
+      variables = list(
+        MEDI = list(
+          label = "Melanopic EDI",
+          unit = "lux"
+        )
+      )
+    ),
+    analysis_settings = list(primary_variable = "MEDI"),
+    id = "dataset_m7complete"
+  )
+  complete$metadata_bundle$sources[[1L]]$state <- "complete"
+  complete$metadata_bundle$sources[[1L]]$fingerprint <- NULL
+  complete$metadata_bundle$sources[[1L]] <- do.call(
+    new_metadata_source_namespace,
+    complete$metadata_bundle$sources[[1L]][c(
+      "namespace_id",
+      "label",
+      "source_type",
+      "records",
+      "resources",
+      "source_dataset_id",
+      "state",
+      "source_schema_version",
+      "provenance"
+    )]
+  )
+  names(complete$metadata_bundle$sources) <-
+    complete$metadata_bundle$sources[[1L]]$namespace_id
+  complete$metadata_bundle <- new_metadata_bundle(
+    complete$metadata_bundle$sources
+  )
+  complete <- validate_dataset_record(complete)
+  partial <- new_dataset_record(
+    data,
+    "Partial metadata",
+    manifest,
+    factual_metadata = list(
+      device = list(model = "Logger B"),
+      variables = list(MEDI = list(label = "Melanopic EDI"))
+    ),
+    analysis_settings = list(primary_variable = "MEDI"),
+    id = "dataset_m7partial"
+  )
+  absent <- new_dataset_record(
+    data,
+    "Metadata absent",
+    manifest,
+    analysis_settings = list(primary_variable = "MEDI"),
+    id = "dataset_m7absent"
+  )
+  records <- list(complete, partial, absent)
+  stats::setNames(records, vapply(records, `[[`, character(1), "id"))
+}
+
+metadata_explorer_fixture_records <- function(
+  fixture_directory,
+  include_absent = TRUE
+) {
+  assert_scalar_string(fixture_directory, "fixture_directory")
+  assert_flag(include_absent, "include_absent")
+  files <- c(
+    "tum-medi-only.rds",
+    "iztech-light-subset.rds",
+    "ucr-all-light-variables.rds"
+  )
+  paths <- file.path(fixture_directory, files)
+  if (any(!file.exists(paths))) {
+    abort_llw(
+      "The three offline Milestone 7 review fixtures are incomplete.",
+      type = "validation"
+    )
+  }
+  records <- lapply(paths, function(path) {
+    fixture <- readRDS(path)
+    required <- c(
+      "fixture_schema",
+      "fixture_id",
+      "label",
+      "disclaimer",
+      "source",
+      "selection",
+      "generation",
+      "data",
+      "metadata_snapshot"
+    )
+    if (
+      !is.list(fixture) ||
+        !all(required %in% names(fixture)) ||
+        !identical(fixture$fixture_schema, "llw-glc-derived-fixture")
+    ) {
+      abort_llw("A Milestone 7 review fixture is invalid.", type = "validation")
+    }
+    snapshot <- validate_glc_source_metadata_snapshot(
+      fixture$metadata_snapshot
+    )
+    current_bundle <- new_metadata_bundle(
+      snapshot$bundle$sources,
+      overlay = snapshot$bundle$overlay
+    )
+    new_dataset_record(
+      raw_data = fixture$data,
+      display_name = fixture$label,
+      source_manifest = new_source_manifest(
+        source_type = "derived_glc_fixture",
+        original_filenames = basename(path),
+        hashes = paste0(
+          "sha256:",
+          digest::digest(path, algo = "sha256", file = TRUE)
+        ),
+        source_timezone = "UTC",
+        imported_at = as.POSIXct(
+          fixture$generation$generated_at,
+          format = "%Y-%m-%dT%H:%M:%SZ",
+          tz = "UTC"
+        ),
+        details = list(
+          derived_fixture = TRUE,
+          fixture_id = fixture$fixture_id,
+          fixture_contract = metadata_fixture_contract_label(
+            fixture$selection
+          ),
+          disclaimer = fixture$disclaimer,
+          source = fixture$source,
+          selection = fixture$selection,
+          generation = fixture$generation
+        )
+      ),
+      factual_metadata = list(
+        derived_fixture = fixture$label,
+        source_dataset_ids = fixture$selection$dataset_ids %||%
+          fixture$selection$dataset_id
+      ),
+      analysis_settings = list(
+        primary_variable = if ("MEDI" %in% names(fixture$data)) {
+          "MEDI"
+        } else {
+          names(fixture$data)[[1L]]
+        }
+      ),
+      metadata_bundle = current_bundle,
+      id = metadata_fixture_dataset_record_id(fixture$fixture_id)
+    )
+  })
+  names(records) <- vapply(records, `[[`, character(1), "id")
+  appended <- metadata_explorer_append_review_record(records)
+  records <- c(records, list(appended))
+  if (isTRUE(include_absent)) {
+    absent <- metadata_explorer_showcase_records()[[3L]]
+    absent$display_name <- "Metadata absent fallback"
+    absent <- validate_dataset_record(absent)
+    records <- c(records, list(absent))
+  }
+  stats::setNames(records, vapply(records, `[[`, character(1), "id"))
+}
+
+metadata_explorer_app <- function(
+  records = metadata_explorer_showcase_records()
+) {
+  if (!is.list(records) || length(records) == 0L) {
+    abort_llw(
+      "The metadata showcase requires dataset records.",
+      type = "validation"
+    )
+  }
+  records <- lapply(records, validate_dataset_record)
+  names(records) <- vapply(records, `[[`, character(1), "id")
+  ui <- lightlogweb_page(page_fluid(
+    theme = lightlogweb_theme(),
+    lightlogweb_head(),
+    tags$main(
+      class = "llw-main-shell",
+      llw_view_header(
+        "Milestone 7 showcase",
+        "Metadata essentials",
+        paste(
+          "Exercise retained metadata and the metadata-free fallback without",
+          "network access or measurement-file reads."
+        )
+      ),
+      selectInput(
+        "showcase_record",
+        "Dataset or fixture",
+        choices = stats::setNames(
+          names(records),
+          vapply(records, `[[`, character(1), "display_name")
+        )
+      ),
+      metadata_explorer_ui("metadata"),
+      tags$aside(
+        class = "llw-showcase-status",
+        `aria-label` = "Development status",
+        tags$h2("Development status"),
+        verbatimTextOutput("status")
+      )
+    )
+  ))
+  server <- function(input, output, session) {
+    selected <- reactive(records[[
+      input$showcase_record %||% names(records)[[1L]]
+    ]])
+    explorer <- metadata_explorer_server("metadata", selected)
+    output$status <- renderPrint(explorer$status())
+  }
+  shinyApp(ui, server)
+}

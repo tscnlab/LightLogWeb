@@ -1,6 +1,6 @@
 # LightLogWeb full implementation plan
 
-Last updated: 2026-07-28
+Last updated: 2026-08-31
 
 This is the governing implementation plan for LightLogWeb. It is tracked in
 version control but excluded from package builds by the exact
@@ -70,10 +70,10 @@ old dependency choices are not inherited by default.
 
 ### 2.3 GLC/glcdp integration basis
 
-- The integration target is glcdp 1.0.0 at the submitted-source Git commit
-  `bf97cb30555569886f08db0bdb25421c546ccf0a`, confirmed from the package's
-  CRAN submission record on 2026-08-01. glcdp 1.0.0 has been submitted but is
-  not yet available from CRAN, so the exact-commit policy remains in force.
+- The integration target is glcdp 1.0.0.9000 at exact Git commit
+  `e49fcf153a114916ce2680f8b40eb475e694e10d`. DESCRIPTION and renv.lock pin
+  that same revision. The Milestone 7 public-API audit on 2026-08-31 found no
+  reason to repin, so the exact-commit policy remains in force.
 - glcdp is the sole boundary for GLC registry discovery, immutable validated
   revision selection, Git/Git-LFS transport, schema-normalized inventories,
   metadata reads/search, data import, compatible collection, subset download,
@@ -729,13 +729,11 @@ Milestone evidence:
 
 ### Milestone 6: GLC discovery, selective import, and library integration
 
-1. Upgrade the historical optional glcdp 0.90.0 dependency to glcdp 1.0.0 at
-   exact submitted-source commit
-   `bf97cb30555569886f08db0bdb25421c546ccf0a` and promote it to Imports at the
-   start of this milestone. Refresh the R 4.6.1 lock and deployment manifest;
-   adapter parity tests still gate feature integration. Make any later CRAN
-   transition a tested dependency update rather than an automatic source
-   switch.
+1. Upgrade the historical optional glcdp 0.90.0 dependency and promote it to
+   Imports. The implemented dependency is now glcdp 1.0.0.9000 at exact commit
+   `e49fcf153a114916ce2680f8b40eb475e694e10d`. Keep adapter parity tests as the
+   feature gate. Make any later CRAN transition a tested dependency update
+   rather than an automatic source switch.
 2. Build registry discovery with glc_packages and glc_search_packages. Show
    repository, registry id, current validation status, latest passing revision,
    attestation state, validation time, and whether a passing revision exists.
@@ -820,6 +818,125 @@ Milestone 13 acceptance item.
 
 ### Milestone 7 — Metadata essentials and settings separation
 
+Milestone 7 is divided into three independently reviewable vertical slices:
+
+1. A read-only explorer foundation and versioned source-versus-overlay value
+   contract, including exact GLC snapshot retention, append namespaces,
+   complete/partial/absent states, offline public-derived fixtures, and
+   in-memory performance gates.
+2. Relationship-aware metadata context and source-agnostic integration using
+   exported extract_metadata/add_metadata behavior, including crosslinks and
+   metadata-driven labels/units in the library, dashboard, and tables. This
+   slice also completes the factual-metadata versus analysis-settings moves.
+3. Typed overlay authoring, precedence and invalidation behavior, inline
+   validation, and LightLogWeb JSON/flattened CSV overlay export.
+
+The owner-approved Slice 1B extends only the read-only explorer foundation.
+Selecting a result exposes every sibling property belonging to the same exact
+source item, then permits focus-based traversal through retained ancestors,
+children, and nearby structural branches. Shared containment is displayed as
+containment and never as inferred semantic equivalence. This extension does
+not pull relationship-aware library/dashboard integration forward from Slice
+2.
+
+The owner-approved Slice 1B hierarchy reorder places the same-item and
+structural hierarchy selectors in one collapsed-by-default panel immediately
+above the selected-field detail. The panel is an upstream controller: branch
+choices change only its hierarchy focus, while a concrete field choice changes
+the selected-field content below. Search text, filters, result ordering, and
+the matching-result list above remain unchanged. The accordion shell is stable
+while its contents update, so hierarchy interactions do not close the panel.
+This reorder adds no visualization dependency or bespoke JavaScript.
+
+Milestone 6 remains the owner of data/metadata transport, task recovery, and
+session record recovery. Milestone 7 carries its metadata bundle through those
+existing seams and does not introduce a parallel recovery mechanism. Portable
+project save/reload remains within the later project-bundle milestone.
+
+For Slice 1, ordinary hierarchy navigation, fixed-text search, filtering,
+sorting, and selection use only the retained in-memory index. The design gate
+is p95 at or below 50 ms and the hard gate is p95 at or below 100 ms. Each
+retained bundle must remain at or below 32 MiB, the three approved fixture
+bundles together at or below 64 MiB, and a 50,000-entry scaled index at or
+below 64 MiB. One complete neighbourhood and hierarchy-focus operation on the
+scaled index must allocate at most 10 MiB temporarily. Work outside those
+bounds must use the existing truthful task progress, duplicate blocking,
+recovery, and retained-context behavior. Constructing and rendering the
+expanded textual hierarchy panel must also allocate at most 10 MiB
+temporarily and meet the same interaction timing gates.
+
+Slice 1 uses three bounded derived fixtures from different CC-BY-4.0 public
+packages at exact revisions: TUM MEDI-only at
+`1187d19b7f6145b73b8d4dfee13af711c1cb6180`, IZTECH LIGHT plus MEDI at
+`abc456bdb418e6250b9c973813a190dc062c6e76`, and all variables from the UCR
+S001 through S005 wrist files at
+`1d1309c969b9ca754a5c9696382c39d4b58ccdfd`. Each fixture represents five
+participants. TUM retains five files, IZTECH retains six files because S004
+has separate AL03 and AL04 device files, and UCR retains five files.
+IZTECH remains explicitly partial because two declared metadata resources
+returned HTTP 400 through exported glc_metadata at generation. Routine tests
+are offline and never reopen these public packages. The fixture manifest
+labels every snapshot as derived, bounded, and not current or complete
+published evidence. Under the owner's no-filtering instruction, exact bounded
+public source values are retained and no privacy transform is applied.
+
+The Slice 1 offline review route also constructs one deterministic appended
+state in memory from the frozen TUM and IZTECH fixtures. Its 352 rows retain
+stable `llw_source_dataset_id` lineage, its two metadata namespaces remain
+separate, and the TUM and IZTECH measurements use distinct result columns.
+One source-bound revision 1 overlay value makes layer separation reviewable.
+The fixture manifest records both source citations, revisions, licenses,
+package dataset IDs, mappings, and the no-reopen policy. No additional package
+data file or public measurement read is required for this review state.
+
+The Slice 1 explorer presents one selectable result per semantic item and
+field location rather than one row per repeated record value. Repeated values
+for the same item across datasets or participants stay together. Sibling
+items, such as photopic and melanopic variables in the same variable table,
+remain separate selectable results. Selecting a result shows every exact
+retained record value and path. Parent dataset or file-group identity remains
+separate from the semantic item and leaf value, preserving readable file to
+device and file to variable relationships. A separate hierarchy names the
+source dataset, section, nested subsection levels, semantic item, and field.
+The selected item also exposes all same-record properties as directly
+selectable fields. These field choices and a separate hierarchy focus now sit
+in one folded-by-default structure panel above the display-only selected-field
+card. Its collapsed summary names the selected field and current focus, and
+its expanded direction text states which choices navigate a branch and which
+replace the field below. The hierarchy focus shows its ancestor path,
+contained nodes, and structural branches that share an ancestor. Repeated
+items retain a selectable exact-record instance for path inspection. When a
+source is carried through append, file-group lookup recurses only through that
+source namespace's retained immutable metadata bundle. This preserves exact
+file-group identities in values, instance choices, hierarchy nodes, and focus
+paths. For example, IZTECH participant S004 retains separate `:19` and `:20`
+records linked to AL03 and AL04 instead of falling back to the shared parent
+dataset id. Separately,
+the source term `melanopic_edi` remains distinct from a concrete `MEDI`
+variable whose retained unit is `lx`; the explorer permits navigation between
+their containing branches without assigning the concrete unit to the term.
+Single-source records omit a source selector and source labels from matching results;
+appended records keep their source selector and provenance. Native section,
+layer, source, and sort controls are used so their menus are not clipped by the
+search card.
+Free-text search covers raw and plain-language field names plus retained
+values. It does not copy source labels, record labels, or whole paths into
+every field's search text, so direct variable matches remain visible within
+the bounded result list while source and hierarchy context remain available
+through their dedicated controls.
+The offline review loader verifies each frozen source snapshot fingerprint
+before building one current derived search index from its immutable sources
+and overlay. It does not change the serialized snapshot and never rebuilds the
+index during ordinary explorer interactions.
+
+The public-derived fixtures and the production GLC snapshot seam retain only
+study, participant, file, device, datasheet, and variable metadata connected
+to the represented import selection. Unrelated participants, devices, files,
+and questionnaire-variable definitions are not copied into the selected
+metadata context. The fixture values remain exact public source values under
+the owner's explicit no-filtering instruction. Tests remain offline and never
+treat the bounded snapshots as current evidence.
+
 1. Separate factual metadata from analysis/view settings and transformations.
 2. Maintain two factual-metadata layers for GLC sources: the immutable metadata
    loaded through glc_metadata and a clearly labelled LightLogWeb overlay.
@@ -869,6 +986,13 @@ metadata extraction preserve row count, order, grouping, and identifiers;
 ambiguous relationships and column conflicts are recoverable; display-only
 edits do not mutate data or invalidate unrelated results; and the earlier
 source-agnostic library and dashboard remain valid when metadata are absent.
+
+Slice 1 evidence:
+
+- dev/milestone-7-metadata-essentials.md
+- dev/run-milestone-7-metadata-acceptance.R
+- dev/milestone-7-metadata-benchmark.json
+- tests/testthat/fixtures/milestone-7/manifest.json
 
 ### Milestone 8 — Recipe-based preprocessing
 

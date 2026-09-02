@@ -280,7 +280,8 @@ new_dataset_record <- function(
   analysis_settings = list(),
   recipe = new_recipe(),
   provenance = list(),
-  id = new_stable_id("dataset")
+  id = new_stable_id("dataset"),
+  metadata_bundle = NULL
 ) {
   assert_scalar_string(id, "id")
   if (!grepl("^dataset_[a-z0-9]+$", id)) {
@@ -315,6 +316,21 @@ new_dataset_record <- function(
   assert_serializable_value(analysis_settings, "analysis_settings")
   assert_serializable_value(provenance, "provenance")
 
+  if (is.null(metadata_bundle)) {
+    metadata_bundle <- new_metadata_bundle_from_factual(
+      factual_metadata = factual_metadata,
+      namespace_id = id,
+      label = display_name,
+      source_type = source_manifest$source_type,
+      provenance = list(
+        source_manifest = source_manifest,
+        derived_from_legacy_factual_summary = TRUE
+      )
+    )
+  } else {
+    metadata_bundle <- validate_metadata_bundle(metadata_bundle)
+  }
+
   raw_payload <- serialize_dataset_data(raw_data, "raw_data")
   record <- structure(
     list(
@@ -325,6 +341,7 @@ new_dataset_record <- function(
       prepared_payload = raw_payload,
       source_manifest = source_manifest,
       factual_metadata = factual_metadata,
+      metadata_bundle = metadata_bundle,
       analysis_settings = analysis_settings,
       recipe = recipe,
       revision = 0L,
@@ -352,6 +369,7 @@ validate_dataset_record <- function(record) {
     "prepared_payload",
     "source_manifest",
     "factual_metadata",
+    "metadata_bundle",
     "analysis_settings",
     "recipe",
     "revision",
@@ -431,6 +449,7 @@ validate_dataset_record <- function(record) {
     )
   }
   assert_serializable_value(record$factual_metadata, "record$factual_metadata")
+  record$metadata_bundle <- validate_metadata_bundle(record$metadata_bundle)
   assert_serializable_value(
     record$analysis_settings,
     "record$analysis_settings"
@@ -488,6 +507,7 @@ dataset_snapshot <- function(record) {
     display_name = record$display_name,
     prepared_payload = record$prepared_payload,
     factual_metadata = record$factual_metadata,
+    metadata_bundle = record$metadata_bundle,
     analysis_settings = record$analysis_settings,
     recipe = record$recipe
   )
@@ -500,6 +520,7 @@ validate_dataset_values <- function(values, include_prepared = FALSE) {
   required <- c(
     "display_name",
     "factual_metadata",
+    "metadata_bundle",
     "analysis_settings",
     "recipe"
   )
@@ -516,6 +537,7 @@ validate_dataset_values <- function(values, include_prepared = FALSE) {
       type = "validation"
     )
   }
+  values$metadata_bundle <- validate_metadata_bundle(values$metadata_bundle)
   values$recipe <- validate_recipe(values$recipe)
   if (include_prepared) {
     if (!is.raw(values$prepared_payload)) {
@@ -715,6 +737,7 @@ apply_dataset_draft <- function(record) {
   record <- push_dataset_history(record, dataset_snapshot(record))
   record$display_name <- preview$values$display_name
   record$factual_metadata <- preview$values$factual_metadata
+  record$metadata_bundle <- preview$values$metadata_bundle
   record$analysis_settings <- preview$values$analysis_settings
   record$recipe <- preview$values$recipe
   record$prepared_payload <- preview$prepared_payload
@@ -743,6 +766,7 @@ undo_dataset_record <- function(record) {
   record$display_name <- snapshot$display_name
   record$prepared_payload <- snapshot$prepared_payload
   record$factual_metadata <- snapshot$factual_metadata
+  record$metadata_bundle <- snapshot$metadata_bundle
   record$analysis_settings <- snapshot$analysis_settings
   record$recipe <- snapshot$recipe
   record$revision <- record$revision + 1L

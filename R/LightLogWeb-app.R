@@ -324,6 +324,23 @@ LightLogWeb <- function(
       )
     ),
     nav_panel(
+      "Metadata",
+      value = "metadata",
+      tags$main(
+        class = "llw-main-shell llw-metadata-shell",
+        `aria-label` = "Explore retained dataset metadata",
+        llw_view_header(
+          "Understand the source context",
+          "Metadata",
+          paste(
+            "Browse immutable source facts separately from the versioned",
+            "LightLogWeb overlay. Search and filtering stay in memory."
+          )
+        ),
+        metadata_explorer_ui("metadata")
+      )
+    ),
+    nav_panel(
       "Append",
       value = "append",
       tags$main(
@@ -390,6 +407,10 @@ LightLogWeb <- function(
         384 * 1024^2
       ),
       snapshot_cache_max_entries = 3L
+    )
+    metadata <- metadata_explorer_server(
+      "metadata",
+      dataset = store$selected_dataset
     )
     appended <- append_merge_server(
       "append",
@@ -469,12 +490,15 @@ LightLogWeb <- function(
     example_loader <- new_dataset_example_loader(
       runtime = runtime,
       schedule = function(callback) {
-        session$onFlushed(function() {
-          shiny::withReactiveDomain(
-            session,
-            shiny::isolate(callback())
-          )
-        }, once = TRUE)
+        session$onFlushed(
+          function() {
+            shiny::withReactiveDomain(
+              session,
+              shiny::isolate(callback())
+            )
+          },
+          once = TRUE
+        )
       },
       on_busy = function(key) {
         update_example_load_button(TRUE)
@@ -607,57 +631,63 @@ LightLogWeb <- function(
         )
       )
       if (!isTRUE(current)) return()
-      session$onFlushed(function() {
-        record <- tryCatch(
-          {
-            validate_glc_library_add_request(request)
-            new_glc_dataset_record(request$full_import)
-          },
-          error = identity
-        )
-        if (inherits(record, "error")) {
-          mapped <- normalize_task_error(record, "preparation")
-          glc_import$mark_library_add_failed(
+      session$onFlushed(
+        function() {
+          record <- tryCatch(
+            {
+              validate_glc_library_add_request(request)
+              new_glc_dataset_record(request$full_import)
+            },
+            error = identity
+          )
+          if (inherits(record, "error")) {
+            mapped <- normalize_task_error(record, "preparation")
+            glc_import$mark_library_add_failed(
+              request_id,
+              llw_public_message(mapped)
+            )
+            showNotification(
+              llw_public_message(mapped),
+              type = "error",
+              duration = NULL
+            )
+            return()
+          }
+          current <- glc_import$mark_library_add_progress(
             request_id,
-            llw_public_message(mapped)
+            "adding",
+            "Adding to session library...",
+            "The validated dataset record is being added to this session."
           )
-          showNotification(
-            llw_public_message(mapped),
-            type = "error",
-            duration = NULL
-          )
-          return()
-        }
-        current <- glc_import$mark_library_add_progress(
-          request_id,
-          "adding",
-          "Adding to session library...",
-          "The validated dataset record is being added to this session."
-        )
-        if (!isTRUE(current)) return()
-        session$onFlushed(function() {
-          dispatch_safely(
-            new_session_event("add", value = record),
-            success = function(event) {
-              paste0(
-                "GLC dataset `",
-                event$value$display_name,
-                "` added with its normalized metadata and exact provenance."
+          if (!isTRUE(current)) return()
+          session$onFlushed(
+            function() {
+              dispatch_safely(
+                new_session_event("add", value = record),
+                success = function(event) {
+                  paste0(
+                    "GLC dataset `",
+                    event$value$display_name,
+                    "` added with its normalized metadata and exact provenance."
+                  )
+                },
+                on_success = function() {
+                  glc_import$mark_library_add_progress(
+                    request_id,
+                    "opening",
+                    "Opening dashboard...",
+                    "The new session dataset is ready and its dashboard is opening."
+                  )
+                  glc_import$mark_library_added(request_id, record$id)
+                  nav_select("main_nav", selected = "dashboard")
+                }
               )
             },
-            on_success = function() {
-              glc_import$mark_library_add_progress(
-                request_id,
-                "opening",
-                "Opening dashboard...",
-                "The new session dataset is ready and its dashboard is opening."
-              )
-              glc_import$mark_library_added(request_id, record$id)
-              nav_select("main_nav", selected = "dashboard")
-            }
+            once = TRUE
           )
-        }, once = TRUE)
-      }, once = TRUE)
+        },
+        once = TRUE
+      )
     }) |>
       bindEvent(glc_import$library_add_request(), ignoreInit = TRUE)
 

@@ -11,6 +11,8 @@ glcdp_export_contract <- function() {
     "glc_resources",
     "glc_metadata",
     "glc_search_metadata",
+    "extract_metadata",
+    "add_metadata",
     "glc_collection_plan",
     "glc_collection_refine",
     "glc_read",
@@ -1013,6 +1015,7 @@ new_glc_inspection <- function(
   variables,
   resources,
   metadata,
+  metadata_snapshot = NULL,
   terms = glc_term_catalogue(variables),
   warnings = character()
 ) {
@@ -1034,6 +1037,34 @@ new_glc_inspection <- function(
   ) {
     abort_llw(
       "GLC core metadata must be a named list.",
+      type = "validation"
+    )
+  }
+  if (is.null(metadata_snapshot)) {
+    metadata_snapshot <- new_glc_source_metadata_snapshot(
+      source = source,
+      resources = resources,
+      metadata = metadata,
+      datasets = datasets,
+      variables = variables
+    )
+  } else {
+    metadata_snapshot <- validate_glc_source_metadata_snapshot(
+      metadata_snapshot
+    )
+  }
+  if (
+    !identical(
+      metadata_snapshot$source$repository,
+      source$repository
+    ) ||
+      !identical(
+        metadata_snapshot$source$resolved_revision,
+        source$resolved_revision
+      )
+  ) {
+    abort_llw(
+      "The retained metadata snapshot identifies another GLC source.",
       type = "validation"
     )
   }
@@ -1074,6 +1105,7 @@ new_glc_inspection <- function(
       variables = variables,
       resources = resources,
       metadata = metadata,
+      metadata_snapshot = metadata_snapshot,
       terms = terms,
       warnings = unique(warnings)
     ),
@@ -1098,6 +1130,7 @@ validate_glc_inspection <- function(inspection) {
     "variables",
     "resources",
     "metadata",
+    "metadata_snapshot",
     "terms",
     "warnings"
   )
@@ -1120,6 +1153,7 @@ validate_glc_inspection <- function(inspection) {
     variables = inspection$variables,
     resources = inspection$resources,
     metadata = inspection$metadata,
+    metadata_snapshot = inspection$metadata_snapshot,
     terms = inspection$terms,
     warnings = inspection$warnings
   )
@@ -1455,6 +1489,28 @@ glcdp_inspect_source <- function(
       progress$complete("The public core metadata were loaded.")
 
       progress$begin(
+        "metadata_index",
+        "Indexing retained metadata",
+        paste(
+          "Building the versioned immutable-source contract and its",
+          "in-memory search index. The package remains metadata-only."
+        )
+      )
+      source_metadata_snapshot <- new_glc_source_metadata_snapshot(
+        source = new_glc_inspection_source(
+          request,
+          as.character(summary$schema_version[[1L]])
+        ),
+        resources = resources,
+        metadata = metadata,
+        datasets = datasets,
+        variables = variables
+      )
+      progress$complete(
+        "The retained metadata and in-memory search index are ready."
+      )
+
+      progress$begin(
         "terms",
         "Building semantic-term catalogue",
         paste(
@@ -1504,6 +1560,7 @@ glcdp_inspect_source <- function(
         variables = variables,
         resources = resources,
         metadata = metadata,
+        metadata_snapshot = source_metadata_snapshot,
         terms = terms,
         warnings = c(schema_warnings, byte_warnings, label_warnings)
       )
@@ -2801,7 +2858,8 @@ new_glc_projection_review <- function(
   parent_plan,
   parent_compatibility_id,
   parent_refinement,
-  metadata_filters = list()
+  metadata_filters = list(),
+  source_metadata_snapshot = NULL
 ) {
   source <- validate_glc_source_spec(source)
   parent <- glc_scope_parent_identity(
@@ -2990,11 +3048,39 @@ new_glc_projection_review <- function(
   bytes_complete <- nrow(files) > 0L &&
     all(!is.na(files$bytes_known)) &&
     all(files$bytes_known)
+  selected_metadata <- new_glc_selected_metadata(parent_plan, groups)
+  if (is.null(source_metadata_snapshot)) {
+    source_metadata_snapshot <- new_selected_glc_source_metadata_snapshot(
+      source = source,
+      metadata = selected_metadata,
+      selected_groups = groups,
+      variables = available
+    )
+  } else {
+    source_metadata_snapshot <- validate_glc_source_metadata_snapshot(
+      source_metadata_snapshot
+    )
+  }
+  if (
+    !identical(
+      source_metadata_snapshot$source$repository,
+      source$repository
+    ) ||
+      !identical(
+        source_metadata_snapshot$source$resolved_revision,
+        source$resolved_revision
+      )
+  ) {
+    abort_llw(
+      "The output projection metadata snapshot identifies another source.",
+      type = "validation"
+    )
+  }
 
   review <- structure(
     list(
       review_schema = "llw-glc-variable-projection-review",
-      review_version = "1.1.0",
+      review_version = "1.2.0",
       source = list(
         registry_url = source$registry_url,
         registry_generated_at = source$registry_generated_at,
@@ -3028,7 +3114,8 @@ new_glc_projection_review <- function(
       selected_compatibility_id = parent_compatibility_id,
       selected_unit_ids = selected_unit_ids,
       selected_groups = groups,
-      metadata = new_glc_selected_metadata(parent_plan, groups),
+      metadata = selected_metadata,
+      source_metadata_snapshot = source_metadata_snapshot,
       diagnostics = diagnostics,
       diagnostic_groups = diagnostic_groups,
       read_columns = read_columns,
@@ -3084,6 +3171,7 @@ validate_glc_projection_review <- function(review) {
     "selected_unit_ids",
     "selected_groups",
     "metadata",
+    "source_metadata_snapshot",
     "diagnostics",
     "diagnostic_groups",
     "read_columns",
@@ -3105,7 +3193,7 @@ validate_glc_projection_review <- function(review) {
   }
   if (
     !identical(review$review_schema, "llw-glc-variable-projection-review") ||
-      !identical(review$review_version, "1.1.0")
+      !identical(review$review_version, "1.2.0")
   ) {
     abort_llw(
       "The output projection review schema is not supported.",
@@ -3198,11 +3286,22 @@ validate_glc_projection_review <- function(review) {
     )
   }
   validate_glc_selected_metadata(review$metadata)
+  source_metadata_snapshot <- validate_glc_source_metadata_snapshot(
+    review$source_metadata_snapshot
+  )
   if (
     !identical(
-      review$metadata$upstream_fingerprint,
-      review$parent$metadata_fingerprint
+      source_metadata_snapshot$source$repository,
+      review$source$repository
     ) ||
+      !identical(
+        source_metadata_snapshot$source$resolved_revision,
+        review$source$resolved_revision
+      ) ||
+      !identical(
+        review$metadata$upstream_fingerprint,
+        review$parent$metadata_fingerprint
+      ) ||
       !identical(
         glc_metadata_ids(review$metadata$selected_ids$file_group_ids),
         group_ids
@@ -4914,7 +5013,7 @@ new_glc_full_import_result <- function(
   result <- structure(
     list(
       result_schema = "llw-glc-full-import-handoff",
-      result_version = "1.1.0",
+      result_version = "1.2.0",
       transfer_review_fingerprint = transfer_review$fingerprint,
       projection_fingerprint = transfer_review$projection_fingerprint,
       source = transfer_review$source,
@@ -4923,6 +5022,7 @@ new_glc_full_import_result <- function(
       read_columns = transfer_review$projection$read_columns,
       output_columns = transfer_review$projection$output_columns,
       metadata = transfer_review$projection$metadata,
+      source_metadata_snapshot = transfer_review$projection$source_metadata_snapshot,
       problems_policy = transfer_review$problems_policy,
       reviewed = list(
         file_ids = as.character(reviewed_file_membership$declared_path),
@@ -5014,6 +5114,7 @@ validate_glc_full_import_result <- function(
     "read_columns",
     "output_columns",
     "metadata",
+    "source_metadata_snapshot",
     "problems_policy",
     "reviewed",
     "actual",
@@ -5031,7 +5132,7 @@ validate_glc_full_import_result <- function(
   }
   if (
     !identical(result$result_schema, "llw-glc-full-import-handoff") ||
-      !identical(result$result_version, "1.1.0") ||
+      !identical(result$result_version, "1.2.0") ||
       !result$execution_mode %in% c("runtime", "fixture") ||
       !is.data.frame(result$data) ||
       !is.data.frame(result$reviewed$file_membership) ||
@@ -5055,6 +5156,7 @@ validate_glc_full_import_result <- function(
     )
   }
   validate_glc_selected_metadata(result$metadata)
+  validate_glc_source_metadata_snapshot(result$source_metadata_snapshot)
   if (!is.null(transfer_review)) {
     validate_glc_transfer_review(transfer_review)
     expected_membership <- transfer_review$files[,
@@ -5085,6 +5187,10 @@ validate_glc_full_import_result <- function(
           transfer_review$projection$output_columns
         ) ||
         !identical(result$metadata, transfer_review$projection$metadata) ||
+        !identical(
+          result$source_metadata_snapshot,
+          transfer_review$projection$source_metadata_snapshot
+        ) ||
         !identical(result$problems_policy, transfer_review$problems_policy) ||
         !identical(result$reviewed$file_membership, expected_membership)
     ) {

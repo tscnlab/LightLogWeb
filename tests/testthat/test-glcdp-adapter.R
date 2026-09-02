@@ -36,6 +36,8 @@ fake_glcdp_api <- function(call_log = new.env(parent = emptyenv())) {
     glc_resources = function(x) data.frame(resource = "datasets"),
     glc_metadata = function(x, resources = NULL) list(study = "Fixture"),
     glc_search_metadata = function(...) data.frame(),
+    extract_metadata = function(...) data.frame(),
+    add_metadata = function(dataset, ...) dataset,
     glc_collection_plan = function(...) stop("not used"),
     glc_collection_refine = function(...) stop("not used"),
     glc_read = function(...) {
@@ -1032,7 +1034,15 @@ test_that("exact-package inspection reports phases and never reads measurements"
   expect_identical(inspection$terms$term, c("datetime", "melanopic_edi"))
   expect_identical(
     progress$phase,
-    c("open", "description", "inventory", "metadata", "terms", "validation")
+    c(
+      "open",
+      "description",
+      "inventory",
+      "metadata",
+      "metadata_index",
+      "terms",
+      "validation"
+    )
   )
   expect_true(all(progress$status == "complete"))
   expect_null(fake$calls$read)
@@ -1272,7 +1282,7 @@ test_that("variable projection preserves the exact Slice 2A structure", {
     metadata_filters = list(characteristic_numeric_tokens = token_map)
   )
   expect_s3_class(review, "llw_glc_projection_review")
-  expect_identical(review$review_version, "1.1.0")
+  expect_identical(review$review_version, "1.2.0")
   expect_identical(review$refined_file_group_ids, refined_ids)
   expect_identical(review$parent$plan_fingerprint, strrep("f", 64L))
   expect_identical(review$selected_compatibility_id, parent_id)

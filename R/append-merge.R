@@ -1509,6 +1509,7 @@ preview_append_merge <- function(records, spec, max_preview_rows = 100L) {
       raw_checksum = profile$raw_checksum,
       source_manifest = profile$source_manifest,
       factual_metadata = record$factual_metadata %||% list(),
+      metadata_bundle = metadata_bundle_for_record(record),
       provenance = record$provenance %||% list(),
       mapping = spec$mappings[[index]]
     )
@@ -1723,6 +1724,7 @@ new_appended_dataset_record <- function(preview) {
       character(1)
     )
   )
+  metadata_bundle <- new_appended_metadata_bundle(preview$source_provenance)
   new_dataset_record(
     raw_data = merged,
     display_name = spec$display_name,
@@ -1751,6 +1753,7 @@ new_appended_dataset_record <- function(preview) {
         warnings = preview$warnings,
         spec = spec
       )
-    )
+    ),
+    metadata_bundle = metadata_bundle
   )
 }

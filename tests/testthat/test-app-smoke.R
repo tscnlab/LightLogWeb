@@ -14,6 +14,8 @@ test_that("the packaged application can be constructed", {
   expect_identical(app_environment$import_presentation, "wizard")
   expect_match(production_html, "llw-import-wizard", fixed = TRUE)
   expect_match(production_html, "GLC Import", fixed = TRUE)
+  expect_match(production_html, "Metadata", fixed = TRUE)
+  expect_match(production_html, "Explore metadata", fixed = TRUE)
   expect_match(production_html, "glc_preview-wizard_stepper", fixed = TRUE)
   expect_match(production_html, "Append datasets safely", fixed = TRUE)
   expect_match(production_html, "Ready-to-use example", fixed = TRUE)
@@ -26,6 +28,7 @@ test_that("every changed module retains a constructible development app", {
     dataset_manager_app(),
     dataset_dashboard_app(),
     append_merge_app(),
+    metadata_explorer_app(),
     import_app(),
     import_wizard_app()
   )
@@ -67,11 +70,14 @@ test_that("dataset example task payloads are exact and serializable", {
   )
   expect_identical(payload$schema_version, "1.0.0")
   expect_identical(payload$key, "sample")
-  expect_identical(payload$project_root, normalizePath(
-    project_root,
-    winslash = "/",
-    mustWork = TRUE
-  ))
+  expect_identical(
+    payload$project_root,
+    normalizePath(
+      project_root,
+      winslash = "/",
+      mustWork = TRUE
+    )
+  )
   expect_identical(validate_dataset_example_task_payload(payload), payload)
   expect_error(
     validate_dataset_example_task_payload(payload[-1L]),

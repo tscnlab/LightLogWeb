@@ -2125,7 +2125,8 @@ glc_library_add_action_ui <- function(
         class = "llw-glc-library-progress",
         role = "status",
         `aria-live` = "polite",
-        status$detail %||% "The dataset record and provenance are being prepared."
+        status$detail %||%
+          "The dataset record and provenance are being prepared."
       )
     },
     if (show_error && !is.null(error)) {
@@ -5185,7 +5186,8 @@ glcPreviewServer <- function(
         parent_plan = parent_plan,
         parent_compatibility_id = parent_compatibility_id,
         parent_refinement = parent_refinement,
-        metadata_filters = current_metadata_filters()
+        metadata_filters = current_metadata_filters(),
+        source_metadata_snapshot = inspection$metadata_snapshot
       )
     }
 
