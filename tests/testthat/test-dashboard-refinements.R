@@ -50,7 +50,10 @@ refinement_html_between <- function(html, start_marker, end_marker = NULL) {
   substring(remainder, 1L, finish - 1L)
 }
 
-refinement_record <- function(data, display_name = "Dashboard refinement fixture") {
+refinement_record <- function(
+  data,
+  display_name = "Dashboard refinement fixture"
+) {
   quality <- summarize_raw_import_quality(data, "UTC")
   new_dataset_record(
     raw_data = data,
@@ -378,6 +381,14 @@ test_that("dashboard refinement controls have stable labels and placement hooks"
     ".llw-dashboard-value-box__icon i::before",
     fixed = TRUE
   )
+  expect_match(
+    sass,
+    ".llw-dashboard-value-box--focus .selectize-input > .item",
+    fixed = TRUE
+  )
+  expect_match(sass, "text-overflow: ellipsis;", fixed = TRUE)
+  expect_match(sass, ".llw-dataset-sidebar", fixed = TRUE)
+  expect_match(sass, "@media (max-width: 899.98px)", fixed = TRUE)
 })
 
 test_that("module exposes recommendation, missingness, table, and range controls", {
@@ -765,13 +776,13 @@ test_that("dashboard support content is flat inside its owning cards", {
     quality,
     "llw-dashboard-flat-table-region"
   )
-  expect_length(flat_table_tags, 2L)
+  expect_length(flat_table_tags, 3L)
   expect_false(any(grepl("llw-data-region", flat_table_tags, fixed = TRUE)))
   auto_height_cards <- refinement_open_tags_with_class(
     quality,
     "llw-dashboard-auto-height-card"
   )
-  expect_length(auto_height_cards, 2L)
+  expect_length(auto_height_cards, 3L)
   expect_false(any(grepl("html-fill-item", auto_height_cards, fixed = TRUE)))
 })
 

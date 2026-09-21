@@ -15,6 +15,7 @@ test_that("dataset manager returns explicit stable-ID events", {
         example_key = "sample",
         load_example = 0,
         append_datasets = 0,
+        explore_metadata = 0,
         duplicate_dataset = 0,
         duplicate_dataset_real = 0,
         reset_dataset_real = 0,
@@ -22,6 +23,14 @@ test_that("dataset manager returns explicit stable-ID events", {
         rename_dataset_real = 0,
         delete_dataset_real = 0
       )
+      session$flushReact()
+      summary_html <- paste(
+        as.character(output$selected_summary),
+        collapse = ""
+      )
+      expect_match(summary_html, "Primary: MEDI", fixed = TRUE)
+      expect_match(summary_html, "unit not specified", fixed = TRUE)
+      expect_match(summary_html, "Metadata: Not specified", fixed = TRUE)
       session$setInputs(import_newdata = 1)
       expect_identical(returned$event()$type, "open_import")
 
@@ -31,6 +40,10 @@ test_that("dataset manager returns explicit stable-ID events", {
 
       session$setInputs(append_datasets = 1)
       expect_identical(returned$event()$type, "open_append")
+
+      session$setInputs(explore_metadata = 1)
+      expect_identical(returned$event()$type, "open_metadata")
+      expect_identical(returned$event()$dataset_id, first$id)
 
       session$setInputs(dataset_select = second$id)
       expect_identical(returned$event()$type, "select")

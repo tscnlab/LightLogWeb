@@ -345,6 +345,244 @@ glcdp_api <- function(api = NULL) {
   api[exports]
 }
 
+glcdp_relationship_field_contract <- function() {
+  list(
+    file_group = c(
+      "dataset_internal_id",
+      "dataset_timezone",
+      "participant_internal_id",
+      "participant_age",
+      "participant_sex",
+      "participant_gender",
+      "study_internal_id",
+      "study_title",
+      "study_short_description",
+      "study_setting",
+      "study_geographical_location",
+      "device_internal_id",
+      "device_manufacturer",
+      "device_model",
+      "device_serial_number",
+      "device_calibration_date",
+      "device_datasheet_id",
+      "datasheet_id",
+      "datasheet_manufacturer",
+      "datasheet_model",
+      "datasheet_calibration_method",
+      "datasheet_calibration_accuracy",
+      "datasheet_calibration_range",
+      "datasheet_calibration_notes"
+    ),
+    dataset = c(
+      "dataset_internal_id",
+      "dataset_timezone",
+      "participant_internal_id",
+      "participant_age",
+      "participant_sex",
+      "participant_gender",
+      "study_internal_id",
+      "study_title",
+      "study_short_description",
+      "study_setting",
+      "study_geographical_location"
+    )
+  )
+}
+
+glcdp_metadata_field_names <- function(metadata) {
+  if (is.data.frame(metadata)) return(names(metadata))
+  if (!is.list(metadata)) return(character())
+  unique(unlist(
+    lapply(metadata, glcdp_metadata_field_names),
+    use.names = FALSE
+  ))
+}
+
+glcdp_extract_relationship_table <- function(
+  keys,
+  handle,
+  fields,
+  by,
+  api,
+  resource = NULL
+) {
+  if (!is.data.frame(keys) || !by %in% names(keys)) {
+    abort_llw("Relationship extraction keys are invalid.", type = "validation")
+  }
+  keys <- keys[!duplicated(as.character(keys[[by]])), , drop = FALSE]
+  if (length(fields) == 0L) {
+    return(list(table = keys[, by, drop = FALSE], warnings = character()))
+  }
+  warnings <- character()
+  value <- withCallingHandlers(
+    api$extract_metadata(
+      dataset = keys,
+      metadata = handle,
+      fields = fields,
+      by = by,
+      resource = resource
+    ),
+    warning = function(cnd) {
+      warnings <<- c(warnings, conditionMessage(cnd))
+      invokeRestart("muffleWarning")
+    }
+  )
+  if (!is.data.frame(value) || !by %in% names(value)) {
+    abort_llw(
+      "Exported glcdp relationship extraction returned an invalid table.",
+      type = "validation"
+    )
+  }
+  expected <- as.character(keys[[by]])
+  observed <- as.character(value[[by]])
+  if (!identical(observed, expected)) {
+    abort_llw(
+      paste(
+        "Exported glcdp relationship extraction changed key membership or",
+        "first-occurrence order."
+      ),
+      type = "validation"
+    )
+  }
+  list(table = value, warnings = unique(warnings))
+}
+
+glcdp_combine_relationship_tables <- function(primary, secondary, by) {
+  if (
+    !is.data.frame(primary) ||
+      !is.data.frame(secondary) ||
+      !by %in% names(primary) ||
+      !by %in% names(secondary) ||
+      !identical(
+        as.character(primary[[by]]),
+        as.character(secondary[[by]])
+      )
+  ) {
+    abort_llw(
+      "Exported metadata relationship fragments have different identities.",
+      type = "validation"
+    )
+  }
+  additions <- setdiff(names(secondary), by)
+  conflicts <- intersect(additions, names(primary))
+  if (length(conflicts) > 0L) {
+    abort_llw(
+      paste0(
+        "Exported metadata relationship fragments conflict on: ",
+        paste(conflicts, collapse = ", "),
+        "."
+      ),
+      type = "validation"
+    )
+  }
+  cbind(primary, secondary[additions], stringsAsFactors = FALSE)
+}
+
+glcdp_extract_relationship_context <- function(
+  handle,
+  files,
+  metadata,
+  api = NULL
+) {
+  api <- glcdp_api(api)
+  if (
+    !is.data.frame(files) ||
+      !all(c("dataset_id", "file_group_id") %in% names(files))
+  ) {
+    abort_llw(
+      "GLC relationship extraction requires dataset and file-group inventory.",
+      type = "validation"
+    )
+  }
+  file_keys <- unique(data.frame(
+    Id = as.character(files$dataset_id),
+    file_group_id = as.character(files$file_group_id),
+    stringsAsFactors = FALSE
+  ))
+  dataset_keys <- unique(file_keys["Id"])
+  available <- glcdp_metadata_field_names(metadata)
+  contract <- glcdp_relationship_field_contract()
+  file_fields <- intersect(contract$file_group, available)
+  dataset_fields <- intersect(contract$dataset, available)
+  participant_identity <- "participant_internal_id"
+  file_primary_fields <- setdiff(file_fields, participant_identity)
+  dataset_primary_fields <- setdiff(dataset_fields, participant_identity)
+  file_groups <- glcdp_extract_relationship_table(
+    file_keys,
+    handle,
+    file_primary_fields,
+    "file_group_id",
+    api
+  )
+  datasets <- glcdp_extract_relationship_table(
+    dataset_keys,
+    handle,
+    dataset_primary_fields,
+    "Id",
+    api
+  )
+  participant_warnings <- character()
+  if (participant_identity %in% file_fields) {
+    participant_file_groups <- glcdp_extract_relationship_table(
+      file_keys,
+      handle,
+      participant_identity,
+      "file_group_id",
+      api,
+      resource = "participants"
+    )
+    file_groups$table <- glcdp_combine_relationship_tables(
+      file_groups$table,
+      participant_file_groups$table,
+      "file_group_id"
+    )
+    participant_warnings <- c(
+      participant_warnings,
+      participant_file_groups$warnings
+    )
+  }
+  if (participant_identity %in% dataset_fields) {
+    participant_datasets <- glcdp_extract_relationship_table(
+      dataset_keys,
+      handle,
+      participant_identity,
+      "Id",
+      api,
+      resource = "participants"
+    )
+    datasets$table <- glcdp_combine_relationship_tables(
+      datasets$table,
+      participant_datasets$table,
+      "Id"
+    )
+    participant_warnings <- c(
+      participant_warnings,
+      participant_datasets$warnings
+    )
+  }
+  new_metadata_relationship_context(
+    file_groups = file_groups$table,
+    datasets = datasets$table,
+    requested_fields = unique(c(file_fields, dataset_fields)),
+    warnings = unique(c(
+      file_groups$warnings,
+      datasets$warnings,
+      participant_warnings
+    )),
+    provenance = list(
+      extractor = "glcdp::extract_metadata",
+      default_anchor = "file_group_id",
+      dataset_anchor = "Id",
+      ambiguity_resolution = list(
+        field = participant_identity,
+        resource = "participants"
+      ),
+      package_reopened_after_inspection = FALSE,
+      measurement_contents_read = FALSE
+    )
+  )
+}
+
 glcdp_reopen_source <- function(source, api = NULL) {
   source <- validate_glc_source_spec(source)
   api <- glcdp_api(api)
@@ -1489,6 +1727,24 @@ glcdp_inspect_source <- function(
       progress$complete("The public core metadata were loaded.")
 
       progress$begin(
+        "metadata_relationships",
+        "Resolving metadata relationships",
+        paste(
+          "Using exported glcdp metadata traversal once while the exact",
+          "package is already open. Measurement files remain unopened."
+        )
+      )
+      relationships <- glcdp_extract_relationship_context(
+        handle = handle,
+        files = files,
+        metadata = metadata,
+        api = api
+      )
+      progress$complete(
+        "File-group and explicit dataset-level relationships were retained."
+      )
+
+      progress$begin(
         "metadata_index",
         "Indexing retained metadata",
         paste(
@@ -1504,7 +1760,8 @@ glcdp_inspect_source <- function(
         resources = resources,
         metadata = metadata,
         datasets = datasets,
-        variables = variables
+        variables = variables,
+        relationships = relationships
       )
       progress$complete(
         "The retained metadata and in-memory search index are ready."
@@ -3057,8 +3314,11 @@ new_glc_projection_review <- function(
       variables = available
     )
   } else {
-    source_metadata_snapshot <- validate_glc_source_metadata_snapshot(
-      source_metadata_snapshot
+    source_metadata_snapshot <- new_scoped_glc_source_metadata_snapshot(
+      snapshot = source_metadata_snapshot,
+      selected_metadata = selected_metadata,
+      selected_groups = groups,
+      variables = available
     )
   }
   if (

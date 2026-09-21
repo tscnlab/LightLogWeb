@@ -260,6 +260,17 @@ dataset_record_inventory <- function(record) {
       calibration = NA_character_
     )
   }
+  primary_display_metadata <- if (
+    is.character(primary) && length(primary) == 1L && !is.na(primary)
+  ) {
+    metadata_resolve_variable(record, primary)
+  } else {
+    list(
+      display_label = "not specified",
+      unit = "unit not specified",
+      provenance = "Not specified"
+    )
+  }
   source_bytes <- record$source_manifest$details$size_bytes %||% NA_real_
   source_bytes <- suppressWarnings(as.numeric(source_bytes))
   source_bytes <- if (
@@ -300,6 +311,9 @@ dataset_record_inventory <- function(record) {
       primary_label = primary_metadata$label,
       primary_unit = primary_metadata$unit,
       calibration = primary_metadata$calibration,
+      primary_display_label = primary_display_metadata$display_label,
+      primary_display_unit = primary_display_metadata$unit,
+      primary_metadata_provenance = primary_display_metadata$provenance,
       recipe_revision = record$revision,
       recipe_steps = length(record$recipe$steps),
       warning_count = length(warnings),

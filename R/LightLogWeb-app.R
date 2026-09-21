@@ -13,6 +13,18 @@ shiny_upload_limit_on_start <- function(runtime_profile) {
   }
 }
 
+deliver_metadata_focus_request <- function(focus_value, request) {
+  if (!is.function(focus_value)) {
+    abort_llw(
+      "`focus_value` must be a reactive value setter.",
+      type = "validation"
+    )
+  }
+  focus_value(NULL)
+  focus_value(request)
+  invisible(request)
+}
+
 new_dataset_example_task_payload <- function(
   key,
   project_root = lightlogweb_development_root()
@@ -329,14 +341,6 @@ LightLogWeb <- function(
       tags$main(
         class = "llw-main-shell llw-metadata-shell",
         `aria-label` = "Explore retained dataset metadata",
-        llw_view_header(
-          "Understand the source context",
-          "Metadata",
-          paste(
-            "Browse immutable source facts separately from the versioned",
-            "LightLogWeb overlay. Search and filtering stay in memory."
-          )
-        ),
         metadata_explorer_ui("metadata")
       )
     ),
@@ -372,6 +376,7 @@ LightLogWeb <- function(
     }
 
     color_mode <- reactive(input$color_mode %||% "light")
+    metadata_focus_request_value <- reactiveVal(NULL)
     imported <- importServer(
       "import",
       runtime = runtime,
@@ -410,7 +415,8 @@ LightLogWeb <- function(
     )
     metadata <- metadata_explorer_server(
       "metadata",
-      dataset = store$selected_dataset
+      dataset = store$selected_dataset,
+      focus_request = reactive(metadata_focus_request_value())
     )
     appended <- append_merge_server(
       "append",
@@ -419,9 +425,40 @@ LightLogWeb <- function(
     )
     pending_name_retry <- reactiveVal(NULL)
 
+    observeEvent(
+      store$selected_dataset_id(),
+      metadata_focus_request_value(NULL),
+      ignoreInit = FALSE,
+      ignoreNULL = FALSE
+    )
+
     restore_manager_selection <- function() {
       manager$resync_selection()
       invisible(NULL)
+    }
+
+    open_metadata_context <- function(record, request = NULL) {
+      if (is.null(record)) return(invisible(FALSE))
+      if (is.null(request)) {
+        request <- dashboard_metadata_identity_request(
+          record,
+          "dataset",
+          label = paste("Metadata for", record$display_name)
+        )
+      }
+      if (is.null(request)) {
+        bundle <- metadata_bundle_for_record(record)
+        if (nrow(bundle$index$groups) > 0L) {
+          request <- new_metadata_focus_request(
+            dataset_id = record$id,
+            group_id = bundle$index$groups$group_id[[1L]],
+            label = paste("Metadata for", record$display_name)
+          )
+        }
+      }
+      deliver_metadata_focus_request(metadata_focus_request_value, request)
+      nav_select("main_nav", selected = "metadata")
+      invisible(TRUE)
     }
 
     dispatch_safely <- function(event, success = NULL, on_success = NULL) {
@@ -727,6 +764,18 @@ LightLogWeb <- function(
             )
           }
         },
+        open_metadata = {
+          target <- store$datasets()[[event$dataset_id]]
+          if (is.null(target)) {
+            showNotification(
+              "The selected dataset is no longer available.",
+              type = "error",
+              duration = 8
+            )
+          } else {
+            open_metadata_context(target)
+          }
+        },
         select = {
           target <- store$datasets()[[event$dataset_id]]
           if (is.null(target)) {
@@ -823,6 +872,11 @@ LightLogWeb <- function(
       if (identical(event$type, "open_import")) {
         nav_select("main_nav", selected = "Import")
         imported$open_import()
+      } else if (identical(event$type, "open_metadata")) {
+        open_metadata_context(
+          store$selected_dataset(),
+          event$focus_request
+        )
       }
     }) |>
       bindEvent(dashboard$event(), ignoreInit = TRUE)

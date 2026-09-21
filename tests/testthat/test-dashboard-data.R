@@ -8,7 +8,7 @@ test_that("dashboard snapshot keeps source and pre-processed states explicit", {
   expect_true(snapshot$recipe$unchanged)
   expect_identical(snapshot$recipe$step_count, 0L)
   expect_identical(snapshot$grouping$state, "empty")
-  expect_identical(snapshot$primary_unit, "Unit not specified")
+  expect_identical(snapshot$primary_unit, "unit not specified")
   expect_true("MEDI" %in% snapshot$focus_variables)
   expect_identical(snapshot$display_timezone, "UTC")
   expect_identical(nrow(snapshot$coverage), 4L)
@@ -22,6 +22,666 @@ test_that("dashboard snapshot keeps source and pre-processed states explicit", {
   expect_identical(
     state$Value[state$Field == "Grouping state"],
     "No active grouping"
+  )
+})
+
+test_that("dashboard resolves metadata and enriches only a disposable key view", {
+  data <- data.frame(
+    Id = rep(c("D1", "D2"), each = 2L),
+    file_group_id = rep(c("D1:1", "D2:1"), each = 2L),
+    Datetime = as.POSIXct(
+      rep(c("2026-01-01 00:00:00", "2026-01-01 00:01:00"), 2L),
+      tz = "UTC"
+    ),
+    MEDI = c(1, 2, 3, 4),
+    stringsAsFactors = FALSE
+  )
+  relationships <- new_metadata_relationship_context(
+    file_groups = data.frame(
+      file_group_id = c("D1:1", "D2:1"),
+      dataset_internal_id = c("D1", "D2"),
+      participant_internal_id = c("P1", "P2"),
+      device_internal_id = c("device-a", "device-b"),
+      stringsAsFactors = FALSE
+    ),
+    datasets = data.frame(
+      Id = c("D1", "D2"),
+      study_title = "Study",
+      stringsAsFactors = FALSE
+    ),
+    requested_fields = c(
+      "dataset_internal_id",
+      "participant_internal_id",
+      "device_internal_id",
+      "study_title"
+    ),
+    provenance = list(measurement_contents_read = FALSE)
+  )
+  source <- new_metadata_source_namespace(
+    namespace_id = "source-dashboard",
+    label = "Dashboard source",
+    source_type = "test",
+    records = list(
+      core_metadata = list(
+        participants = data.frame(
+          participant_internal_id = c("P1", "P2"),
+          stringsAsFactors = FALSE
+        )
+      ),
+      variable_inventory = data.frame(
+        dataset_id = c("D1", "D2"),
+        file_group_id = c("D1:1", "D2:1"),
+        name = "MEDI",
+        label = "Melanopic EDI",
+        unit = "lx",
+        calibration = NA_character_,
+        stringsAsFactors = FALSE
+      ),
+      relationship_context = relationships
+    )
+  )
+  record <- new_dataset_record(
+    data,
+    "Related metadata fixture",
+    new_source_manifest("test", source_timezone = "Europe/Berlin"),
+    analysis_settings = list(
+      primary_variable = "MEDI",
+      analysis_timezone = "UTC"
+    ),
+    metadata_bundle = new_metadata_bundle(list(`source-dashboard` = source))
+  )
+  raw_before <- unserialize(record$raw_payload)
+  prepared_before <- unserialize(record$prepared_payload)
+  snapshot <- dashboard_dataset_snapshot(record)
+
+  expect_identical(snapshot$primary_label, "Melanopic EDI")
+  expect_identical(snapshot$primary_unit, "lx")
+  expect_identical(snapshot$variable_metadata_provenance, "Immutable source")
+  expect_identical(snapshot$source_timezone, "Europe/Berlin")
+  expect_identical(snapshot$display_timezone, "UTC")
+  expect_identical(snapshot$relationship_view$state, "ready")
+  expect_equal(nrow(snapshot$relationship_view$data), 2L)
+  expect_true(all(
+    c(
+      "participant_internal_id",
+      "device_internal_id"
+    ) %in%
+      names(snapshot$relationship_view$data)
+  ))
+  expect_identical(unserialize(record$raw_payload), raw_before)
+  expect_identical(unserialize(record$prepared_payload), prepared_before)
+
+  display <- dashboard_metadata_display_table(data[c("Id", "MEDI")], record)
+  expect_identical(names(display), c("Id", "Melanopic EDI [MEDI] · lx"))
+  expect_identical(display[[2L]], data$MEDI)
+  inventory <- snapshot$variable_inventory
+  expect_identical(
+    inventory$`Display label`[inventory$Variable == "MEDI"],
+    "Melanopic EDI"
+  )
+
+  failed <- dashboard_relationship_view(
+    record,
+    data,
+    api = function(...) stop("recoverable fixture conflict")
+  )
+  expect_identical(failed$state, "error")
+  expect_match(failed$warnings, "recoverable fixture conflict", fixed = TRUE)
+})
+
+test_that("dashboard crosslinks preserve an exact two-device participant context", {
+  record <- m7_fixture_record("iztech-light-subset")
+  dataset <- shiny::reactiveVal(record)
+  al04_action <- dashboard_device_metadata_input_id(
+    dashboard_metadata_identity_request(
+      record,
+      "device",
+      "IZTECH_AL04"
+    )
+  )
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = dataset,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      returned <- session$getReturned()
+      session$setInputs(
+        focus_variable = "MEDI",
+        data_stage = "preprocessed",
+        participants = "MELIDOS_IZTECH_S004",
+        show_all_participants = FALSE
+      )
+      session$flushReact()
+
+      metadata_html <- output$metadata_context
+      metadata_html <- if (
+        is.list(metadata_html) && !is.null(metadata_html$html)
+      ) {
+        metadata_html$html
+      } else {
+        paste(as.character(metadata_html), collapse = "")
+      }
+      expect_match(metadata_html, "IZTECH_AL03", fixed = TRUE)
+      expect_match(metadata_html, "IZTECH_AL04", fixed = TRUE)
+      expect_match(
+        metadata_html,
+        "Melanopic equivalent daylight illuminance",
+        fixed = TRUE
+      )
+      expect_match(metadata_html, "lx", fixed = TRUE)
+
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), al04_action)
+      )
+      session$flushReact()
+      event <- returned$event()
+      expect_identical(event$type, "open_metadata")
+      expect_identical(event$focus_request$field, "device_internal_id")
+      expect_identical(event$focus_request$record_identity, "IZTECH_AL04")
+      expect_identical(
+        metadata_resolve_focus_request(
+          metadata_bundle_for_record(record),
+          event$focus_request
+        )$state,
+        "resolved"
+      )
+    }
+  )
+})
+
+test_that("dashboard device actions keep identity during participant refresh", {
+  record <- m7_fixture_record("iztech-light-subset")
+  dataset <- shiny::reactiveVal(record)
+  action_id <- function(device_id) {
+    dashboard_device_metadata_input_id(
+      dashboard_metadata_identity_request(
+        record,
+        "device",
+        device_id
+      )
+    )
+  }
+  stale_al05 <- action_id("IZTECH_AL05_FW1_7")
+  current_al03 <- action_id("IZTECH_AL03")
+  expect_identical(stale_al05, action_id("IZTECH_AL05_FW1_7"))
+  expect_false(identical(stale_al05, current_al03))
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = dataset,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      returned <- session$getReturned()
+      session$setInputs(
+        focus_variable = "MEDI",
+        data_stage = "preprocessed",
+        participants = c(
+          "MELIDOS_IZTECH_S003",
+          "MELIDOS_IZTECH_S004"
+        ),
+        show_all_participants = FALSE
+      )
+      session$flushReact()
+      metadata_html <- output$metadata_context
+      metadata_html <- if (
+        is.list(metadata_html) && !is.null(metadata_html$html)
+      ) {
+        metadata_html$html
+      } else {
+        paste(as.character(metadata_html), collapse = "")
+      }
+      expect_match(metadata_html, "Device IZTECH_AL05_FW1_7", fixed = TRUE)
+      expect_match(metadata_html, session$ns(stale_al05), fixed = TRUE)
+
+      session$setInputs(participants = "MELIDOS_IZTECH_S004")
+      session$flushReact()
+      expect_null(returned$event())
+      metadata_html <- output$metadata_context
+      metadata_html <- if (
+        is.list(metadata_html) && !is.null(metadata_html$html)
+      ) {
+        metadata_html$html
+      } else {
+        paste(as.character(metadata_html), collapse = "")
+      }
+      expect_false(grepl(session$ns(stale_al05), metadata_html, fixed = TRUE))
+      expect_match(metadata_html, session$ns(current_al03), fixed = TRUE)
+
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), stale_al05)
+      )
+      session$flushReact()
+      expect_null(returned$event())
+
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), current_al03)
+      )
+      session$flushReact()
+      event <- returned$event()
+      expect_identical(event$type, "open_metadata")
+      expect_identical(event$focus_request$record_identity, "IZTECH_AL03")
+    }
+  )
+})
+
+test_that("dashboard metadata actions use the same four-item participant and device limit", {
+  record <- m7_fixture_record("iztech-light-subset")
+  dataset <- shiny::reactiveVal(record)
+  participant_request <- function(participant_id) {
+    dashboard_metadata_identity_request(
+      record,
+      "participant",
+      participant_id
+    )
+  }
+  device_request <- function(device_id) {
+    dashboard_metadata_identity_request(record, "device", device_id)
+  }
+  participant_ids <- paste0("IZTECH_S00", seq_len(5L))
+  participant_actions <- vapply(
+    participant_ids,
+    function(participant_id) {
+      dashboard_participant_metadata_input_id(
+        participant_request(participant_id)
+      )
+    },
+    character(1)
+  )
+  device_ids <- c(
+    "IZTECH_AL03",
+    "IZTECH_AL05_FW1_7",
+    "IZTECH_AL04",
+    "IZTECH_AL06_FW1_7"
+  )
+  device_actions <- vapply(
+    device_ids,
+    function(device_id) {
+      dashboard_device_metadata_input_id(device_request(device_id))
+    },
+    character(1)
+  )
+  five_devices <- lapply(seq_len(5L), function(index) {
+    list(label = paste("Device", index), request = NULL)
+  })
+  device_reduction_html <- htmltools::renderTags(
+    dashboard_metadata_entity_group_ui(five_devices, "device")
+  )$html
+  expect_match(
+    device_reduction_html,
+    "5 devices in this context",
+    fixed = TRUE
+  )
+  expect_match(
+    device_reduction_html,
+    "four or fewer related devices remain",
+    fixed = TRUE
+  )
+  expect_false(grepl("<button", device_reduction_html, fixed = TRUE))
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = dataset,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      returned <- session$getReturned()
+      session$setInputs(
+        focus_variable = "MEDI",
+        data_stage = "preprocessed",
+        participants = paste0("MELIDOS_IZTECH_S00", seq_len(5L)),
+        show_all_participants = FALSE
+      )
+      session$flushReact()
+
+      metadata_html <- output$metadata_context
+      metadata_html <- if (
+        is.list(metadata_html) && !is.null(metadata_html$html)
+      ) {
+        metadata_html$html
+      } else {
+        paste(as.character(metadata_html), collapse = "")
+      }
+      expect_match(
+        metadata_html,
+        "5 participants in this context",
+        fixed = TRUE
+      )
+      expect_match(
+        metadata_html,
+        "Reduce the participant selection to four or fewer",
+        fixed = TRUE
+      )
+      expect_false(any(vapply(
+        participant_actions,
+        grepl,
+        logical(1),
+        x = metadata_html,
+        fixed = TRUE
+      )))
+      expect_true(all(vapply(
+        device_actions,
+        grepl,
+        logical(1),
+        x = metadata_html,
+        fixed = TRUE
+      )))
+
+      session$setInputs(
+        participants = paste0("MELIDOS_IZTECH_S00", seq_len(4L))
+      )
+      session$flushReact()
+      metadata_html <- output$metadata_context
+      metadata_html <- if (
+        is.list(metadata_html) && !is.null(metadata_html$html)
+      ) {
+        metadata_html$html
+      } else {
+        paste(as.character(metadata_html), collapse = "")
+      }
+      expect_false(grepl(
+        "Reduce the participant selection",
+        metadata_html,
+        fixed = TRUE
+      ))
+      expect_true(all(vapply(
+        participant_actions[seq_len(4L)],
+        grepl,
+        logical(1),
+        x = metadata_html,
+        fixed = TRUE
+      )))
+
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), participant_actions[[4L]])
+      )
+      session$flushReact()
+      event <- returned$event()
+      expect_identical(event$type, "open_metadata")
+      expect_identical(event$focus_request$field, "participant_internal_id")
+      expect_identical(event$focus_request$record_identity, "IZTECH_S004")
+    }
+  )
+})
+
+test_that("dashboard participant actions ignore identities removed during refresh", {
+  record <- m7_fixture_record("iztech-light-subset")
+  dataset <- shiny::reactiveVal(record)
+  action_id <- function(participant_id) {
+    dashboard_participant_metadata_input_id(
+      dashboard_metadata_identity_request(
+        record,
+        "participant",
+        participant_id
+      )
+    )
+  }
+  stale_s003 <- action_id("IZTECH_S003")
+  current_s004 <- action_id("IZTECH_S004")
+  expect_false(identical(stale_s003, current_s004))
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = dataset,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      returned <- session$getReturned()
+      session$setInputs(
+        focus_variable = "MEDI",
+        data_stage = "preprocessed",
+        participants = c(
+          "MELIDOS_IZTECH_S003",
+          "MELIDOS_IZTECH_S004"
+        ),
+        show_all_participants = FALSE
+      )
+      session$flushReact()
+
+      session$setInputs(participants = "MELIDOS_IZTECH_S004")
+      session$flushReact()
+      expect_null(returned$event())
+      metadata_html <- output$metadata_context
+      metadata_html <- if (
+        is.list(metadata_html) && !is.null(metadata_html$html)
+      ) {
+        metadata_html$html
+      } else {
+        paste(as.character(metadata_html), collapse = "")
+      }
+      expect_false(grepl(session$ns(stale_s003), metadata_html, fixed = TRUE))
+      expect_match(metadata_html, session$ns(current_s004), fixed = TRUE)
+
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), stale_s003)
+      )
+      session$flushReact()
+      expect_null(returned$event())
+
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), current_s004)
+      )
+      session$flushReact()
+      event <- returned$event()
+      expect_identical(event$type, "open_metadata")
+      expect_identical(event$focus_request$record_identity, "IZTECH_S004")
+    }
+  )
+})
+
+test_that("appended dashboard preserves mapped metrics and source relationships", {
+  records <- metadata_explorer_fixture_records(
+    m7_fixture_directory(),
+    include_absent = FALSE
+  )
+  record <- records[["dataset_m7appendedreview"]]
+  snapshot <- dashboard_dataset_snapshot(record)
+
+  expect_true(all(
+    c(
+      "tum_MEDI",
+      "iztech_MEDI",
+      "iztech_LIGHT"
+    ) %in%
+      snapshot$focus_variables
+  ))
+  tum_focus <- dashboard_focus_view(snapshot, "tum_MEDI")
+  expect_identical(
+    tum_focus$focus_label,
+    "Melanopic equivalent daylight illuminance"
+  )
+  expect_identical(tum_focus$focus_unit, "lx")
+  expect_identical(snapshot$relationship_view$state, "ready")
+
+  tum <- dashboard_relationship_entities(
+    snapshot$relationship_view,
+    "TUM_TUM_S001"
+  )
+  expect_identical(tum$namespace_ids, "dataset_m7tummedionly")
+  expect_identical(tum$dataset_ids, "MELIDOS_TUM_S001")
+  expect_identical(tum$participant_ids, "TUM_S001")
+  expect_identical(tum$device_ids, "TUM_AL01")
+  expect_identical(tum$study_ids, "MELIDOS_TUM_2025")
+
+  iztech <- dashboard_relationship_entities(
+    snapshot$relationship_view,
+    "IZTECH_IZTECH_S004"
+  )
+  expect_identical(iztech$namespace_ids, "dataset_m7iztechlightsubset")
+  expect_identical(iztech$dataset_ids, "MELIDOS_IZTECH_S004")
+  expect_identical(iztech$participant_ids, "IZTECH_S004")
+  expect_identical(
+    iztech$device_ids,
+    c("IZTECH_AL03", "IZTECH_AL04")
+  )
+
+  participant_refs <- dashboard_relationship_entity_refs(
+    snapshot$relationship_view,
+    c("TUM_TUM_S001", "IZTECH_IZTECH_S004"),
+    "participant"
+  )
+  expect_identical(
+    participant_refs$identity,
+    c("TUM_S001", "IZTECH_S004")
+  )
+  expect_identical(
+    participant_refs$namespace_id,
+    c("dataset_m7tummedionly", "dataset_m7iztechlightsubset")
+  )
+  device_refs <- dashboard_relationship_entity_refs(
+    snapshot$relationship_view,
+    c("TUM_TUM_S001", "IZTECH_IZTECH_S004"),
+    "device"
+  )
+  expect_identical(
+    device_refs$identity,
+    c("TUM_AL01", "IZTECH_AL03", "IZTECH_AL04")
+  )
+  expect_identical(
+    device_refs$namespace_id,
+    c(
+      "dataset_m7tummedionly",
+      "dataset_m7iztechlightsubset",
+      "dataset_m7iztechlightsubset"
+    )
+  )
+})
+
+test_that("dashboard clears metadata events across dataset round trips", {
+  ucr <- m7_fixture_record("ucr-all-light-variables")
+  tum <- m7_fixture_record("tum-medi-only")
+  dataset <- shiny::reactiveVal(ucr)
+  ucr_al06_action <- dashboard_device_metadata_input_id(
+    dashboard_metadata_identity_request(
+      ucr,
+      "device",
+      "UCR_AL06"
+    )
+  )
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = dataset,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      returned <- session$getReturned()
+      session$setInputs(
+        focus_variable = "MEDI",
+        data_stage = "preprocessed",
+        participants = "MELIDOS_UCR_S002",
+        show_all_participants = FALSE
+      )
+      session$flushReact()
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), ucr_al06_action)
+      )
+      session$flushReact()
+      expect_identical(
+        returned$event()$focus_request$record_identity,
+        "UCR_AL06"
+      )
+
+      dataset(tum)
+      session$flushReact()
+      session$setInputs(participants = "MELIDOS_TUM_S001")
+      session$flushReact()
+      expect_null(returned$event())
+
+      dataset(ucr)
+      session$flushReact()
+      session$setInputs(participants = "MELIDOS_UCR_S002")
+      session$flushReact()
+      expect_null(returned$event())
+    }
+  )
+})
+
+test_that("appended participant crosslink uses exact source lineage", {
+  records <- metadata_explorer_fixture_records(
+    m7_fixture_directory(),
+    include_absent = FALSE
+  )
+  record <- records[["dataset_m7appendedreview"]]
+  dataset <- shiny::reactiveVal(record)
+  participant_action <- dashboard_participant_metadata_input_id(
+    dashboard_metadata_identity_request(
+      record,
+      "participant",
+      "TUM_S001",
+      "dataset_m7tummedionly"
+    )
+  )
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = dataset,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      returned <- session$getReturned()
+      session$setInputs(
+        focus_variable = "tum_MEDI",
+        data_stage = "preprocessed",
+        participants = "TUM_TUM_S001",
+        show_all_participants = FALSE
+      )
+      session$flushReact()
+      metadata_html <- output$metadata_context
+      metadata_html <- if (
+        is.list(metadata_html) && !is.null(metadata_html$html)
+      ) {
+        metadata_html$html
+      } else {
+        paste(as.character(metadata_html), collapse = "")
+      }
+      expect_match(metadata_html, "Participant TUM_S001", fixed = TRUE)
+      expect_false(grepl(
+        "Participant TUM_S001[^>]*disabled",
+        metadata_html
+      ))
+
+      do.call(
+        session$setInputs,
+        stats::setNames(list(1L), participant_action)
+      )
+      session$flushReact()
+      event <- returned$event()
+      expect_identical(event$type, "open_metadata")
+      expect_identical(
+        event$focus_request$namespace_id,
+        "dataset_m7tummedionly"
+      )
+      expect_identical(event$focus_request$record_identity, "TUM_S001")
+      expect_identical(
+        metadata_resolve_focus_request(
+          metadata_bundle_for_record(record),
+          event$focus_request
+        )$state,
+        "resolved"
+      )
+    }
   )
 })
 
@@ -231,8 +891,10 @@ test_that("separate append outputs and source metadata remain dashboard-visible"
   snapshot <- dashboard_dataset_snapshot(appended)
 
   expect_identical(snapshot$primary_variable, "first_MEDI")
-  expect_true(all(c("first_MEDI", "second_light") %in%
-    snapshot$focus_variables))
+  expect_true(all(
+    c("first_MEDI", "second_light") %in%
+      snapshot$focus_variables
+  ))
   expect_false("MEDI" %in% snapshot$focus_variables)
   expect_s3_class(snapshot$append_sources, "llw_dashboard_append_sources")
   expect_identical(snapshot$append_sources$source_dataset_ids, ids)
@@ -1305,10 +1967,7 @@ test_that("participant timelines keep empty facets without losing POSIXct scales
   source <- dataset_raw_data(record)
   cutoff <- min(source$Datetime) + 7 * 86400
   source <- source[
-    !(
-      source$Id %in% c("P01", "P04") &
-        source$Datetime >= cutoff
-    ),
+    !(source$Id %in% c("P01", "P04") & source$Datetime >= cutoff),
     ,
     drop = FALSE
   ]
@@ -1422,13 +2081,17 @@ test_that("symlog axes show zero, the linear threshold, and readable decades", {
     c("0", "1", "10", "100", "1,000", "10,000", "100,000")
   )
   expect_equal(
-    positive$minor_breaks[positive$minor_breaks > 0 &
-      positive$minor_breaks < 1],
+    positive$minor_breaks[
+      positive$minor_breaks > 0 &
+        positive$minor_breaks < 1
+    ],
     seq(0.1, 0.9, by = 0.1)
   )
   expect_equal(
-    positive$minor_breaks[positive$minor_breaks > 1 &
-      positive$minor_breaks < 10],
+    positive$minor_breaks[
+      positive$minor_breaks > 1 &
+        positive$minor_breaks < 10
+    ],
     seq(1.9, 9.1, by = 0.9)
   )
   positive_transform <- LightLogR::symlog_trans(
@@ -1437,14 +2100,18 @@ test_that("symlog axes show zero, the linear threshold, and readable decades", {
   )$transform
   central_spacing <- diff(positive_transform(c(
     0,
-    positive$minor_breaks[positive$minor_breaks > 0 &
-      positive$minor_breaks < 1],
+    positive$minor_breaks[
+      positive$minor_breaks > 0 &
+        positive$minor_breaks < 1
+    ],
     1
   )))
   outer_spacing <- diff(positive_transform(c(
     1,
-    positive$minor_breaks[positive$minor_breaks > 1 &
-      positive$minor_breaks < 10],
+    positive$minor_breaks[
+      positive$minor_breaks > 1 &
+        positive$minor_breaks < 10
+    ],
     10
   )))
   expect_equal(central_spacing, rep(0.1, 10L), tolerance = 1e-12)
@@ -1769,9 +2436,7 @@ test_that("calendar controls refit to the selected participants", {
       )
       session$flushReact()
       selected_ui <- output$date_window_ui
-      selected_html <- if (
-        is.list(selected_ui) && !is.null(selected_ui$html)
-      ) {
+      selected_html <- if (is.list(selected_ui) && !is.null(selected_ui$html)) {
         selected_ui$html
       } else {
         paste(as.character(selected_ui), collapse = "")
@@ -1782,9 +2447,7 @@ test_that("calendar controls refit to the selected participants", {
       session$setInputs(participants = c("P01", "P02"))
       session$flushReact()
       combined_ui <- output$date_window_ui
-      combined_html <- if (
-        is.list(combined_ui) && !is.null(combined_ui$html)
-      ) {
+      combined_html <- if (is.list(combined_ui) && !is.null(combined_ui$html)) {
         combined_ui$html
       } else {
         paste(as.character(combined_ui), collapse = "")
@@ -1929,9 +2592,7 @@ test_that("dashboard module reports bounded reactive state", {
         "symlog linear range"
       )
       adjusted_ui <- output$view_recommendation
-      adjusted_html <- if (
-        is.list(adjusted_ui) && !is.null(adjusted_ui$html)
-      ) {
+      adjusted_html <- if (is.list(adjusted_ui) && !is.null(adjusted_ui$html)) {
         adjusted_ui$html
       } else {
         paste(as.character(adjusted_ui), collapse = "")
@@ -2011,9 +2672,7 @@ test_that("dashboard module reports bounded reactive state", {
       expect_identical(returned$status()$time_pages, 5L)
       expect_lte(returned$status()$displayed_plot_rows, 2000L)
       pagination <- output$facet_pagination
-      pagination_html <- if (
-        is.list(pagination) && !is.null(pagination$html)
-      ) {
+      pagination_html <- if (is.list(pagination) && !is.null(pagination$html)) {
         pagination$html
       } else {
         paste(as.character(pagination), collapse = "")
@@ -2047,7 +2706,11 @@ test_that("dashboard module reports bounded reactive state", {
         "llw-dashboard-page-option__icon",
         fixed = TRUE
       )
-      expect_false(grepl("\U0001f4c4", participant_pagination_html, fixed = TRUE))
+      expect_false(grepl(
+        "\U0001f4c4",
+        participant_pagination_html,
+        fixed = TRUE
+      ))
       participant_previous <- output$participant_previous_control
       participant_previous_html <- if (
         is.list(participant_previous) &&
@@ -2064,5 +2727,12 @@ test_that("dashboard module reports bounded reactive state", {
       )
       expect_match(participant_previous_html, "disabled", fixed = TRUE)
     }
+  )
+})
+test_that("metadata context follows the dashboard workbench", {
+  html <- htmltools::renderTags(datasetDashboardUI("dashboard"))$html
+  expect_gt(
+    regexpr("dashboard-metadata_context", html, fixed = TRUE)[[1L]],
+    regexpr("dashboard-dashboard_tabs", html, fixed = TRUE)[[1L]]
   )
 })

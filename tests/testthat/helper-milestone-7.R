@@ -40,7 +40,7 @@ m7_fixture_record <- function(
       source_type = "derived_glc_fixture",
       original_filenames = entry$file,
       hashes = entry$file_sha256,
-      source_timezone = "UTC",
+      source_timezone = lubridate::tz(fixture$data$Datetime),
       imported_at = as.POSIXct(
         fixture$generation$generated_at,
         format = "%Y-%m-%dT%H:%M:%SZ",

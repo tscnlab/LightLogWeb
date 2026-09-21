@@ -22,6 +22,69 @@ test_that("the packaged application can be constructed", {
   expect_false(grepl("import_accordion", production_html, fixed = TRUE))
 })
 
+test_that("identical metadata focus requests are delivered repeatedly", {
+  request <- new_metadata_focus_request(
+    dataset_id = "dataset_m7iztechlightsubset",
+    namespace_id = "dataset_m7iztechlightsubset",
+    field = "participant_internal_id",
+    path_contains = "/core_metadata/participants",
+    record_identity = "IZTECH_S004",
+    label = "Participant IZTECH_S004"
+  )
+
+  bridge_server <- function(input, output, session) {
+    focus_value <- shiny::reactiveVal(NULL)
+    hierarchy_focus <- shiny::reactiveVal(NULL)
+    activation_ids <- shiny::reactiveVal(character())
+
+    shiny::observeEvent(
+      focus_value(),
+      {
+        current <- focus_value()
+        activation_ids(c(activation_ids(), current$request_id))
+        hierarchy_focus(current$record_identity)
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    session$userData$deliver <- function(value) {
+      deliver_metadata_focus_request(focus_value, value)
+    }
+    session$userData$focus_value <- focus_value
+    session$userData$hierarchy_focus <- hierarchy_focus
+    session$userData$activation_ids <- activation_ids
+  }
+
+  shiny::testServer(bridge_server, {
+    session$flushReact()
+    session$userData$deliver(request)
+    session$flushReact()
+    expect_identical(
+      session$userData$hierarchy_focus(),
+      "IZTECH_S004"
+    )
+    expect_identical(session$userData$activation_ids(), request$request_id)
+
+    session$userData$hierarchy_focus("MELIDOS_IZTECH_S004:20")
+    session$userData$deliver(request)
+    session$flushReact()
+
+    expect_identical(
+      session$userData$hierarchy_focus(),
+      "IZTECH_S004"
+    )
+    expect_identical(
+      session$userData$activation_ids(),
+      rep(request$request_id, 2L)
+    )
+    expect_identical(
+      session$userData$focus_value()$request_id,
+      request$request_id
+    )
+  })
+})
+
 test_that("every changed module retains a constructible development app", {
   apps <- list(
     core_architecture_app(),

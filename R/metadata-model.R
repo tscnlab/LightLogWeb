@@ -6,6 +6,10 @@ metadata_index_version <- function() {
   "1.3.1"
 }
 
+metadata_relationship_contract_version <- function() {
+  "1.0.0"
+}
+
 metadata_overlay_namespace_id <- function() {
   "llw:overlay"
 }
@@ -499,11 +503,13 @@ metadata_record_identity <- function(data, row) {
       names(data)
     )
   ))
-  candidates <- candidates[!grepl(
-    "crossref|reference",
-    candidates,
-    ignore.case = TRUE
-  )]
+  candidates <- candidates[
+    !grepl(
+      "crossref|reference",
+      candidates,
+      ignore.case = TRUE
+    )
+  ]
   for (column in unique(candidates)) {
     cell <- metadata_data_frame_cell(data, column, row)
     if (is.data.frame(cell) || is.list(cell) || length(cell) != 1L) next
@@ -553,8 +559,10 @@ metadata_file_group_lookup <- function(records) {
   }
 
   pairs <- unique(collect_pairs(records))
-  keep <- !is.na(pairs$dataset_id) & nzchar(pairs$dataset_id) &
-    !is.na(pairs$file_group_id) & nzchar(pairs$file_group_id)
+  keep <- !is.na(pairs$dataset_id) &
+    nzchar(pairs$dataset_id) &
+    !is.na(pairs$file_group_id) &
+    nzchar(pairs$file_group_id)
   pairs <- pairs[keep, , drop = FALSE]
   if (nrow(pairs) == 0L) return(list())
   split(
@@ -620,7 +628,8 @@ metadata_row_group_identity <- function(data, row) {
     intersect(c("parameter_name", "device_sensor_type"), names(data)),
     if (all(c("term", "label") %in% names(data))) "term" else character(),
     if (
-      "name" %in% names(data) &&
+      "name" %in%
+        names(data) &&
         any(c("dataset_id", "file_group_id") %in% names(data))
     ) {
       "name"
@@ -941,6 +950,14 @@ metadata_index_groups <- function(entries) {
 metadata_index_source <- function(source, buffers, layer = "Immutable source") {
   source <- validate_metadata_source_namespace(source)
   file_groups <- metadata_file_group_lookup(source$records)
+  index_records <- source$records[
+    !vapply(
+      source$records,
+      inherits,
+      logical(1),
+      "llw_metadata_relationships"
+    )
+  ]
   namespace_node <- buffers$add_node(
     parent_node_id = "",
     namespace_id = source$namespace_id,
@@ -965,6 +982,9 @@ metadata_index_source <- function(source, buffers, layer = "Immutable source") {
     group_context,
     field
   ) {
+    if (inherits(value, "llw_metadata_relationships")) {
+      return(invisible(NULL))
+    }
     if (inherits(value, "llw_metadata_bundle")) {
       bundle_node <- buffers$add_node(
         parent_node_id,
@@ -1142,8 +1162,8 @@ metadata_index_source <- function(source, buffers, layer = "Immutable source") {
     invisible(NULL)
   }
 
-  resource_names <- names(source$records)
-  for (index in seq_along(source$records)) {
+  resource_names <- names(index_records)
+  for (index in seq_along(index_records)) {
     resource <- resource_names[[index]]
     resource_node <- buffers$add_node(
       namespace_node,
@@ -1158,7 +1178,7 @@ metadata_index_source <- function(source, buffers, layer = "Immutable source") {
       paste0(source$namespace_id, "/", resource)
     )
     walk(
-      source$records[[index]],
+      index_records[[index]],
       resource_node,
       resource,
       resource,
@@ -1846,31 +1866,35 @@ metadata_index_group_neighborhood <- function(index, group) {
     ,
     drop = FALSE
   ]
-  instance_records <- vapply(item_nodes$node_id, function(node_id) {
-    records <- unique(group$entries$record[group$entries$node_id == node_id])
-    records <- metadata_nonempty_text(records)
-    record <- if (length(records) > 0L) records[[1L]] else ""
-    if (
-      nzchar(record) &&
-        sum(group$entries$record == record, na.rm = TRUE) == 1L
-    ) {
-      return(record)
-    }
-    ancestors <- metadata_index_node_ancestors(index, node_id)
-    parent_records <- ancestors[
-      ancestors$kind == "record" & ancestors$node_id != node_id,
-      ,
-      drop = FALSE
-    ]
-    if (nrow(parent_records) > 0L) {
-      parent <- utils::tail(parent_records$label, 1L)
-      if (nzchar(record) && !identical(record, parent)) {
-        return(paste(record, "in", parent))
+  instance_records <- vapply(
+    item_nodes$node_id,
+    function(node_id) {
+      records <- unique(group$entries$record[group$entries$node_id == node_id])
+      records <- metadata_nonempty_text(records)
+      record <- if (length(records) > 0L) records[[1L]] else ""
+      if (
+        nzchar(record) &&
+          sum(group$entries$record == record, na.rm = TRUE) == 1L
+      ) {
+        return(record)
       }
-      return(parent)
-    }
-    if (nzchar(record)) record else node_id
-  }, character(1))
+      ancestors <- metadata_index_node_ancestors(index, node_id)
+      parent_records <- ancestors[
+        ancestors$kind == "record" & ancestors$node_id != node_id,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(parent_records) > 0L) {
+        parent <- utils::tail(parent_records$label, 1L)
+        if (nzchar(record) && !identical(record, parent)) {
+          return(paste(record, "in", parent))
+        }
+        return(parent)
+      }
+      if (nzchar(record)) record else node_id
+    },
+    character(1)
+  )
   item_nodes <- metadata_index_decorate_nodes(index, item_nodes)
   item_nodes$instance_record <- instance_records
   rownames(item_nodes) <- NULL
@@ -1904,6 +1928,677 @@ metadata_display_unit <- function(unit = NA_character_) {
   if (length(unit) == 0L) "unit not specified" else unit[[1L]]
 }
 
+metadata_relationship_empty_table <- function(key) {
+  assert_scalar_string(key, "key")
+  stats::setNames(
+    data.frame(character(), stringsAsFactors = FALSE),
+    key
+  )
+}
+
+metadata_relationship_validate_table <- function(table, key, label) {
+  if (!is.data.frame(table) || !key %in% names(table)) {
+    abort_llw(
+      paste0("The ", label, " relationship table requires `", key, "`."),
+      type = "validation"
+    )
+  }
+  table <- as.data.frame(table, stringsAsFactors = FALSE, check.names = FALSE)
+  identities <- as.character(table[[key]])
+  if (
+    anyNA(identities) || any(!nzchar(identities)) || anyDuplicated(identities)
+  ) {
+    abort_llw(
+      paste0("The ", label, " relationship identities must be unique."),
+      type = "validation"
+    )
+  }
+  table
+}
+
+new_metadata_relationship_context <- function(
+  file_groups = metadata_relationship_empty_table("file_group_id"),
+  datasets = metadata_relationship_empty_table("Id"),
+  requested_fields = character(),
+  warnings = character(),
+  provenance = list()
+) {
+  file_groups <- metadata_relationship_validate_table(
+    file_groups,
+    "file_group_id",
+    "file-group"
+  )
+  datasets <- metadata_relationship_validate_table(
+    datasets,
+    "Id",
+    "dataset-level"
+  )
+  assert_character_vector(requested_fields, "requested_fields")
+  assert_character_vector(warnings, "warnings")
+  if (!is.list(provenance)) {
+    abort_llw("Relationship provenance must be a list.", type = "validation")
+  }
+  requested_fields <- unique(metadata_nonempty_text(requested_fields))
+  warnings <- unique(metadata_nonempty_text(warnings))
+  context <- structure(
+    list(
+      relationship_schema = "llw-metadata-relationships",
+      relationship_version = metadata_relationship_contract_version(),
+      anchor = "file_group_id",
+      dataset_anchor = "Id",
+      requested_fields = requested_fields,
+      resolved_file_group_fields = setdiff(
+        names(file_groups),
+        "file_group_id"
+      ),
+      resolved_dataset_fields = setdiff(names(datasets), "Id"),
+      file_groups = file_groups,
+      datasets = datasets,
+      warnings = warnings,
+      provenance = provenance
+    ),
+    class = c("llw_metadata_relationships", "list")
+  )
+  context$fingerprint <- metadata_fingerprint(context)
+  assert_serializable_value(context, "metadata relationship context")
+  context
+}
+
+validate_metadata_relationship_context <- function(context) {
+  if (!inherits(context, "llw_metadata_relationships") || !is.list(context)) {
+    abort_llw(
+      "The metadata relationship context is invalid.",
+      type = "validation"
+    )
+  }
+  required <- c(
+    "relationship_schema",
+    "relationship_version",
+    "anchor",
+    "dataset_anchor",
+    "requested_fields",
+    "resolved_file_group_fields",
+    "resolved_dataset_fields",
+    "file_groups",
+    "datasets",
+    "warnings",
+    "provenance",
+    "fingerprint"
+  )
+  if (
+    !all(required %in% names(context)) ||
+      !identical(context$relationship_schema, "llw-metadata-relationships") ||
+      !identical(
+        context$relationship_version,
+        metadata_relationship_contract_version()
+      ) ||
+      !identical(context$anchor, "file_group_id") ||
+      !identical(context$dataset_anchor, "Id")
+  ) {
+    abort_llw(
+      "The metadata relationship context contract is incomplete.",
+      type = "validation"
+    )
+  }
+  expected <- context$fingerprint
+  rebuilt <- new_metadata_relationship_context(
+    file_groups = context$file_groups,
+    datasets = context$datasets,
+    requested_fields = context$requested_fields,
+    warnings = context$warnings,
+    provenance = context$provenance
+  )
+  if (
+    !identical(
+      context$resolved_file_group_fields,
+      rebuilt$resolved_file_group_fields
+    ) ||
+      !identical(
+        context$resolved_dataset_fields,
+        rebuilt$resolved_dataset_fields
+      ) ||
+      !identical(expected, rebuilt$fingerprint)
+  ) {
+    abort_llw(
+      "The metadata relationship context failed its fingerprint check.",
+      type = "validation",
+      public_message = paste(
+        "The retained metadata relationships failed an integrity check.",
+        "No source data or source metadata were changed."
+      )
+    )
+  }
+  rebuilt
+}
+
+metadata_relationship_subset <- function(
+  context,
+  file_group_ids,
+  dataset_ids = NULL
+) {
+  context <- validate_metadata_relationship_context(context)
+  assert_character_vector(file_group_ids, "file_group_ids")
+  file_group_ids <- unique(metadata_nonempty_text(file_group_ids))
+  file_groups <- context$file_groups[
+    as.character(context$file_groups$file_group_id) %in% file_group_ids,
+    ,
+    drop = FALSE
+  ]
+  if (is.null(dataset_ids)) {
+    dataset_ids <- if ("dataset_internal_id" %in% names(file_groups)) {
+      metadata_nonempty_text(file_groups$dataset_internal_id)
+    } else {
+      character()
+    }
+  } else {
+    assert_character_vector(dataset_ids, "dataset_ids")
+    dataset_ids <- unique(metadata_nonempty_text(dataset_ids))
+  }
+  datasets <- context$datasets[
+    as.character(context$datasets$Id) %in% dataset_ids,
+    ,
+    drop = FALSE
+  ]
+  new_metadata_relationship_context(
+    file_groups = file_groups,
+    datasets = datasets,
+    requested_fields = context$requested_fields,
+    warnings = context$warnings,
+    provenance = c(
+      context$provenance,
+      list(
+        subset_file_group_ids = file_group_ids,
+        subset_dataset_ids = dataset_ids
+      )
+    )
+  )
+}
+
+metadata_relationships_for_record <- function(record) {
+  if (!inherits(record, "llw_dataset_record") || !is.list(record)) {
+    abort_llw("A dataset record is required.", type = "validation")
+  }
+  bundle <- metadata_bundle_for_record(record)
+  collect <- function(source, namespace_id) {
+    context <- source$records$relationship_context %||% NULL
+    if (!is.null(context)) {
+      return(stats::setNames(
+        list(validate_metadata_relationship_context(context)),
+        namespace_id
+      ))
+    }
+    nested <- source$records$metadata_bundle %||% NULL
+    if (!inherits(nested, "llw_metadata_bundle")) return(list())
+    nested <- validate_metadata_bundle(nested)
+    found <- list()
+    for (nested_id in names(nested$sources)) {
+      nested_contexts <- collect(
+        nested$sources[[nested_id]],
+        paste(namespace_id, nested_id, sep = "::")
+      )
+      found <- c(found, nested_contexts)
+    }
+    if (length(found) == 1L) names(found) <- namespace_id
+    found
+  }
+  contexts <- list()
+  for (namespace_id in names(bundle$sources)) {
+    contexts <- c(
+      contexts,
+      collect(bundle$sources[[namespace_id]], namespace_id)
+    )
+  }
+  contexts
+}
+
+metadata_focus_request_version <- function() {
+  "1.0.0"
+}
+
+new_metadata_focus_request <- function(
+  dataset_id,
+  namespace_id = NULL,
+  field = NULL,
+  path_contains = NULL,
+  record_identity = NULL,
+  group_id = NULL,
+  label = "Metadata context",
+  request_id = new_stable_id("metadata_focus")
+) {
+  assert_scalar_string(dataset_id, "dataset_id")
+  assert_scalar_string(label, "label")
+  assert_scalar_string(request_id, "request_id")
+  optional <- list(
+    namespace_id = namespace_id,
+    field = field,
+    path_contains = path_contains,
+    record_identity = record_identity,
+    group_id = group_id
+  )
+  for (name in names(optional)) {
+    value <- optional[[name]]
+    if (!is.null(value)) assert_scalar_string(value, name)
+  }
+  if (is.null(group_id) && is.null(field)) {
+    abort_llw(
+      "A metadata focus request requires a stable group or field.",
+      type = "validation"
+    )
+  }
+  request <- structure(
+    c(
+      list(
+        request_schema = "llw-metadata-focus-request",
+        request_version = metadata_focus_request_version(),
+        request_id = request_id,
+        dataset_id = dataset_id,
+        label = label
+      ),
+      optional
+    ),
+    class = c("llw_metadata_focus_request", "list")
+  )
+  assert_serializable_value(request, "metadata focus request")
+  request
+}
+
+validate_metadata_focus_request <- function(request) {
+  if (!inherits(request, "llw_metadata_focus_request") || !is.list(request)) {
+    abort_llw("The metadata focus request is invalid.", type = "validation")
+  }
+  if (
+    !identical(request$request_schema, "llw-metadata-focus-request") ||
+      !identical(request$request_version, metadata_focus_request_version())
+  ) {
+    abort_llw(
+      "The metadata focus request version is unsupported.",
+      type = "validation"
+    )
+  }
+  do.call(
+    new_metadata_focus_request,
+    request[c(
+      "dataset_id",
+      "namespace_id",
+      "field",
+      "path_contains",
+      "record_identity",
+      "group_id",
+      "label",
+      "request_id"
+    )]
+  )
+}
+
+metadata_resolve_focus_request <- function(bundle, request) {
+  bundle <- validate_metadata_bundle(bundle)
+  request <- validate_metadata_focus_request(request)
+  groups <- bundle$index$groups
+  candidates <- rep(TRUE, nrow(groups))
+  if (!is.null(request$group_id)) {
+    candidates <- candidates & groups$group_id == request$group_id
+  }
+  if (!is.null(request$namespace_id)) {
+    candidates <- candidates & groups$namespace_id == request$namespace_id
+  }
+  if (!is.null(request$field)) {
+    candidates <- candidates & groups$field == request$field
+  }
+  if (!is.null(request$path_contains)) {
+    candidates <- candidates &
+      grepl(
+        request$path_contains,
+        groups$group_path,
+        fixed = TRUE
+      )
+  }
+  matching_entries <- integer()
+  if (!is.null(request$record_identity)) {
+    entries <- bundle$index$entries
+    candidate_group_ids <- groups$group_id[candidates]
+    matching_entries <- which(
+      entries$group_id %in%
+        candidate_group_ids &
+        (entries$record == request$record_identity |
+          entries$value == request$record_identity)
+    )
+    matching_group_ids <- unique(entries$group_id[matching_entries])
+    candidates <- candidates & groups$group_id %in% matching_group_ids
+  }
+  rows <- which(candidates)
+  if (length(rows) != 1L) {
+    return(structure(
+      list(
+        state = if (length(rows) == 0L) "unavailable" else "ambiguous",
+        request = request,
+        candidate_count = length(rows),
+        group_id = NULL,
+        node_id = NULL
+      ),
+      class = c("llw_metadata_focus_resolution", "list")
+    ))
+  }
+  group_id <- groups$group_id[[rows]]
+  node_id <- NULL
+  if (!is.null(request$record_identity)) {
+    entry_rows <- matching_entries[
+      bundle$index$entries$group_id[matching_entries] == group_id
+    ]
+    if (length(entry_rows) > 0L) {
+      node_id <- bundle$index$entries$parent_node_id[[entry_rows[[1L]]]]
+    }
+  }
+  structure(
+    list(
+      state = "resolved",
+      request = request,
+      candidate_count = 1L,
+      group_id = group_id,
+      node_id = node_id
+    ),
+    class = c("llw_metadata_focus_resolution", "list")
+  )
+}
+
+metadata_variable_source_mappings <- function(record, variable) {
+  assert_scalar_string(variable, "variable")
+  append_sources <- record$provenance$append_merge$source_records %||% list()
+  mappings <- list()
+  if (length(append_sources) > 0L) {
+    for (source in append_sources) {
+      mapping <- source$mapping %||% list()
+      source_name <- NULL
+      if (identical(mapping$measurement_target %||% NULL, variable)) {
+        source_name <- mapping$measurement_column %||% NULL
+      } else {
+        position <- match(variable, mapping$optional_targets %||% character())
+        if (!is.na(position)) {
+          source_name <- (mapping$optional_columns %||% character())[[position]]
+        }
+      }
+      if (is.null(source_name)) next
+      mappings[[length(mappings) + 1L]] <- list(
+        namespace_id = source$dataset_id,
+        source_name = source_name,
+        session_source_dataset_id = source$dataset_id
+      )
+    }
+  }
+  if (length(mappings) == 0L) {
+    bundle <- metadata_bundle_for_record(record)
+    mappings <- lapply(names(bundle$sources), function(namespace_id) {
+      list(
+        namespace_id = namespace_id,
+        source_name = variable,
+        session_source_dataset_id = record$id
+      )
+    })
+  }
+  mappings
+}
+
+metadata_source_variable_inventory <- function(source) {
+  direct <- source$records$variable_inventory %||% NULL
+  if (is.data.frame(direct)) return(direct)
+  nested <- source$records$metadata_bundle %||% NULL
+  if (!inherits(nested, "llw_metadata_bundle")) return(data.frame())
+  rows <- lapply(nested$sources, function(nested_source) {
+    inventory <- nested_source$records$variable_inventory %||% data.frame()
+    if (!is.data.frame(inventory)) data.frame() else inventory
+  })
+  rows <- rows[vapply(rows, nrow, integer(1)) > 0L]
+  if (length(rows) == 0L) return(data.frame())
+  result <- do.call(rbind, rows)
+  rownames(result) <- NULL
+  result
+}
+
+metadata_variable_candidate_rows <- function(record, variable) {
+  bundle <- metadata_bundle_for_record(record)
+  mappings <- metadata_variable_source_mappings(record, variable)
+  rows <- list()
+  overlay <- bundle$overlay$tables$variables
+  for (mapping in mappings) {
+    source <- bundle$sources[[mapping$namespace_id]] %||% NULL
+    inventory <- if (is.null(source)) {
+      data.frame()
+    } else {
+      metadata_source_variable_inventory(source)
+    }
+    inventory_matches <- if (
+      is.data.frame(inventory) && "name" %in% names(inventory)
+    ) {
+      inventory[
+        as.character(inventory$name) == mapping$source_name,
+        ,
+        drop = FALSE
+      ]
+    } else {
+      data.frame()
+    }
+    if (is.data.frame(overlay) && nrow(overlay) > 0L) {
+      matches <- overlay$name == mapping$source_name
+      mapped_dataset_ids <- unique(c(
+        metadata_nonempty_text(inventory_matches$dataset_id %||% character()),
+        metadata_nonempty_text(mapping$session_source_dataset_id)
+      ))
+      mapped_file_group_ids <- metadata_nonempty_text(
+        inventory_matches$file_group_id %||% character()
+      )
+      if (length(mapped_dataset_ids) > 0L) {
+        matches <- matches & overlay$dataset_id %in% mapped_dataset_ids
+      }
+      if (length(mapped_file_group_ids) > 0L) {
+        matches <- matches & overlay$file_group_id %in% mapped_file_group_ids
+      }
+      for (row in which(matches)) {
+        rows[[length(rows) + 1L]] <- data.frame(
+          layer = "LightLogWeb overlay",
+          namespace_id = metadata_overlay_namespace_id(),
+          source_dataset_id = as.character(overlay$dataset_id[[row]]),
+          file_group_id = as.character(overlay$file_group_id[[row]]),
+          source_name = mapping$source_name,
+          display_name = variable,
+          label = as.character(overlay$label[[row]]),
+          unit = as.character(overlay$unit[[row]]),
+          calibration = NA_character_,
+          stringsAsFactors = FALSE
+        )
+      }
+    }
+    if (is.null(source)) next
+    if (!is.data.frame(inventory) || !"name" %in% names(inventory)) next
+    matches <- as.character(inventory$name) == mapping$source_name
+    for (row in which(matches)) {
+      value <- function(column) {
+        if (!column %in% names(inventory)) return(NA_character_)
+        as.character(inventory[[column]][[row]])
+      }
+      rows[[length(rows) + 1L]] <- data.frame(
+        layer = "Immutable source",
+        namespace_id = mapping$namespace_id,
+        source_dataset_id = value("dataset_id"),
+        file_group_id = value("file_group_id"),
+        source_name = mapping$source_name,
+        display_name = variable,
+        label = value("label"),
+        unit = value("unit"),
+        calibration = value("calibration"),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (length(rows) == 0L) {
+    return(data.frame(
+      layer = character(),
+      namespace_id = character(),
+      source_dataset_id = character(),
+      file_group_id = character(),
+      source_name = character(),
+      display_name = character(),
+      label = character(),
+      unit = character(),
+      calibration = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  values <- do.call(rbind, rows)
+  rownames(values) <- NULL
+  values
+}
+
+metadata_resolve_variable <- function(record, variable) {
+  if (!inherits(record, "llw_dataset_record") || !is.list(record)) {
+    abort_llw("A dataset record is required.", type = "validation")
+  }
+  assert_scalar_string(variable, "variable")
+  candidates <- metadata_variable_candidate_rows(record, variable)
+  legacy <- record$factual_metadata$variables[[variable]] %||% list()
+  legacy_units <- record$source_manifest$details$units %||% list()
+  resolve_property <- function(column, fallback = character()) {
+    for (layer in c("LightLogWeb overlay", "Immutable source")) {
+      rows <- candidates[candidates$layer == layer, , drop = FALSE]
+      present <- if (nrow(rows) == 0L) character() else rows[[column]]
+      present <- unique(metadata_nonempty_text(present))
+      if (length(present) > 0L) {
+        return(list(values = present, layer = layer))
+      }
+    }
+    fallback <- unique(metadata_nonempty_text(fallback))
+    list(
+      values = fallback,
+      layer = if (length(fallback) > 0L) {
+        "Imported source details"
+      } else {
+        "Not specified"
+      }
+    )
+  }
+  label_result <- resolve_property("label", legacy$label %||% character())
+  unit_result <- resolve_property(
+    "unit",
+    c(
+      legacy$unit %||% character(),
+      legacy_units[[variable]] %||% character()
+    )
+  )
+  calibration_result <- resolve_property(
+    "calibration",
+    c(
+      legacy$calibration %||% character(),
+      (record$source_manifest$details$calibration %||% list())[[variable]] %||%
+        character()
+    )
+  )
+  labels <- label_result$values
+  units <- unit_result$values
+  calibrations <- calibration_result$values
+  label_conflict <- length(labels) > 1L
+  unit_conflict <- length(units) > 1L
+  calibration_conflict <- length(calibrations) > 1L
+  label_unit_layers <- unique(c(label_result$layer, unit_result$layer))
+  label_unit_layers <- setdiff(label_unit_layers, "Not specified")
+  provenance <- if (length(label_unit_layers) == 0L) {
+    "Not specified"
+  } else if (length(label_unit_layers) == 1L) {
+    label_unit_layers[[1L]]
+  } else {
+    paste0(
+      "Label: ",
+      label_result$layer,
+      "; Unit: ",
+      unit_result$layer
+    )
+  }
+  target_layer <- c(
+    label_result$layer,
+    unit_result$layer,
+    calibration_result$layer
+  )
+  target_layer <- target_layer[
+    target_layer %in%
+      c(
+        "LightLogWeb overlay",
+        "Immutable source"
+      )
+  ]
+  target_layer <- if (length(target_layer) == 0L) NULL else target_layer[[1L]]
+  selected <- if (is.null(target_layer)) {
+    candidates[FALSE, , drop = FALSE]
+  } else {
+    candidates[candidates$layer == target_layer, , drop = FALSE]
+  }
+  namespace_id <- unique(metadata_nonempty_text(selected$namespace_id))
+  source_name <- unique(metadata_nonempty_text(selected$source_name))
+  target <- if (length(namespace_id) == 1L && length(source_name) == 1L) {
+    path <- if (identical(target_layer, "LightLogWeb overlay")) {
+      "/variables"
+    } else {
+      "/variable_inventory"
+    }
+    new_metadata_focus_request(
+      dataset_id = record$id,
+      namespace_id = namespace_id[[1L]],
+      field = "name",
+      path_contains = path,
+      record_identity = source_name[[1L]],
+      label = paste("Variable metadata for", variable)
+    )
+  } else {
+    NULL
+  }
+  structure(
+    list(
+      raw_name = variable,
+      source_name = if (length(source_name) == 1L) source_name[[1L]] else
+        variable,
+      label = if (label_conflict || length(labels) == 0L) variable else
+        labels[[1L]],
+      display_label = if (label_conflict || length(labels) == 0L) {
+        variable
+      } else {
+        labels[[1L]]
+      },
+      unit = if (unit_conflict) {
+        "varies by retained source"
+      } else {
+        metadata_display_unit(units)
+      },
+      calibration = if (calibration_conflict) {
+        "varies by retained source"
+      } else if (length(calibrations) == 0L) {
+        "not specified"
+      } else {
+        calibrations[[1L]]
+      },
+      provenance = provenance,
+      label_provenance = label_result$layer,
+      unit_provenance = unit_result$layer,
+      calibration_provenance = calibration_result$layer,
+      conflict = label_conflict || unit_conflict || calibration_conflict,
+      candidates = candidates,
+      target = target
+    ),
+    class = c("llw_metadata_variable_resolution", "list")
+  )
+}
+
+metadata_variable_choice_labels <- function(record, variables) {
+  assert_character_vector(variables, "variables")
+  values <- vapply(
+    variables,
+    function(variable) {
+      resolved <- metadata_resolve_variable(record, variable)
+      label <- resolved$display_label
+      if (!identical(label, variable))
+        label <- paste0(label, " [", variable, "]")
+      paste0(label, " \u00b7 ", resolved$unit)
+    },
+    character(1)
+  )
+  stats::setNames(variables, values)
+}
+
 glc_metadata_namespace_id <- function(source) {
   paste0(
     "glc:",
@@ -1919,6 +2614,7 @@ new_glc_source_metadata_snapshot <- function(
   metadata,
   datasets = data.frame(),
   variables = data.frame(),
+  relationships = NULL,
   state = NULL
 ) {
   if (!is.list(source)) {
@@ -1963,7 +2659,18 @@ new_glc_source_metadata_snapshot <- function(
   if (!is.data.frame(datasets) || !is.data.frame(variables)) {
     abort_llw("GLC metadata inventories must be tabular.", type = "validation")
   }
+  if (!is.null(relationships)) {
+    relationships <- validate_metadata_relationship_context(relationships)
+  }
   namespace_id <- glc_metadata_namespace_id(source)
+  records <- list(
+    core_metadata = metadata,
+    dataset_inventory = datasets,
+    variable_inventory = variables
+  )
+  if (!is.null(relationships)) {
+    records$relationship_context <- relationships
+  }
   source_namespace <- new_metadata_source_namespace(
     namespace_id = namespace_id,
     source_dataset_id = namespace_id,
@@ -1973,11 +2680,7 @@ new_glc_source_metadata_snapshot <- function(
       substr(source$resolved_revision, 1L, 12L)
     ),
     source_type = "glc_package",
-    records = list(
-      core_metadata = metadata,
-      dataset_inventory = datasets,
-      variable_inventory = variables
-    ),
+    records = records,
     resources = resources,
     state = state %||%
       if (metadata_value_has_content(metadata)) {
@@ -2052,7 +2755,8 @@ new_selected_glc_source_metadata_snapshot <- function(
   metadata,
   selected_groups,
   variables,
-  resources = NULL
+  resources = NULL,
+  relationships = NULL
 ) {
   if (is.null(resources)) {
     resource_status <- metadata$tables$resource_status %||% data.frame()
@@ -2080,7 +2784,91 @@ new_selected_glc_source_metadata_snapshot <- function(
       selected_groups = selected_groups
     ),
     datasets = metadata$tables$datasets %||% data.frame(),
-    variables = variables
+    variables = variables,
+    relationships = relationships
+  )
+}
+
+metadata_scope_rows_by_id <- function(table, column, ids) {
+  if (!is.data.frame(table) || !column %in% names(table)) return(table)
+  ids <- metadata_nonempty_text(ids)
+  table[as.character(table[[column]]) %in% ids, , drop = FALSE]
+}
+
+metadata_scope_glc_core <- function(core, selected_ids) {
+  if (!is.list(core)) return(core)
+  scoped <- core
+  contracts <- list(
+    study = c("study_internal_id", "study_ids"),
+    participants = c("participant_internal_id", "participant_ids"),
+    participant_characteristics = c(
+      "participant_internal_id",
+      "participant_ids"
+    ),
+    datasets = c("dataset_internal_id", "dataset_ids"),
+    devices = c("device_internal_id", "device_ids"),
+    device_datasheets = c("datasheet_id", "datasheet_ids")
+  )
+  for (name in intersect(names(contracts), names(scoped))) {
+    contract <- contracts[[name]]
+    scoped[[name]] <- metadata_scope_rows_by_id(
+      scoped[[name]],
+      contract[[1L]],
+      selected_ids[[contract[[2L]]]] %||% character()
+    )
+  }
+  scoped
+}
+
+new_scoped_glc_source_metadata_snapshot <- function(
+  snapshot,
+  selected_metadata,
+  selected_groups,
+  variables
+) {
+  snapshot <- validate_glc_source_metadata_snapshot(snapshot)
+  selected_metadata <- validate_glc_selected_metadata(selected_metadata)
+  if (
+    !is.data.frame(selected_groups) ||
+      !"file_group_id" %in% names(selected_groups) ||
+      !setequal(
+        metadata_nonempty_text(selected_groups$file_group_id),
+        metadata_nonempty_text(selected_metadata$selected_ids$file_group_ids)
+      )
+  ) {
+    abort_llw(
+      "The scoped metadata snapshot does not match its selected file groups.",
+      type = "validation"
+    )
+  }
+  source_namespace <- snapshot$bundle$sources[[1L]]
+  records <- source_namespace$records
+  core <- records$core_metadata %||% list()
+  scoped_core <- metadata_scope_glc_core(
+    core,
+    selected_metadata$selected_ids
+  )
+  datasets <- metadata_scope_rows_by_id(
+    records$dataset_inventory %||% data.frame(),
+    "dataset_id",
+    selected_metadata$selected_ids$dataset_ids
+  )
+  relationships <- records$relationship_context %||% NULL
+  if (!is.null(relationships)) {
+    relationships <- metadata_relationship_subset(
+      relationships,
+      selected_metadata$selected_ids$file_group_ids,
+      selected_metadata$selected_ids$dataset_ids
+    )
+  }
+  new_glc_source_metadata_snapshot(
+    source = snapshot$source,
+    resources = source_namespace$resources,
+    metadata = scoped_core,
+    datasets = datasets,
+    variables = variables,
+    relationships = relationships,
+    state = source_namespace$state
   )
 }
 

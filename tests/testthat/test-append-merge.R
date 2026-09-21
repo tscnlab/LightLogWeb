@@ -9,6 +9,11 @@ test_that("dataset inventory reports provenance, dimensions, time, and unknowns"
   expect_equal(inventory$sampling_seconds, 60)
   expect_identical(inventory$source_timezone, "UTC")
   expect_identical(inventory$primary_unit, "lux")
+  expect_identical(inventory$primary_display_unit, "lux")
+  expect_identical(
+    inventory$primary_metadata_provenance,
+    "Imported source details"
+  )
   expect_equal(inventory$source_size_bytes, 1024)
   expect_equal(inventory$recipe_revision, 0L)
 
@@ -21,6 +26,14 @@ test_that("dataset inventory reports provenance, dimensions, time, and unknowns"
   unknown_inventory <- dataset_record_inventory(unknown)
   expect_true(is.na(unknown_inventory$source_timezone))
   expect_true(is.na(unknown_inventory$primary_unit))
+  expect_identical(
+    unknown_inventory$primary_display_unit,
+    "unit not specified"
+  )
+  expect_identical(
+    unknown_inventory$primary_metadata_provenance,
+    "Imported source details"
+  )
   expect_true(is.na(unknown_inventory$device))
 })
 

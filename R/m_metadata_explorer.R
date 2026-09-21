@@ -66,28 +66,6 @@ metadata_layer_choices <- function(bundle) {
   )
 }
 
-metadata_resource_choices <- function(
-  index,
-  namespace_id = "all",
-  layer = "all"
-) {
-  nodes <- index$nodes
-  keep <- nodes$kind == "resource"
-  if (!identical(namespace_id, "all")) {
-    keep <- keep & nodes$namespace_id == namespace_id
-  }
-  if (!identical(layer, "all")) {
-    keep <- keep & nodes$layer == layer
-  }
-  resources <- sort(unique(nodes$resource[keep]), method = "radix")
-  resources <- resources[!is.na(resources) & nzchar(resources)]
-  labels <- gsub("[_-]+", " ", resources)
-  labels <- tools::toTitleCase(labels)
-  labels[resources == "metadata_bundle"] <- "Retained Source Metadata"
-  labels[resources == "factual_metadata"] <- "Record Summary"
-  c("All sections" = "all", stats::setNames(resources, labels))
-}
-
 metadata_entry_choice_label <- function(row, max_value = 72L) {
   value <- row$value[[1L]]
   if (is.na(value) || !nzchar(value)) value <- "not specified"
@@ -200,6 +178,155 @@ metadata_group_path_segments <- function(group) {
   segments
 }
 
+metadata_group_section_id <- function(group) {
+  if (!is.data.frame(group) || nrow(group) != 1L) {
+    abort_llw(
+      "A metadata section can only be derived from one grouped field.",
+      type = "validation"
+    )
+  }
+  resource <- metadata_nonempty_text(group$resource[[1L]])
+  if (length(resource) > 0L && !identical(resource[[1L]], "metadata_bundle")) {
+    return(resource[[1L]])
+  }
+  segments <- metadata_group_path_segments(group)
+  if (length(segments) > 0L) segments[[1L]] else "metadata"
+}
+
+metadata_section_label <- function(section_id) {
+  switch(
+    section_id,
+    core_metadata = "Core Metadata",
+    dataset_inventory = "Dataset Inventory",
+    variable_inventory = "Variable Inventory",
+    factual_metadata = "Record Summary",
+    metadata_bundle = "Retained Source Metadata",
+    metadata_friendly_name(section_id)
+  )
+}
+
+metadata_section_index <- function(index) {
+  index <- validate_metadata_index(index, index$source_fingerprint)
+  groups <- index$groups
+  if (nrow(groups) == 0L) {
+    return(data.frame(
+      group_id = character(),
+      namespace_id = character(),
+      layer = character(),
+      section_id = character(),
+      section_label = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  section_ids <- vapply(
+    seq_len(nrow(groups)),
+    function(row) metadata_group_section_id(groups[row, , drop = FALSE]),
+    character(1)
+  )
+  data.frame(
+    group_id = groups$group_id,
+    namespace_id = groups$namespace_id,
+    layer = groups$layer,
+    section_id = section_ids,
+    section_label = vapply(
+      section_ids,
+      metadata_section_label,
+      character(1)
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+metadata_section_choices <- function(
+  section_index,
+  namespace_id = "all",
+  layer = "all"
+) {
+  keep <- rep(TRUE, nrow(section_index))
+  if (!identical(namespace_id, "all")) {
+    keep <- keep & section_index$namespace_id %in% namespace_id
+  }
+  if (!identical(layer, "all")) {
+    keep <- keep & section_index$layer %in% layer
+  }
+  sections <- unique(
+    section_index[keep, c("section_id", "section_label"), drop = FALSE]
+  )
+  if (nrow(sections) == 0L) return(c("All sections" = "all"))
+  preferred <- match(
+    sections$section_id,
+    c("core_metadata", "dataset_inventory", "variable_inventory")
+  )
+  ordering <- order(
+    is.na(preferred),
+    preferred,
+    sections$section_label,
+    sections$section_id,
+    method = "radix"
+  )
+  sections <- sections[ordering, , drop = FALSE]
+  c(
+    "All sections" = "all",
+    stats::setNames(sections$section_id, sections$section_label)
+  )
+}
+
+metadata_section_filter_visible <- function(choices) {
+  length(setdiff(unique(unname(choices)), "all")) > 1L
+}
+
+metadata_index_query_groups_by_section <- function(
+  index,
+  section_index = NULL,
+  query = "",
+  namespace_id = NULL,
+  section_id = "all",
+  layer = NULL,
+  sort_by = c("path", "field", "value", "source"),
+  descending = FALSE,
+  limit = 200L
+) {
+  index <- validate_metadata_index(index, index$source_fingerprint)
+  assert_scalar_string(section_id, "section_id")
+  if (
+    !is.numeric(limit) ||
+      length(limit) != 1L ||
+      is.na(limit) ||
+      limit < 1 ||
+      limit != floor(limit)
+  ) {
+    abort_llw(
+      "Metadata result limit must be a positive whole number.",
+      type = "validation"
+    )
+  }
+  if (is.null(section_index)) section_index <- metadata_section_index(index)
+  result <- metadata_index_query_groups(
+    index,
+    query = query,
+    namespace_id = namespace_id,
+    resource = NULL,
+    layer = layer,
+    sort_by = match.arg(sort_by),
+    descending = descending,
+    limit = max(1L, nrow(index$groups))
+  )
+  rows <- result$rows
+  if (!identical(section_id, "all")) {
+    group_ids <- section_index$group_id[
+      section_index$section_id == section_id
+    ]
+    rows <- rows[rows$group_id %in% group_ids, , drop = FALSE]
+  }
+  total <- nrow(rows)
+  rows <- utils::head(rows, as.integer(limit))
+  rownames(rows) <- NULL
+  structure(
+    list(rows = rows, total = total, limited = total > nrow(rows)),
+    class = c("llw_metadata_group_query", "list")
+  )
+}
+
 metadata_group_location_text <- function(group) {
   segments <- metadata_group_path_segments(group)
   paste(
@@ -259,7 +386,7 @@ metadata_result_list_ui <- function(
 ) {
   if (!is.data.frame(rows) || nrow(rows) == 0L) return(NULL)
   if (is.null(selected) || !selected %in% rows$group_id) {
-    selected <- rows$group_id[[1L]]
+    selected <- character()
   }
   tags$div(
     class = "llw-metadata-result-list",
@@ -365,7 +492,7 @@ metadata_property_group_list_ui <- function(
       is.na(selected) ||
       !selected %in% groups$group_id
   ) {
-    selected <- groups$group_id[[1L]]
+    selected <- character()
   }
   tags$div(
     class = paste("llw-metadata-property-list", class),
@@ -382,46 +509,120 @@ metadata_property_group_list_ui <- function(
   )
 }
 
-metadata_item_properties_ui <- function(
-  neighborhood,
-  input_id,
-  selected_group_id
-) {
+metadata_hierarchy_context_neighborhood <- function(context) {
   if (
-    is.null(neighborhood) ||
-      !inherits(neighborhood, "llw_metadata_neighborhood") ||
-      nrow(neighborhood$property_groups) == 0L
+    is.null(context) ||
+      !inherits(context, "llw_metadata_node_context")
   ) {
     return(NULL)
   }
-  instance_count <- nrow(neighborhood$item_nodes)
-  tags$section(
-    class = "llw-metadata-item-properties",
-    tags$div(
-      class = "llw-metadata-section-heading",
-      tags$div(
-        tags$h4("Explore this metadata item"),
-        tags$p(
-          class = "llw-secondary mb-0",
-          paste(
-            "Choose any retained property to inspect its values. Fields are",
-            "joined only when they belong to the same exact source item."
-          )
-        )
-      ),
-      tags$span(
-        class = "llw-metadata-relationship-badge",
-        paste(
-          format(instance_count, big.mark = ","),
-          if (instance_count == 1L) "item instance" else "item instances"
-        )
-      )
+  item_nodes <- context$exact_nodes
+  if (!is.data.frame(item_nodes) || nrow(item_nodes) == 0L) {
+    item_nodes <- context$node
+  }
+  representative_node_id <- if (nrow(item_nodes) > 0L) {
+    item_nodes$node_id[[1L]]
+  } else {
+    ""
+  }
+  structure(
+    list(
+      selected_group_id = NULL,
+      item_nodes = item_nodes,
+      property_entries = context$entries,
+      property_groups = context$groups,
+      representative_node_id = representative_node_id
     ),
+    class = c("llw_metadata_neighborhood", "list")
+  )
+}
+
+metadata_item_properties_ui <- function(
+  neighborhood,
+  input_id,
+  selected_group_id,
+  children = NULL,
+  child_input_id = metadata_hierarchy_action_id,
+  show_areas = FALSE
+) {
+  if (
+    !isTRUE(show_areas) &&
+      (is.null(neighborhood) ||
+        !inherits(neighborhood, "llw_metadata_neighborhood"))
+  ) {
+    return(NULL)
+  }
+  has_children <- is.data.frame(children) && nrow(children) > 0L
+  groups <- neighborhood$property_groups
+  has_fields <- is.data.frame(groups) && nrow(groups) > 0L
+  properties <- if (!has_fields) {
+    llw_status_callout(
+      "idle",
+      if (has_children) {
+        "Open a contained item below to reach its fields. The previously selected field remains unchanged."
+      } else {
+        "No retained fields or deeper items are available here. Choose an earlier path level or use One level up."
+      },
+      heading = "No fields at this hierarchy focus",
+      compact = TRUE
+    )
+  } else {
     metadata_property_group_list_ui(
-      neighborhood$property_groups,
+      groups,
       input_id,
       selected_group_id
     )
+  }
+  tags$div(
+    class = "llw-metadata-item-properties",
+    `aria-label` = "Fields and contained metadata",
+    if (!has_fields && !isTRUE(show_areas)) properties,
+    tags$div(
+      class = "llw-metadata-focus-contents",
+      if (has_children)
+        metadata_hierarchy_branch_list_ui(
+          children,
+          child_input_id
+        ),
+      if (has_fields) properties
+    )
+  )
+}
+
+metadata_item_count_ui <- function(neighborhood) {
+  if (is.null(neighborhood)) return(NULL)
+  instance_count <- nrow(neighborhood$item_nodes)
+  if (instance_count == 0L) return(NULL)
+  tags$span(
+    class = "llw-metadata-relationship-badge",
+    paste(
+      format(instance_count, big.mark = ","),
+      if (instance_count == 1L) "retained item" else "retained items"
+    )
+  )
+}
+
+metadata_hierarchy_action_id <- function(node_id) {
+  if (length(node_id) == 0L) return(character())
+  paste0("hierarchy_enter_", node_id)
+}
+
+metadata_hierarchy_branch_list_ui <- function(nodes, input_id) {
+  enter_icon <- icon("chevron-right")
+  tags$div(
+    class = "llw-metadata-branch-list",
+    role = "group",
+    `aria-label` = "Contained metadata",
+    lapply(seq_len(nrow(nodes)), function(index) {
+      node <- nodes[index, , drop = FALSE]
+      actionButton(
+        input_id(node$node_id[[1L]]),
+        label = metadata_hierarchy_node_choice_ui(node),
+        icon = enter_icon,
+        `aria-label` = paste("Open", metadata_friendly_name(node$label[[1L]])),
+        class = "llw-metadata-branch-action"
+      )
+    })
   )
 }
 
@@ -445,6 +646,20 @@ metadata_hierarchy_node_choice_ui <- function(
   label <- node$label[[1L]]
   if (is.na(label) || !nzchar(label)) label <- "Unnamed metadata node"
   facts <- character()
+  logical_item_count <- if ("logical_item_count" %in% names(node)) {
+    node$logical_item_count[[1L]]
+  } else {
+    1L
+  }
+  if (logical_item_count > 1L) {
+    facts <- c(
+      facts,
+      paste(
+        format(logical_item_count, big.mark = ","),
+        "grouped items"
+      )
+    )
+  }
   if (node$direct_value_count[[1L]] > 0L) {
     facts <- c(
       facts,
@@ -527,205 +742,399 @@ metadata_hierarchy_node_list_ui <- function(
   )
 }
 
+metadata_hierarchy_collapse_nodes <- function(index, nodes) {
+  if (!is.data.frame(nodes)) {
+    abort_llw("Metadata hierarchy nodes are invalid.", type = "validation")
+  }
+  nodes <- metadata_index_decorate_nodes(index, nodes)
+  if (nrow(nodes) == 0L) {
+    nodes$logical_item_count <- integer()
+    return(nodes)
+  }
+  key_fields <- c("namespace_id", "layer", "resource", "kind", "label")
+  key_parts <- lapply(key_fields, function(field) {
+    value <- as.character(nodes[[field]])
+    value[is.na(value)] <- "<missing>"
+    value
+  })
+  keys <- do.call(paste, c(key_parts, sep = "\r"))
+  logical_keys <- unique(keys)
+  result <- nodes[match(logical_keys, keys), , drop = FALSE]
+  result$logical_item_count <- integer(nrow(result))
+  for (index_row in seq_len(nrow(result))) {
+    members <- which(keys == logical_keys[[index_row]])
+    result$logical_item_count[[index_row]] <- length(members)
+    result$direct_value_count[[index_row]] <- sum(
+      nodes$direct_value_count[members],
+      na.rm = TRUE
+    )
+    result$child_node_count[[index_row]] <- sum(
+      nodes$child_node_count[members],
+      na.rm = TRUE
+    )
+    if (length(members) > 1L) result$record_identity[[index_row]] <- ""
+  }
+  rownames(result) <- NULL
+  result
+}
+
+metadata_hierarchy_same_level_nodes <- function(index, node_row) {
+  nodes <- index$nodes
+  node <- nodes[node_row, , drop = FALSE]
+  parent_id <- node$parent_node_id[[1L]]
+  if (is.na(parent_id) || !nzchar(parent_id)) {
+    return(metadata_index_decorate_nodes(index, node))
+  }
+  same <- nodes$parent_node_id == parent_id
+  for (field in c("namespace_id", "layer", "resource", "kind", "label")) {
+    target <- node[[field]][[1L]]
+    values <- nodes[[field]]
+    same_field <- if (is.na(target)) {
+      is.na(values)
+    } else {
+      !is.na(values) & values == target
+    }
+    same <- same & same_field
+  }
+  same[is.na(same)] <- FALSE
+  peers <- nodes[which(same), , drop = FALSE]
+  ordering <- order(peers$path, peers$node_id, method = "radix")
+  peers <- peers[ordering, , drop = FALSE]
+  rownames(peers) <- NULL
+  metadata_index_decorate_nodes(index, peers)
+}
+
+metadata_hierarchy_node_context <- function(index, node_id) {
+  index <- validate_metadata_index(index, index$source_fingerprint)
+  assert_scalar_string(node_id, "node_id")
+  node_row <- match(node_id, index$nodes$node_id)
+  if (is.na(node_row)) return(NULL)
+
+  exact_nodes <- metadata_hierarchy_same_level_nodes(index, node_row)
+  node <- metadata_hierarchy_collapse_nodes(index, exact_nodes)
+  node <- node[1L, , drop = FALSE]
+  exact_node_ids <- exact_nodes$node_id
+  entry_rows <- which(index$entries$node_id %in% exact_node_ids)
+  entries <- index$entries[entry_rows, , drop = FALSE]
+  if (nrow(entries) > 0L) {
+    ordering <- order(entries$path, entries$entry_id, method = "radix")
+    entries <- entries[ordering, , drop = FALSE]
+  }
+  group_ids <- unique(entries$group_id)
+  group_rows <- match(group_ids, index$groups$group_id)
+  groups <- index$groups[group_rows[!is.na(group_rows)], , drop = FALSE]
+  child_rows <- which(index$nodes$parent_node_id %in% exact_node_ids)
+  children <- metadata_hierarchy_collapse_nodes(
+    index,
+    index$nodes[child_rows, , drop = FALSE]
+  )
+  ancestors <- metadata_index_decorate_nodes(
+    index,
+    metadata_index_node_ancestors(index, node$node_id[[1L]])
+  )
+  ancestors$logical_item_count <- 1L
+  current_row <- match(node$node_id[[1L]], ancestors$node_id)
+  if (!is.na(current_row)) {
+    shared <- intersect(names(ancestors), names(node))
+    ancestors[current_row, shared] <- node[1L, shared]
+  }
+  rownames(entries) <- NULL
+  rownames(groups) <- NULL
+  structure(
+    list(
+      node = node,
+      exact_nodes = exact_nodes,
+      ancestors = ancestors,
+      entries = entries,
+      groups = groups,
+      children = children
+    ),
+    class = c("llw_metadata_node_context", "list")
+  )
+}
+
+metadata_hierarchy_logical_roots <- function(index, group) {
+  index <- validate_metadata_index(index, index$source_fingerprint)
+  if (is.character(group)) group <- metadata_index_group(index, group)
+  if (is.null(group) || !inherits(group, "llw_metadata_group")) {
+    return(index$nodes[FALSE, , drop = FALSE])
+  }
+  selected <- group$group
+  nodes <- index$nodes
+  scope_rows <- which(
+    nodes$namespace_id == selected$namespace_id[[1L]] &
+      nodes$layer == selected$layer[[1L]]
+  )
+  if (length(scope_rows) == 0L) return(nodes[FALSE, , drop = FALSE])
+
+  record_containers <- nodes$node_id[scope_rows[
+    nodes$kind[scope_rows] == "group" &
+      nodes$label[scope_rows] == "records" &
+      grepl("/records$", nodes$path[scope_rows])
+  ]]
+  root_rows <- scope_rows[
+    nodes$parent_node_id[scope_rows] %in% record_containers
+  ]
+
+  resource_rows <- scope_rows[
+    nodes$kind[scope_rows] == "resource" &
+      nodes$label[scope_rows] != "metadata_bundle"
+  ]
+  if (length(resource_rows) > 0L) {
+    child_rows <- scope_rows[
+      nodes$kind[scope_rows] %in% c("group", "table")
+    ]
+    child_parents <- nodes$parent_node_id[child_rows]
+    child_match <- match(nodes$node_id[resource_rows], child_parents)
+    duplicate_children <- child_rows[child_match]
+    unique_child_parent <- !duplicated(child_parents) &
+      !duplicated(child_parents, fromLast = TRUE)
+    valid_duplicate <- !is.na(child_match) &
+      unique_child_parent[child_match] &
+      nodes$path[duplicate_children] == nodes$path[resource_rows] &
+      nodes$label[duplicate_children] == nodes$label[resource_rows]
+    duplicate_children[!valid_duplicate] <- NA_integer_
+    root_rows <- c(
+      root_rows,
+      ifelse(is.na(duplicate_children), resource_rows, duplicate_children)
+    )
+  }
+
+  root_rows <- unique(root_rows)
+  if (length(root_rows) == 0L && nrow(group$entries) > 0L) {
+    ancestors <- metadata_index_node_ancestors(
+      index,
+      group$entries$node_id[[1L]]
+    )
+    meaningful <- which(
+      !ancestors$kind %in% c("source", "resource") &
+        !ancestors$label %in% c("metadata_bundle", "sources", "records")
+    )
+    if (length(meaningful) > 0L) {
+      root_rows <- match(
+        ancestors$node_id[[meaningful[[1L]]]],
+        nodes$node_id
+      )
+    }
+  }
+  root_rows <- root_rows[!is.na(root_rows)]
+  roots <- nodes[root_rows, , drop = FALSE]
+  if (nrow(roots) == 0L) return(roots)
+
+  key <- paste(roots$path, roots$label, sep = "\r")
+  roots <- roots[!duplicated(key), , drop = FALSE]
+  known_order <- match(
+    roots$label,
+    c("core_metadata", "dataset_inventory", "variable_inventory"),
+    nomatch = 4L
+  )
+  ordering <- order(known_order, roots$path, roots$node_id, method = "radix")
+  roots <- roots[ordering, , drop = FALSE]
+  rownames(roots) <- NULL
+  roots
+}
+
+metadata_hierarchy_active_root_id <- function(context, roots) {
+  if (
+    is.null(context) ||
+      !inherits(context, "llw_metadata_node_context") ||
+      !is.data.frame(roots) ||
+      nrow(roots) == 0L
+  ) {
+    return("")
+  }
+  candidates <- context$ancestors$node_id[
+    context$ancestors$node_id %in% roots$node_id
+  ]
+  if (length(candidates) == 0L) "" else candidates[[1L]]
+}
+
+metadata_hierarchy_visible_path <- function(context, roots) {
+  if (is.null(context) || !inherits(context, "llw_metadata_node_context")) {
+    return(data.frame())
+  }
+  path <- context$ancestors
+  active_root <- metadata_hierarchy_active_root_id(context, roots)
+  if (nzchar(active_root)) {
+    start <- match(active_root, path$node_id)
+    path <- if (start < nrow(path)) {
+      path[seq.int(start + 1L, nrow(path)), , drop = FALSE]
+    } else {
+      path[FALSE, , drop = FALSE]
+    }
+  } else {
+    keep <- !path$kind %in% c("source") &
+      !path$label %in% c("metadata_bundle", "sources", "records")
+    path <- path[keep, , drop = FALSE]
+  }
+  if (nrow(path) == 0L) return(path)
+  duplicate_key <- paste(path$path, path$label, sep = "\r")
+  remove_wrapper <- path$kind == "resource" &
+    duplicated(duplicate_key, fromLast = TRUE)
+  path <- path[!remove_wrapper, , drop = FALSE]
+  rownames(path) <- NULL
+  path
+}
+
+metadata_hierarchy_full_path <- function(context, roots) {
+  if (is.null(context) || !inherits(context, "llw_metadata_node_context")) {
+    return(data.frame())
+  }
+  path <- context$ancestors
+  active_root <- metadata_hierarchy_active_root_id(context, roots)
+  if (nzchar(active_root)) {
+    path <- path[
+      seq.int(match(active_root, path$node_id), nrow(path)),
+      ,
+      drop = FALSE
+    ]
+  } else {
+    path <- path[
+      !path$kind %in% c("source") &
+        !path$label %in% c("metadata_bundle", "sources", "records"),
+      ,
+      drop = FALSE
+    ]
+  }
+  duplicate_key <- paste(path$path, path$label, sep = "\r")
+  path <- path[
+    !(path$kind == "resource" & duplicated(duplicate_key, fromLast = TRUE)),
+    ,
+    drop = FALSE
+  ]
+  rownames(path) <- NULL
+  path
+}
+
+metadata_hierarchy_parent_id <- function(context, roots) {
+  if (is.null(context) || !inherits(context, "llw_metadata_node_context")) {
+    return(NULL)
+  }
+  path <- metadata_hierarchy_full_path(context, roots)
+  if (nrow(path) <= 1L) return("metadata_areas")
+  path$node_id[[nrow(path) - 1L]]
+}
+
+metadata_hierarchy_path_ui <- function(path, input_id, compact = TRUE) {
+  if (nrow(path) == 0L) return(NULL)
+  shown <- if (isTRUE(compact)) utils::tail(path, 4L) else path
+  tags$div(
+    class = paste(
+      "llw-metadata-breadcrumbs",
+      if (isTRUE(compact)) "is-compact" else "is-full"
+    ),
+    style = paste0(
+      "--llw-path-levels: ",
+      nrow(shown),
+      "; --llw-path-small-levels: ",
+      min(1L, nrow(shown)),
+      ";"
+    ),
+    radioButtons(
+      input_id,
+      tags$span(
+        class = "visually-hidden",
+        "Jump to a level in the metadata path"
+      ),
+      choiceNames = lapply(seq_len(nrow(shown)), function(index) {
+        node <- shown[index, , drop = FALSE]
+        label <- metadata_friendly_name(node$label[[1L]])
+        tags$span(
+          class = "llw-metadata-breadcrumb",
+          title = paste(metadata_hierarchy_kind_label(node$kind[[1L]]), label),
+          tags$span(
+            class = "llw-metadata-location__level",
+            metadata_hierarchy_kind_label(node$kind[[1L]])
+          ),
+          tags$strong(label),
+          tags$code(node$label[[1L]])
+        )
+      }),
+      choiceValues = shown$node_id,
+      selected = character(),
+      width = "100%"
+    )
+  )
+}
+
 metadata_hierarchy_context_ui <- function(
   context,
-  neighborhood,
+  roots,
   input_ids,
   selected_group_id
 ) {
-  if (
-    is.null(context) ||
-      !inherits(context, "llw_metadata_node_context")
-  ) {
+  if (is.null(context) || !inherits(context, "llw_metadata_node_context")) {
     return(NULL)
   }
-  node <- context$node
-  is_overlay <- identical(
-    node$namespace_id[[1L]],
-    metadata_overlay_namespace_id()
-  )
-  provenance_class <- if (is_overlay) {
-    "llw-metadata-provenance--overlay"
-  } else {
-    "llw-metadata-provenance--source"
-  }
-  on_item <- !is.null(neighborhood) &&
-    node$node_id[[1L]] %in% neighborhood$item_nodes$node_id
-  tags$section(
-    class = "llw-metadata-hierarchy-explorer",
-    tags$div(
-      class = "llw-metadata-section-heading",
-      tags$div(
-        tags$h4("Explore the metadata hierarchy"),
-        tags$p(
-          class = "llw-secondary mb-0",
-          paste(
-            "Move to a broader level, open contained metadata, or inspect a",
-            "nearby structural branch. Containment is not semantic equivalence."
-          )
-        )
-      ),
-      tags$span(
-        class = paste("llw-metadata-provenance", provenance_class),
-        if (is_overlay) "Overlay hierarchy" else "Source hierarchy"
-      )
+  path <- metadata_hierarchy_full_path(context, roots)
+  tags$div(
+    class = "llw-app llw-metadata-navigation-dialog",
+    tags$p(
+      "Choose any level to jump there. The properties below the path follow your focus."
     ),
-    tags$div(
-      class = "llw-metadata-hierarchy-focus",
-      tags$span(
-        class = "llw-metadata-location__level",
-        "Hierarchy focus"
-      ),
-      tags$strong(metadata_friendly_name(node$label[[1L]])),
-      tags$span(metadata_hierarchy_kind_label(node$kind[[1L]]))
-    ),
-    if (!is.null(neighborhood) && nrow(neighborhood$item_nodes) > 1L) {
-      tags$div(
-        class = "llw-metadata-hierarchy-block",
-        tags$h5("Choose an exact item instance"),
-        tags$p(
-          class = "llw-secondary small",
-          paste(
-            "Properties stay grouped across repeated records above. Choose",
-            "one retained instance to inspect its exact surrounding path."
-          )
-        ),
-        metadata_hierarchy_node_list_ui(
-          neighborhood$item_nodes,
-          input_ids$instance,
-          "Exact metadata item instances",
-          selected = if (on_item) node$node_id[[1L]] else character(),
-          class = "llw-metadata-node-list--instances",
-          show_instance = TRUE
-        )
-      )
-    },
-    tags$div(
-      class = "llw-metadata-hierarchy-block",
-      tags$h5("Path to this focus"),
-      metadata_hierarchy_node_list_ui(
-        context$ancestors,
-        input_ids$path,
-        "Path to hierarchy focus",
-        selected = node$node_id[[1L]],
-        class = "llw-metadata-node-list--path"
-      )
-    ),
-    if (!on_item && nrow(context$groups) > 0L) {
-      tags$div(
-        class = "llw-metadata-hierarchy-block",
-        tags$h5("Fields at this level"),
-        tags$p(
-          class = "llw-secondary small",
-          "Select a field to make it the active metadata result."
-        ),
-        metadata_property_group_list_ui(
-          context$groups,
-          input_ids$field,
-          selected_group_id,
-          class = "llw-metadata-property-list--hierarchy",
-          label = "Fields at hierarchy focus"
-        )
-      )
-    },
-    if (nrow(context$children) > 0L) {
-      tags$div(
-        class = "llw-metadata-hierarchy-block",
-        tags$h5("Contained metadata"),
-        metadata_hierarchy_node_list_ui(
-          context$children,
-          input_ids$child,
-          "Contained metadata",
-          class = "llw-metadata-node-list--children"
-        )
-      )
-    },
-    if (nrow(context$nearby) > 0L) {
-      tags$div(
-        class = "llw-metadata-hierarchy-block",
-        tags$h5("Nearby structural branches"),
-        tags$p(
-          class = "llw-secondary small",
-          paste(
-            "These branches share a retained ancestor with the selected",
-            "item. No scientific relationship is inferred."
-          )
-        ),
-        metadata_hierarchy_node_list_ui(
-          context$nearby,
-          input_ids$nearby,
-          "Nearby structural branches",
-          class = "llw-metadata-node-list--nearby",
-          show_anchor = TRUE
-        )
-      )
-    },
-    tags$details(
-      class = "llw-metadata-group-path",
-      tags$summary("Exact hierarchy focus path"),
-      tags$dl(
-        class = "llw-metadata-focus-path",
-        if (
-          "record_identity" %in%
-            names(node) &&
-            nzchar(node$record_identity[[1L]])
-        ) {
-          tags$div(
-            tags$dt("Retained record identity"),
-            tags$dd(tags$code(node$record_identity[[1L]]))
-          )
-        },
-        tags$div(
-          tags$dt("Exact source path"),
-          tags$dd(tags$code(node$path[[1L]]))
-        )
-      )
-    )
+    metadata_hierarchy_path_ui(path, input_ids$path, compact = FALSE)
   )
 }
 
 metadata_hierarchy_summary_ui <- function(group, context) {
-  if (
-    is.null(group) ||
-      !inherits(group, "llw_metadata_group") ||
-      is.null(context) ||
-      !inherits(context, "llw_metadata_node_context")
-  ) {
-    return(tags$span(
-      class = "llw-metadata-hierarchy-summary__empty",
-      "Choose a matching field first"
-    ))
+  if (is.null(group) || is.null(context)) {
+    return(tags$span("Choose a matching field first"))
   }
-  row <- group$group
-  node <- context$node
   tags$span(
     class = "llw-metadata-hierarchy-summary__state",
-    tags$span(
-      paste("Selected field:", metadata_friendly_name(row$field[[1L]]))
-    ),
-    tags$span(
-      paste("Hierarchy focus:", metadata_friendly_name(node$label[[1L]]))
-    )
+    paste("Hierarchy focus:", metadata_friendly_name(context$node$label[[1L]]))
   )
 }
 
 metadata_hierarchy_shell_ui <- function(ns) {
-  accordion(
-    id = ns("hierarchy_accordion"),
-    open = FALSE,
-    multiple = FALSE,
-    class = "llw-metadata-hierarchy-accordion",
-    accordion_panel(
-      title = tags$div(
-        class = "llw-metadata-hierarchy-accordion__title",
-        tags$span(
-          class = "llw-metadata-hierarchy-accordion__label",
-          "Explore metadata structure"
+  card(
+    id = ns("hierarchy_focus"),
+    class = "llw-metadata-path-card llw-metadata-navigation-card",
+    tabindex = "-1",
+    `aria-label` = "Metadata explorer",
+    card_header(
+      class = "llw-metadata-navigation-header",
+      tags$span("Metadata explorer"),
+      bslib::popover(
+        tags$button(
+          id = ns("explorer_help_button"),
+          type = "button",
+          class = "btn btn-outline-secondary llw-icon-button",
+          `aria-label` = "How to use the metadata explorer",
+          icon("circle-question")
         ),
-        uiOutput(ns("hierarchy_summary"), inline = TRUE)
+        paste(
+          "Arrows open branches. Radios select a field without leaving this level.",
+          "Use One level up or a path block to move back.",
+          "The left \u2026 opens the full path.",
+          "Values stay within one exact source namespace and are never reconciled or inferred."
+        ),
+        title = "Explore metadata",
+        id = ns("explorer_help"),
+        placement = "bottom",
+        options = list(
+          trigger = "click",
+          container = "body",
+          animation = FALSE,
+          customClass = "llw-metadata-help-popup"
+        )
+      )
+    ),
+    card_body(
+      class = "llw-metadata-navigation-body",
+      uiOutput(ns("hierarchy_content")),
+      tags$div(
+        class = "llw-metadata-navigation-toolbar",
+        actionButton(
+          ns("hierarchy_up"),
+          "One level up",
+          icon = icon("arrow-up"),
+          disabled = TRUE,
+          class = "btn-outline-secondary"
+        ),
+        uiOutput(ns("item_count"), class = "llw-metadata-item-count")
       ),
-      value = "metadata_structure",
-      uiOutput(ns("hierarchy_content"))
+      uiOutput(ns("item_properties"))
     )
   )
 }
@@ -733,88 +1142,62 @@ metadata_hierarchy_shell_ui <- function(ns) {
 metadata_hierarchy_panel_ui <- function(
   group,
   context,
-  neighborhood,
-  input_ids = NULL
+  roots,
+  input_ids = NULL,
+  show_areas = FALSE
 ) {
-  if (
-    is.null(group) ||
-      !inherits(group, "llw_metadata_group") ||
-      is.null(context) ||
-      !inherits(context, "llw_metadata_node_context") ||
-      is.null(neighborhood) ||
-      !inherits(neighborhood, "llw_metadata_neighborhood")
-  ) {
-    return(llw_status_callout(
-      "idle",
-      paste(
-        "Choose a matching field first. You can then browse its containing",
-        "metadata and choose a related retained field."
-      ),
-      heading = "No metadata structure selected",
-      compact = TRUE
+  if (isTRUE(show_areas) && !is.null(group)) {
+    return(tags$div(
+      class = "llw-metadata-hierarchy-panel llw-metadata-location",
+      `data-selected-group` = group$group$group_id[[1L]],
+      tags$span(class = "llw-metadata-location__level", "Navigation"),
+      tags$strong("Metadata areas")
+    ))
+  }
+  if (is.null(group) || is.null(context)) {
+    return(tags$p(
+      class = "llw-secondary mb-0",
+      "Choose a matching field to see its path and explore nearby metadata."
     ))
   }
   input_ids <- utils::modifyList(
     list(
-      property = "metadata_neighborhood_group_id",
-      instance = "metadata_hierarchy_instance_node_id",
       path = "metadata_hierarchy_path_node_id",
-      field = "metadata_hierarchy_field_group_id",
-      child = "metadata_hierarchy_child_node_id",
-      nearby = "metadata_hierarchy_nearby_node_id"
+      full_path = "metadata_hierarchy_full_path"
     ),
     input_ids %||% list()
   )
-  row <- group$group
-  node <- context$node
+  path <- metadata_hierarchy_full_path(context, roots)
   tags$div(
-    class = "llw-metadata-hierarchy-panel",
+    class = "llw-metadata-hierarchy-panel llw-metadata-location",
+    `data-selected-group` = group$group$group_id[[1L]],
     tags$div(
-      class = "llw-metadata-hierarchy-direction",
-      role = "status",
-      `aria-live` = "polite",
-      `aria-atomic` = "true",
-      tags$strong("This panel controls the selected metadata field below."),
-      tags$p(
-        class = "mb-0",
-        paste(
-          "Choose a branch to change the hierarchy focus. Choose a field to",
-          "replace the selected field below. Search and result order above",
-          "stay unchanged."
-        )
-      )
-    ),
-    tags$dl(
-      class = "llw-metadata-hierarchy-selection-state",
-      tags$div(
-        tags$dt("Selected field below"),
-        tags$dd(
-          tags$strong(metadata_friendly_name(row$field[[1L]])),
-          tags$code(row$field[[1L]])
+      class = "llw-metadata-path-row",
+      actionButton(
+        input_ids$full_path,
+        label = tags$span(`aria-hidden` = "true", "\u2026"),
+        `aria-label` = "Show full metadata path",
+        title = "Show the full path and jump to an earlier level",
+        class = paste(
+          "btn-outline-secondary llw-metadata-path-overflow",
+          if (nrow(path) > 4L) "has-overflow",
+          if (nrow(path) > 1L) "has-mobile-overflow"
         )
       ),
-      tags$div(
-        tags$dt("Current hierarchy focus"),
-        tags$dd(
-          tags$strong(metadata_friendly_name(node$label[[1L]])),
-          tags$span(metadata_hierarchy_kind_label(node$kind[[1L]]))
-        )
-      )
-    ),
-    metadata_item_properties_ui(
-      neighborhood,
-      input_ids$property,
-      row$group_id[[1L]]
-    ),
-    metadata_hierarchy_context_ui(
-      context,
-      neighborhood,
-      input_ids,
-      row$group_id[[1L]]
+      metadata_hierarchy_path_ui(path, input_ids$path)
     )
   )
 }
 
+metadata_navigation_dependency <- function() {
+  htmltools::htmlDependency(
+    name = "llw-metadata-navigation",
+    version = "1.0.0",
+    src = c(file = lightlogweb_asset_dir()),
+    script = "js/metadata-navigation.js",
+    all_files = FALSE
+  )
+}
 metadata_group_values_ui <- function(group) {
   entries <- group$entries
   values <- entries$value
@@ -901,6 +1284,59 @@ metadata_group_values_ui <- function(group) {
   )
 }
 
+metadata_display_source_fingerprint <- function(
+  bundle,
+  namespace_id,
+  path = NULL
+) {
+  bundle <- validate_metadata_bundle(bundle)
+  assert_scalar_string(namespace_id, "namespace_id")
+  if (!namespace_id %in% names(bundle$sources)) {
+    abort_llw(
+      "The metadata source namespace is unavailable.",
+      type = "validation"
+    )
+  }
+  if (!is.null(path)) assert_scalar_string(path, "path")
+
+  source <- bundle$sources[[namespace_id]]
+  nested_depth <- 0L
+  repeat {
+    nested <- source$records$metadata_bundle %||% NULL
+    if (!inherits(nested, "llw_metadata_bundle")) break
+    nested <- validate_metadata_bundle(nested)
+    nested_ids <- names(nested$sources)
+    matches <- if (is.null(path)) {
+      if (length(nested_ids) == 1L) nested_ids else character()
+    } else {
+      nested_ids[vapply(
+        nested_ids,
+        function(id) grepl(paste0("/", id, "/"), path, fixed = TRUE),
+        logical(1)
+      )]
+    }
+    if (length(matches) != 1L) break
+    source <- nested$sources[[matches[[1L]]]]
+    nested_depth <- nested_depth + 1L
+  }
+
+  list(
+    fingerprint = source$fingerprint,
+    label = if (nested_depth > 0L) {
+      "Retained source fingerprint"
+    } else if (
+      inherits(
+        bundle$sources[[namespace_id]]$records$metadata_bundle %||% NULL,
+        "llw_metadata_bundle"
+      )
+    ) {
+      "Namespace wrapper fingerprint"
+    } else {
+      "Source fingerprint"
+    }
+  )
+}
+
 metadata_group_detail_ui <- function(
   group,
   bundle,
@@ -919,10 +1355,17 @@ metadata_group_detail_ui <- function(
     row$namespace_id[[1L]],
     metadata_overlay_namespace_id()
   )
-  fingerprint <- if (is_overlay) {
-    bundle$overlay$source_fingerprint
+  fingerprint_contract <- if (is_overlay) {
+    list(
+      fingerprint = bundle$overlay$source_fingerprint,
+      label = "Bound source fingerprint"
+    )
   } else {
-    bundle$sources[[row$namespace_id[[1L]]]]$fingerprint
+    metadata_display_source_fingerprint(
+      bundle,
+      row$namespace_id[[1L]],
+      row$group_path[[1L]]
+    )
   }
   provenance_class <- if (is_overlay) {
     "llw-metadata-provenance--overlay"
@@ -937,10 +1380,28 @@ metadata_group_detail_ui <- function(
   card(
     class = "llw-metadata-detail-card",
     card_header("Selected metadata field"),
-    metadata_group_location_ui(row, show_source = show_source),
+    tags$section(
+      class = "llw-metadata-values-section",
+      tags$h4("Values in this field"),
+      tags$code(row$field[[1L]]),
+      tags$p(
+        class = "llw-secondary",
+        paste(
+          "Repeated records are kept together here rather than shown as",
+          "duplicate search results. No values are reconciled or inferred."
+        )
+      ),
+      metadata_group_values_ui(group)
+    ),
+    tags$h4(class = "llw-metadata-field-description", "About this field"),
     tags$dl(
       class = "llw-metadata-detail-list",
       tags$div(tags$dt("Field"), tags$dd(tags$code(row$field[[1L]]))),
+      if (isTRUE(show_source))
+        tags$div(
+          tags$dt("Source dataset"),
+          tags$dd(row$source_label[[1L]])
+        ),
       tags$div(
         tags$dt("Retained values"),
         tags$dd(format(row$entry_count[[1L]], big.mark = ","))
@@ -958,23 +1419,12 @@ metadata_group_detail_ui <- function(
         ))
       ),
       tags$div(
-        tags$dt(
-          if (is_overlay) "Bound source fingerprint" else "Source fingerprint"
-        ),
-        tags$dd(tags$code(paste0(substr(fingerprint, 1L, 23L), "...")))
+        tags$dt(fingerprint_contract$label),
+        tags$dd(tags$code(paste0(
+          substr(fingerprint_contract$fingerprint, 1L, 23L),
+          "..."
+        )))
       )
-    ),
-    tags$section(
-      class = "llw-metadata-values-section",
-      tags$h4("Values in this field"),
-      tags$p(
-        class = "llw-secondary",
-        paste(
-          "Repeated records are kept together here rather than shown as",
-          "duplicate search results. No values are reconciled or inferred."
-        )
-      ),
-      metadata_group_values_ui(group)
     ),
     tags$details(
       class = "llw-metadata-group-path",
@@ -1050,10 +1500,17 @@ metadata_entry_detail_ui <- function(entry, bundle) {
     entry$namespace_id[[1L]],
     metadata_overlay_namespace_id()
   )
-  fingerprint <- if (is_overlay) {
-    bundle$overlay$source_fingerprint
+  fingerprint_contract <- if (is_overlay) {
+    list(
+      fingerprint = bundle$overlay$source_fingerprint,
+      label = "Bound source fingerprint"
+    )
   } else {
-    bundle$sources[[entry$namespace_id[[1L]]]]$fingerprint
+    metadata_display_source_fingerprint(
+      bundle,
+      entry$namespace_id[[1L]],
+      entry$path[[1L]]
+    )
   }
   provenance_class <- if (is_overlay) {
     "llw-metadata-provenance--overlay"
@@ -1097,14 +1554,11 @@ metadata_entry_detail_ui <- function(entry, bundle) {
         )
       ),
       tags$div(
-        tags$dt(
-          if (is_overlay) {
-            "Bound source fingerprint"
-          } else {
-            "Source fingerprint"
-          }
-        ),
-        tags$dd(tags$code(paste0(substr(fingerprint, 1L, 23L), "...")))
+        tags$dt(fingerprint_contract$label),
+        tags$dd(tags$code(paste0(
+          substr(fingerprint_contract$fingerprint, 1L, 23L),
+          "..."
+        )))
       )
     ),
     tags$p(
@@ -1677,6 +2131,8 @@ metadata_filter_grid_ui <- function(
   ns,
   selected_namespace = "all",
   selected_layer = "all",
+  section_choices = NULL,
+  selected_section = "all",
   selected_sort = "path"
 ) {
   if (!is.function(ns)) {
@@ -1722,16 +2178,33 @@ metadata_filter_grid_ui <- function(
       )
     }
   }
-  controls <- c(
-    controls,
-    list(selectInput(
-      ns("resource"),
-      "Section",
-      choices = c("All sections" = "all"),
-      selectize = FALSE,
-      width = "100%"
-    ))
-  )
+  if (is.null(section_choices)) {
+    section_choices <- if (is.null(bundle)) {
+      c("All sections" = "all")
+    } else {
+      metadata_section_choices(
+        metadata_section_index(bundle$index),
+        namespace_id = selected_namespace,
+        layer = selected_layer
+      )
+    }
+  }
+  if (metadata_section_filter_visible(section_choices)) {
+    if (!selected_section %in% unname(section_choices)) {
+      selected_section <- "all"
+    }
+    controls <- c(
+      controls,
+      list(selectInput(
+        ns("resource"),
+        "Section",
+        choices = section_choices,
+        selected = selected_section,
+        selectize = FALSE,
+        width = "100%"
+      ))
+    )
+  }
   sort_choices <- c(
     "Metadata location" = "path",
     "Field name" = "field",
@@ -1767,22 +2240,9 @@ metadata_filter_grid_ui <- function(
 metadata_explorer_ui <- function(id) {
   ns <- NS(id)
   tags$section(
+    metadata_navigation_dependency(),
     class = "llw-metadata-explorer",
     `aria-labelledby` = ns("heading"),
-    tags$div(
-      class = "llw-metadata-explorer__heading",
-      tags$h2(id = ns("heading"), "Explore metadata"),
-      tags$p(
-        class = "llw-secondary",
-        paste(
-          "Search retained field names and values, select a match, then",
-          "explore its properties, exact hierarchy, and nearby source context."
-        )
-      )
-    ),
-    uiOutput(ns("dataset_state")),
-    uiOutput(ns("dataset_identity")),
-    uiOutput(ns("layer_summary")),
     card(
       class = "llw-metadata-search-card",
       card_header("Find metadata"),
@@ -1811,18 +2271,37 @@ metadata_explorer_ui <- function(id) {
         ns("descending"),
         "Reverse sort order",
         value = FALSE
+      ),
+      tags$div(
+        class = "llw-metadata-search-results",
+        uiOutput(ns("result_summary")),
+        uiOutput(ns("result_list"))
       )
     ),
-    uiOutput(ns("result_summary")),
-    uiOutput(ns("result_list")),
     uiOutput(ns("hierarchy_shell")),
-    uiOutput(ns("entry_detail"))
+    uiOutput(ns("entry_detail")),
+    tags$div(
+      class = "llw-metadata-explorer__heading",
+      tags$h2(id = ns("heading"), "Dataset and metadata context"),
+      tags$p(
+        class = "llw-secondary",
+        "Retained source facts and the LightLogWeb overlay for the selected dataset."
+      )
+    ),
+    uiOutput(ns("dataset_state")),
+    uiOutput(ns("dataset_identity")),
+    uiOutput(ns("layer_summary")),
+    uiOutput(ns("focus_status"))
   )
 }
 
-metadata_explorer_server <- function(id, dataset) {
+metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
   if (!shiny::is.reactive(dataset)) {
     abort_llw("`dataset` must be a reactive input.", type = "validation")
+  }
+  if (is.null(focus_request)) focus_request <- reactive(NULL)
+  if (!shiny::is.reactive(focus_request)) {
+    abort_llw("`focus_request` must be a reactive input.", type = "validation")
   }
 
   moduleServer(id, function(input, output, session) {
@@ -1842,16 +2321,6 @@ metadata_explorer_server <- function(id, dataset) {
       value$index
     })
 
-    output$filter_grid <- renderUI({
-      metadata_filter_grid_ui(
-        bundle(),
-        session$ns,
-        selected_namespace = isolate(input$namespace %||% "all"),
-        selected_layer = isolate(input$layer %||% "all"),
-        selected_sort = isolate(input$sort_by %||% "path")
-      )
-    })
-
     selected_namespace <- reactive({
       value <- bundle()
       if (is.null(value) || length(value$sources) <= 1L) return("all")
@@ -1868,24 +2337,38 @@ metadata_explorer_server <- function(id, dataset) {
       if (selected %in% choices) selected else "all"
     })
 
-    observe({
+    section_index <- reactive({
       value <- index()
-      choices <- if (is.null(value)) {
-        c("All sections" = "all")
-      } else {
-        metadata_resource_choices(
-          value,
-          namespace_id = selected_namespace(),
-          layer = selected_layer()
-        )
-      }
-      selected <- isolate(input$resource %||% "all")
-      if (!selected %in% unname(choices)) selected <- "all"
-      updateSelectInput(
-        session,
-        "resource",
-        choices = choices,
-        selected = selected
+      if (is.null(value)) return(NULL)
+      metadata_section_index(value)
+    })
+
+    section_choices <- reactive({
+      value <- section_index()
+      if (is.null(value)) return(c("All sections" = "all"))
+      metadata_section_choices(
+        value,
+        namespace_id = selected_namespace(),
+        layer = selected_layer()
+      )
+    })
+
+    selected_section <- reactive({
+      choices <- section_choices()
+      if (!metadata_section_filter_visible(choices)) return("all")
+      selected <- input$resource %||% "all"
+      if (selected %in% unname(choices)) selected else "all"
+    })
+
+    output$filter_grid <- renderUI({
+      metadata_filter_grid_ui(
+        bundle(),
+        session$ns,
+        selected_namespace = selected_namespace(),
+        selected_layer = selected_layer(),
+        section_choices = section_choices(),
+        selected_section = isolate(selected_section()),
+        selected_sort = isolate(input$sort_by %||% "path")
       )
     })
 
@@ -1904,6 +2387,13 @@ metadata_explorer_server <- function(id, dataset) {
         updateSelectInput(session, "namespace", selected = "all")
         updateSelectInput(session, "layer", selected = "all")
         updateSelectInput(session, "resource", selected = "all")
+        record_selection_revision(record_selection_revision() + 1L)
+        group_input_revision(-1L)
+        active_group_id(NULL)
+        focused_node_id(NULL)
+        requested_group_id(NULL)
+        requested_group_synced(FALSE)
+        external_focus_status(NULL)
       },
       ignoreInit = TRUE
     )
@@ -1916,11 +2406,12 @@ metadata_explorer_server <- function(id, dataset) {
           class = c("llw_metadata_group_query", "list")
         ))
       }
-      metadata_index_query_groups(
+      metadata_index_query_groups_by_section(
         value,
+        section_index = section_index(),
         query = input$query %||% "",
         namespace_id = selected_namespace(),
-        resource = input$resource %||% "all",
+        section_id = selected_section(),
         layer = selected_layer(),
         sort_by = input$sort_by %||% "path",
         descending = isTRUE(input$descending),
@@ -1953,6 +2444,31 @@ metadata_explorer_server <- function(id, dataset) {
       metadata_source_overlay_ui(value)
     })
 
+    active_group_id <- reactiveVal(NULL)
+    focused_node_id <- reactiveVal(NULL)
+    requested_group_id <- reactiveVal(NULL)
+    requested_group_synced <- reactiveVal(FALSE)
+    external_focus_status <- reactiveVal(NULL)
+    record_selection_revision <- reactiveVal(0L)
+    group_input_revision <- reactiveVal(-1L)
+
+    scroll_to_focus <- function() {
+      session$onFlushed(
+        function() {
+          group_id <- isolate(active_group_id())
+          if (is.null(group_id)) return(invisible(NULL))
+          session$sendCustomMessage(
+            "llw-metadata-focus",
+            list(
+              target = session$ns("hierarchy_focus"),
+              group_id = group_id
+            )
+          )
+        },
+        once = TRUE
+      )
+    }
+
     output$result_summary <- renderUI({
       value <- bundle()
       if (is.null(value)) return(NULL)
@@ -1970,7 +2486,20 @@ metadata_explorer_server <- function(id, dataset) {
       value <- bundle()
       if (is.null(value)) return(NULL)
       result <- query_result()
-      current <- isolate(input$group_id %||% "")
+      requested <- isolate(requested_group_id())
+      input_is_current <- identical(
+        group_input_revision(),
+        record_selection_revision()
+      )
+      current <- if (
+        !is.null(requested) && requested %in% result$rows$group_id
+      ) {
+        requested
+      } else if (input_is_current) {
+        isolate(input$group_id %||% "")
+      } else {
+        ""
+      }
       metadata_result_list_ui(
         result$rows,
         input_id = session$ns("group_id"),
@@ -1994,15 +2523,13 @@ metadata_explorer_server <- function(id, dataset) {
     search_group_id <- reactive({
       result <- query_result()
       if (nrow(result$rows) == 0L) return(NULL)
-      group_id <- input$group_id %||% ""
-      if (!nzchar(group_id) || !group_id %in% result$rows$group_id) {
-        group_id <- result$rows$group_id[[1L]]
+      if (!identical(group_input_revision(), record_selection_revision())) {
+        return(NULL)
       }
-      group_id
+      group_id <- input$group_id %||% ""
+      if (!nzchar(group_id) || !group_id %in% result$rows$group_id) NULL else
+        group_id
     })
-
-    active_group_id <- reactiveVal(NULL)
-    focused_node_id <- reactiveVal(NULL)
 
     selected_group <- reactive({
       value <- index()
@@ -2026,6 +2553,13 @@ metadata_explorer_server <- function(id, dataset) {
       metadata_index_group_neighborhood(value, group)
     })
 
+    hierarchy_roots <- reactive({
+      value <- index()
+      group <- selected_group()
+      if (is.null(value) || is.null(group)) return(NULL)
+      metadata_hierarchy_logical_roots(value, group)
+    })
+
     hierarchy_context <- reactive({
       value <- index()
       group <- selected_group()
@@ -2034,6 +2568,7 @@ metadata_explorer_server <- function(id, dataset) {
         return(NULL)
       }
       node_id <- focused_node_id()
+      if (identical(node_id, "metadata_areas")) return(NULL)
       if (
         is.null(node_id) ||
           length(node_id) != 1L ||
@@ -2051,7 +2586,31 @@ metadata_explorer_server <- function(id, dataset) {
       ) {
         node_id <- neighborhood$representative_node_id
       }
-      metadata_index_node_context(value, node_id)
+      metadata_hierarchy_node_context(value, node_id)
+    })
+
+    hierarchy_neighborhood <- reactive({
+      metadata_hierarchy_context_neighborhood(hierarchy_context())
+    })
+
+    hierarchy_parent_id <- reactive({
+      metadata_hierarchy_parent_id(hierarchy_context(), hierarchy_roots())
+    })
+
+    observe({
+      updateActionButton(
+        session,
+        "hierarchy_up",
+        disabled = is.null(hierarchy_parent_id())
+      )
+    })
+
+    hierarchy_navigation_nodes <- reactive({
+      if (identical(focused_node_id(), "metadata_areas")) {
+        hierarchy_roots()
+      } else {
+        hierarchy_context()$children
+      }
     })
 
     activate_group <- function(group_id, reset_focus = TRUE) {
@@ -2069,8 +2628,13 @@ metadata_explorer_server <- function(id, dataset) {
       }
       group <- metadata_index_group(value, group_id)
       if (is.null(group)) return(invisible(FALSE))
+      previous_group_id <- isolate(active_group_id())
       active_group_id(group_id)
-      if (isTRUE(reset_focus)) {
+      if (
+        isTRUE(reset_focus) &&
+          (!identical(previous_group_id, group_id) ||
+            identical(isolate(focused_node_id()), "metadata_areas"))
+      ) {
         neighborhood <- metadata_index_group_neighborhood(value, group)
         focused_node_id(neighborhood$representative_node_id)
       }
@@ -2106,81 +2670,289 @@ metadata_explorer_server <- function(id, dataset) {
     observeEvent(
       search_group_id(),
       {
-        activate_group(search_group_id(), reset_focus = TRUE)
+        requested <- requested_group_id()
+        if (
+          !is.null(requested) &&
+            requested %in% index()$groups$group_id
+        ) {
+          activate_group(requested, reset_focus = FALSE)
+        } else {
+          activate_group(search_group_id(), reset_focus = TRUE)
+        }
       },
       ignoreInit = FALSE,
       ignoreNULL = FALSE
     )
 
     observeEvent(
+      input$group_id,
+      {
+        selected <- input$group_id %||% ""
+        group_input_revision(record_selection_revision())
+        requested <- isolate(requested_group_id())
+        if (!is.null(requested)) {
+          if (identical(selected, requested)) {
+            requested_group_synced(TRUE)
+          } else if (
+            nzchar(selected) &&
+              isTRUE(isolate(requested_group_synced()))
+          ) {
+            requested_group_id(NULL)
+            requested_group_synced(FALSE)
+            external_focus_status(NULL)
+          }
+        }
+        if (selected %in% query_result()$rows$group_id) scroll_to_focus()
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      focus_request(),
+      {
+        request <- tryCatch(
+          validate_metadata_focus_request(focus_request()),
+          error = identity
+        )
+        value <- record()
+        if (inherits(request, "error") || is.null(value)) {
+          external_focus_status(list(
+            state = "unavailable",
+            label = "Requested metadata context",
+            message = "The requested metadata context is not available."
+          ))
+          return()
+        }
+        if (!identical(request$dataset_id, value$id)) {
+          external_focus_status(list(
+            state = "unavailable",
+            label = request$label,
+            message = paste(
+              "The request belongs to another dataset. The current metadata",
+              "selection remains unchanged."
+            )
+          ))
+          return()
+        }
+        resolution <- metadata_resolve_focus_request(bundle(), request)
+        if (!identical(resolution$state, "resolved")) {
+          external_focus_status(list(
+            state = resolution$state,
+            label = request$label,
+            message = if (identical(resolution$state, "ambiguous")) {
+              paste(
+                "More than one exact retained location matched this request.",
+                "Nothing was selected automatically."
+              )
+            } else {
+              paste(
+                "No exact retained location matched this request. The",
+                "dataset remains fully available with raw names and values."
+              )
+            }
+          ))
+          return()
+        }
+        row <- bundle()$index$groups[
+          bundle()$index$groups$group_id == resolution$group_id,
+          ,
+          drop = FALSE
+        ]
+        requested_group_id(resolution$group_id)
+        requested_group_synced(identical(
+          isolate(input$group_id %||% ""),
+          resolution$group_id
+        ))
+        activate_group(resolution$group_id, reset_focus = TRUE)
+        if (!is.null(resolution$node_id)) {
+          set_hierarchy_focus(resolution$node_id)
+        }
+        updateTextInput(
+          session,
+          "query",
+          value = request$record_identity %||% request$field %||% ""
+        )
+        updateSelectInput(
+          session,
+          "namespace",
+          selected = row$namespace_id[[1L]]
+        )
+        updateSelectInput(session, "layer", selected = row$layer[[1L]])
+        updateSelectInput(
+          session,
+          "resource",
+          selected = metadata_group_section_id(row)
+        )
+        session$onFlushed(
+          function() {
+            updateRadioButtons(
+              session,
+              "group_id",
+              selected = resolution$group_id
+            )
+          },
+          once = TRUE
+        )
+        external_focus_status(list(
+          state = "resolved",
+          label = request$label,
+          message = paste(
+            "The exact retained field is selected above. Use the path and",
+            "visible explorer to navigate its containing source metadata."
+          )
+        ))
+        scroll_to_focus()
+      },
+      ignoreInit = FALSE,
+      ignoreNULL = TRUE
+    )
+
+    output$focus_status <- renderUI({
+      status <- external_focus_status()
+      if (is.null(status)) return(NULL)
+      llw_status_callout(
+        if (identical(status$state, "resolved")) "complete" else "warning",
+        status$message,
+        heading = status$label,
+        compact = TRUE,
+        live = TRUE
+      )
+    })
+
+    observeEvent(
       input$neighborhood_group_id,
       {
-        neighborhood <- selected_neighborhood()
+        neighborhood <- hierarchy_neighborhood()
         selected <- input$neighborhood_group_id %||% ""
         if (
           !is.null(neighborhood) &&
             selected %in% neighborhood$property_groups$group_id
         ) {
-          activate_group(selected, reset_focus = TRUE)
+          activate_group(selected, reset_focus = FALSE)
         }
       },
       ignoreInit = TRUE
     )
 
+    open_hierarchy_dialog <- function() {
+      context <- hierarchy_context()
+      if (is.null(context)) return(invisible(NULL))
+      showModal(modalDialog(
+        title = "Full metadata path",
+        metadata_hierarchy_context_ui(
+          context,
+          hierarchy_roots(),
+          input_ids = list(
+            path = session$ns("hierarchy_dialog_path_node_id")
+          ),
+          selected_group_id = active_group_id()
+        ),
+        footer = modalButton("Close"),
+        easyClose = TRUE,
+        fade = FALSE,
+        size = "l"
+      ))
+    }
     observeEvent(
-      input$hierarchy_field_group_id,
+      input$hierarchy_full_path,
       {
-        context <- hierarchy_context()
-        selected <- input$hierarchy_field_group_id %||% ""
-        if (!is.null(context) && selected %in% context$groups$group_id) {
-          activate_group(selected, reset_focus = TRUE)
-        }
+        open_hierarchy_dialog()
       },
       ignoreInit = TRUE
     )
-
     observeEvent(
-      input$hierarchy_instance_node_id,
+      input$hierarchy_up,
       {
-        neighborhood <- selected_neighborhood()
-        selected <- input$hierarchy_instance_node_id %||% ""
+        count <- input$hierarchy_up
         if (
-          !is.null(neighborhood) &&
-            selected %in% neighborhood$item_nodes$node_id
+          !is.numeric(count) ||
+            length(count) != 1L ||
+            is.na(count) ||
+            !is.finite(count) ||
+            count <= 0
         ) {
-          set_hierarchy_focus(selected)
+          return()
+        }
+        parent_id <- hierarchy_parent_id()
+        if (is.null(parent_id)) return()
+        if (identical(parent_id, "metadata_areas")) {
+          focused_node_id("metadata_areas")
+          scroll_to_focus()
+        } else if (isTRUE(set_hierarchy_focus(parent_id))) {
+          scroll_to_focus()
         }
       },
       ignoreInit = TRUE
     )
+
+    # One bounded observer tracks only the currently visible, stable node IDs.
+    # Rebaseline on a scope change so a stale/remounted button cannot open a
+    # different branch or replay an earlier activation.
+    navigation_scope <- NULL
+    navigation_counts <- numeric()
+    observe({
+      nodes <- hierarchy_navigation_nodes()
+      ids <- metadata_hierarchy_action_id(nodes$node_id %||% character())
+      counts <- stats::setNames(
+        vapply(
+          ids,
+          function(id) {
+            value <- input[[id]]
+            if (
+              is.numeric(value) &&
+                length(value) == 1L &&
+                !is.na(value) &&
+                is.finite(value) &&
+                value >= 0
+            ) {
+              as.numeric(value)
+            } else 0
+          },
+          numeric(1)
+        ),
+        ids
+      )
+      scope <- list(record_selection_revision(), focused_node_id(), ids)
+      if (!identical(navigation_scope, scope)) {
+        navigation_scope <<- scope
+        navigation_counts <<- counts
+        return()
+      }
+      activated <- which(counts > navigation_counts)
+      navigation_counts <<- counts
+      if (length(activated) != 1L) return()
+      selected <- nodes$node_id[[activated]]
+      if (isTRUE(set_hierarchy_focus(selected))) scroll_to_focus()
+    })
 
     observeEvent(
       input$hierarchy_path_node_id,
       {
-        set_hierarchy_focus(input$hierarchy_path_node_id)
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(
-      input$hierarchy_child_node_id,
-      {
-        context <- hierarchy_context()
-        selected <- input$hierarchy_child_node_id %||% ""
-        if (!is.null(context) && selected %in% context$children$node_id) {
+        path <- metadata_hierarchy_full_path(
+          hierarchy_context(),
+          hierarchy_roots()
+        )
+        selected <- input$hierarchy_path_node_id %||% ""
+        if (selected %in% path$node_id) {
           set_hierarchy_focus(selected)
+          scroll_to_focus()
         }
       },
       ignoreInit = TRUE
     )
 
     observeEvent(
-      input$hierarchy_nearby_node_id,
+      input$hierarchy_dialog_path_node_id,
       {
-        context <- hierarchy_context()
-        selected <- input$hierarchy_nearby_node_id %||% ""
-        if (!is.null(context) && selected %in% context$nearby$node_id) {
+        path <- metadata_hierarchy_full_path(
+          hierarchy_context(),
+          hierarchy_roots()
+        )
+        selected <- input$hierarchy_dialog_path_node_id %||% ""
+        if (selected %in% path$node_id) {
           set_hierarchy_focus(selected)
+          removeModal()
+          scroll_to_focus()
         }
       },
       ignoreInit = TRUE
@@ -2203,15 +2975,46 @@ metadata_explorer_server <- function(id, dataset) {
       metadata_hierarchy_panel_ui(
         selected_group(),
         hierarchy_context(),
-        selected_neighborhood(),
+        hierarchy_roots(),
         input_ids = list(
-          property = session$ns("neighborhood_group_id"),
-          instance = session$ns("hierarchy_instance_node_id"),
           path = session$ns("hierarchy_path_node_id"),
-          field = session$ns("hierarchy_field_group_id"),
-          child = session$ns("hierarchy_child_node_id"),
-          nearby = session$ns("hierarchy_nearby_node_id")
-        )
+          full_path = session$ns("hierarchy_full_path")
+        ),
+        show_areas = identical(focused_node_id(), "metadata_areas")
+      )
+    })
+
+    output$item_count <- renderUI({
+      metadata_item_count_ui(hierarchy_neighborhood())
+    })
+
+    # Keep the list mounted when only its selected field changes. Native radio
+    # updates preserve the browser's list scroll and keyboard focus.
+    output$item_properties <- renderUI({
+      group <- selected_group()
+      if (is.null(group)) return(NULL)
+      metadata_item_properties_ui(
+        hierarchy_neighborhood(),
+        session$ns("neighborhood_group_id"),
+        group$group$group_id[[1L]],
+        children = hierarchy_navigation_nodes(),
+        child_input_id = function(node_id) {
+          session$ns(metadata_hierarchy_action_id(node_id))
+        },
+        show_areas = identical(focused_node_id(), "metadata_areas")
+      )
+    }) |>
+      shiny::bindEvent(index(), focused_node_id(), ignoreNULL = FALSE)
+
+    observe({
+      selected <- active_group_id()
+      groups <- hierarchy_neighborhood()$property_groups$group_id
+      updateRadioButtons(
+        session,
+        "neighborhood_group_id",
+        selected = if (!is.null(selected) && selected %in% groups) {
+          selected
+        } else character()
       )
     })
 
@@ -2248,7 +3051,8 @@ metadata_explorer_server <- function(id, dataset) {
         shown_count = nrow(result$rows),
         selected_group_id = selected_group()$group$group_id %||% NULL,
         selected_entry_id = selected_entry()$entry_id %||% NULL,
-        focused_node_id = hierarchy_context()$node$node_id %||% NULL
+        focused_node_id = hierarchy_context()$node$node_id %||% NULL,
+        external_focus = external_focus_status()
       )
     })
 
@@ -2258,7 +3062,9 @@ metadata_explorer_server <- function(id, dataset) {
       selected_group = selected_group,
       selected_entry = selected_entry,
       selected_neighborhood = selected_neighborhood,
+      hierarchy_roots = hierarchy_roots,
       hierarchy_context = hierarchy_context,
+      hierarchy_neighborhood = hierarchy_neighborhood,
       status = status
     )
   })
@@ -2391,7 +3197,7 @@ metadata_explorer_fixture_records <- function(
           "sha256:",
           digest::digest(path, algo = "sha256", file = TRUE)
         ),
-        source_timezone = "UTC",
+        source_timezone = lubridate::tz(fixture$data$Datetime),
         imported_at = as.POSIXct(
           fixture$generation$generated_at,
           format = "%Y-%m-%dT%H:%M:%SZ",

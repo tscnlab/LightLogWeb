@@ -1,7 +1,7 @@
 {
   "report_schema": "llw-metadata-acceptance",
-  "report_version": "1.6.0",
-  "benchmarked_at": "2026-09-01T06:32:53Z",
+  "report_version": "2.7.0",
+  "benchmarked_at": "2026-09-14T21:03:05Z",
   "baseline": "b704d24ee6eab066163bb88e7125faf19e09543d",
   "budgets": {
     "interaction_design_target_p95_ms": 50,
@@ -9,8 +9,13 @@
     "retained_bundle_max_bytes": 33554432,
     "three_fixture_bundles_max_bytes": 67108864,
     "scaled_index_max_bytes": 67108864,
+    "section_index_max_bytes": 16777216,
     "hierarchy_navigation_max_alloc_bytes": 10485760,
     "hierarchy_panel_render_max_alloc_bytes": 10485760,
+    "hierarchy_dialog_render_max_alloc_bytes": 10485760,
+    "focus_contents_render_max_alloc_bytes": 10485760,
+    "relationship_add_max_alloc_bytes": 67108864,
+    "relationship_add_min_rows": 50000,
     "scaled_inventory_min_entries": 50000
   },
   "environment": {
@@ -28,104 +33,25 @@
       "group_count": 354,
       "node_count": 364,
       "index_bytes": 1192480,
-      "hierarchy_allocated_bytes": 244320,
+      "section_index_bytes": 78424,
+      "section_index_memory_pass": true,
+      "hierarchy_allocated_bytes": 239576,
       "hierarchy_allocation_pass": true,
-      "hierarchy_panel_allocated_bytes": 646088,
+      "hierarchy_panel_allocated_bytes": 286800,
       "hierarchy_panel_allocation_pass": true,
-      "operations": [
-        {
-          "operation": "navigation",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 1,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "search",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 6,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "filtering",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 10,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "sorting",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 7,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "selection",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 6,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "item_neighborhood",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 6,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "hierarchy_navigation",
-          "iterations": 200,
-          "p50_ms": 4,
-          "p95_ms": 10,
-          "max_ms": 12,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "collapsed_hierarchy_shell",
-          "iterations": 200,
-          "p50_ms": 2,
-          "p95_ms": 6.25,
-          "max_ms": 9,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "hierarchy_panel_render",
-          "iterations": 200,
-          "p50_ms": 40,
-          "p95_ms": 47,
-          "max_ms": 114,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        }
-      ]
-    },
-    {
-      "case_id": "iztech-light-subset",
-      "entry_count": 1144,
-      "group_count": 326,
-      "node_count": 317,
-      "index_bytes": 996512,
-      "hierarchy_allocated_bytes": 162256,
-      "hierarchy_allocation_pass": true,
-      "hierarchy_panel_allocated_bytes": 394392,
-      "hierarchy_panel_allocation_pass": true,
+      "hierarchy_dialog_allocated_bytes": 343136,
+      "hierarchy_dialog_allocation_pass": true,
+      "focus_contents_allocated_bytes": 201592,
+      "focus_contents_allocation_pass": true,
+      "widest_contents": {
+        "node_id": "metadata_node_00000022",
+        "label": "participant_characteristics",
+        "exact_child_count": 115,
+        "visible_child_count": 23,
+        "field_count": 0
+      },
+      "widest_contents_allocated_bytes": 357944,
+      "widest_contents_allocation_pass": true,
       "operations": [
         {
           "operation": "navigation",
@@ -141,101 +67,7 @@
           "iterations": 200,
           "p50_ms": 0,
           "p95_ms": 1,
-          "max_ms": 6,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "filtering",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
           "max_ms": 7,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "sorting",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 7,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "selection",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 7,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "item_neighborhood",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 7,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "hierarchy_navigation",
-          "iterations": 200,
-          "p50_ms": 4,
-          "p95_ms": 9,
-          "max_ms": 10,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "collapsed_hierarchy_shell",
-          "iterations": 200,
-          "p50_ms": 2,
-          "p95_ms": 3,
-          "max_ms": 10,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "hierarchy_panel_render",
-          "iterations": 200,
-          "p50_ms": 25,
-          "p95_ms": 33,
-          "max_ms": 37,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        }
-      ]
-    },
-    {
-      "case_id": "ucr-all-light-variables",
-      "entry_count": 4874,
-      "group_count": 723,
-      "node_count": 1175,
-      "index_bytes": 3419272,
-      "hierarchy_allocated_bytes": 705832,
-      "hierarchy_allocation_pass": true,
-      "hierarchy_panel_allocated_bytes": 1095576,
-      "hierarchy_panel_allocation_pass": true,
-      "operations": [
-        {
-          "operation": "navigation",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 1,
-          "design_target_pass": true,
-          "hard_gate_pass": true
-        },
-        {
-          "operation": "search",
-          "iterations": 200,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 6,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -253,6 +85,350 @@
           "iterations": 200,
           "p50_ms": 0,
           "p95_ms": 1,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "selection",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "item_neighborhood",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "logical_roots",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 11,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_navigation",
+          "iterations": 200,
+          "p50_ms": 3,
+          "p95_ms": 9,
+          "max_ms": 10,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_visible_path",
+          "iterations": 200,
+          "p50_ms": 2,
+          "p95_ms": 3,
+          "max_ms": 11,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_parent_navigation",
+          "iterations": 200,
+          "p50_ms": 2,
+          "p95_ms": 2,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "compact_hierarchy_shell",
+          "iterations": 200,
+          "p50_ms": 4,
+          "p95_ms": 10,
+          "max_ms": 13,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_panel_render",
+          "iterations": 200,
+          "p50_ms": 6,
+          "p95_ms": 12,
+          "max_ms": 106,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_dialog_render",
+          "iterations": 200,
+          "p50_ms": 9,
+          "p95_ms": 15,
+          "max_ms": 20,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_comparison",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_contents_render",
+          "iterations": 200,
+          "p50_ms": 4,
+          "p95_ms": 11,
+          "max_ms": 12,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "widest_contents_render",
+          "iterations": 200,
+          "p50_ms": 28,
+          "p95_ms": 37,
+          "max_ms": 116,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        }
+      ]
+    },
+    {
+      "case_id": "iztech-light-subset",
+      "entry_count": 1144,
+      "group_count": 326,
+      "node_count": 317,
+      "index_bytes": 996512,
+      "section_index_bytes": 72376,
+      "section_index_memory_pass": true,
+      "hierarchy_allocated_bytes": 204848,
+      "hierarchy_allocation_pass": true,
+      "hierarchy_panel_allocated_bytes": 254248,
+      "hierarchy_panel_allocation_pass": true,
+      "hierarchy_dialog_allocated_bytes": 265232,
+      "hierarchy_dialog_allocation_pass": true,
+      "focus_contents_allocated_bytes": 200704,
+      "focus_contents_allocation_pass": true,
+      "widest_contents": {
+        "node_id": "metadata_node_00000245",
+        "label": "datasheet_channel",
+        "exact_child_count": 33,
+        "visible_child_count": 33,
+        "field_count": 0
+      },
+      "widest_contents_allocated_bytes": 383952,
+      "widest_contents_allocation_pass": true,
+      "operations": [
+        {
+          "operation": "navigation",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "search",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "filtering",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "sorting",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "selection",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "item_neighborhood",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "logical_roots",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_navigation",
+          "iterations": 200,
+          "p50_ms": 3,
+          "p95_ms": 7.95,
+          "max_ms": 12,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_visible_path",
+          "iterations": 200,
+          "p50_ms": 2,
+          "p95_ms": 4,
+          "max_ms": 11,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_parent_navigation",
+          "iterations": 200,
+          "p50_ms": 2,
+          "p95_ms": 3,
+          "max_ms": 14,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "compact_hierarchy_shell",
+          "iterations": 200,
+          "p50_ms": 4,
+          "p95_ms": 10,
+          "max_ms": 12,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_panel_render",
+          "iterations": 200,
+          "p50_ms": 6,
+          "p95_ms": 14,
+          "max_ms": 15,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_dialog_render",
+          "iterations": 200,
+          "p50_ms": 6,
+          "p95_ms": 12,
+          "max_ms": 14,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_comparison",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_contents_render",
+          "iterations": 200,
+          "p50_ms": 6,
+          "p95_ms": 12,
+          "max_ms": 16,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "widest_contents_render",
+          "iterations": 200,
+          "p50_ms": 43,
+          "p95_ms": 50,
+          "max_ms": 135,
+          "design_target_pass": false,
+          "hard_gate_pass": true
+        }
+      ]
+    },
+    {
+      "case_id": "ucr-all-light-variables",
+      "entry_count": 4874,
+      "group_count": 723,
+      "node_count": 1175,
+      "index_bytes": 3419272,
+      "section_index_bytes": 158128,
+      "section_index_memory_pass": true,
+      "hierarchy_allocated_bytes": 707544,
+      "hierarchy_allocation_pass": true,
+      "hierarchy_panel_allocated_bytes": 724248,
+      "hierarchy_panel_allocation_pass": true,
+      "hierarchy_dialog_allocated_bytes": 780584,
+      "hierarchy_dialog_allocation_pass": true,
+      "focus_contents_allocated_bytes": 497696,
+      "focus_contents_allocation_pass": true,
+      "widest_contents": {
+        "node_id": "metadata_node_00001030",
+        "label": "variable_inventory",
+        "exact_child_count": 145,
+        "visible_child_count": 15,
+        "field_count": 0
+      },
+      "widest_contents_allocated_bytes": 506112,
+      "widest_contents_allocation_pass": true,
+      "operations": [
+        {
+          "operation": "navigation",
+          "iterations": 200,
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "search",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "filtering",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "sorting",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 1,
           "max_ms": 8,
           "design_target_pass": true,
           "hard_gate_pass": true
@@ -262,7 +438,7 @@
           "iterations": 200,
           "p50_ms": 0,
           "p95_ms": 1,
-          "max_ms": 6,
+          "max_ms": 7,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -270,8 +446,17 @@
           "operation": "item_neighborhood",
           "iterations": 200,
           "p50_ms": 1,
-          "p95_ms": 1,
-          "max_ms": 6,
+          "p95_ms": 2,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "logical_roots",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "max_ms": 8,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -279,26 +464,80 @@
           "operation": "hierarchy_navigation",
           "iterations": 200,
           "p50_ms": 4,
-          "p95_ms": 9,
-          "max_ms": 13,
+          "p95_ms": 8.95,
+          "max_ms": 14,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
-          "operation": "collapsed_hierarchy_shell",
+          "operation": "hierarchy_visible_path",
           "iterations": 200,
-          "p50_ms": 2,
-          "p95_ms": 3,
-          "max_ms": 8,
+          "p50_ms": 3,
+          "p95_ms": 5.65,
+          "max_ms": 12,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_parent_navigation",
+          "iterations": 200,
+          "p50_ms": 3,
+          "p95_ms": 5,
+          "max_ms": 11,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "compact_hierarchy_shell",
+          "iterations": 200,
+          "p50_ms": 4,
+          "p95_ms": 10.65,
+          "max_ms": 14,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
           "operation": "hierarchy_panel_render",
           "iterations": 200,
-          "p50_ms": 40,
-          "p95_ms": 48,
-          "max_ms": 102,
+          "p50_ms": 7,
+          "p95_ms": 12,
+          "max_ms": 14,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_dialog_render",
+          "iterations": 200,
+          "p50_ms": 10,
+          "p95_ms": 16,
+          "max_ms": 21,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_comparison",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_contents_render",
+          "iterations": 200,
+          "p50_ms": 3,
+          "p95_ms": 10,
+          "max_ms": 13,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "widest_contents_render",
+          "iterations": 200,
+          "p50_ms": 19,
+          "p95_ms": 27,
+          "max_ms": 109,
           "design_target_pass": true,
           "hard_gate_pass": true
         }
@@ -310,26 +549,41 @@
       "group_count": 740,
       "node_count": 725,
       "index_bytes": 2454056,
-      "hierarchy_allocated_bytes": 313976,
+      "section_index_bytes": 162344,
+      "section_index_memory_pass": true,
+      "hierarchy_allocated_bytes": 395616,
       "hierarchy_allocation_pass": true,
-      "hierarchy_panel_allocated_bytes": 567536,
+      "hierarchy_panel_allocated_bytes": 406768,
       "hierarchy_panel_allocation_pass": true,
+      "hierarchy_dialog_allocated_bytes": 406328,
+      "hierarchy_dialog_allocation_pass": true,
+      "focus_contents_allocated_bytes": 417720,
+      "focus_contents_allocation_pass": true,
+      "widest_contents": {
+        "node_id": "metadata_node_00000033",
+        "label": "participant_characteristics",
+        "exact_child_count": 115,
+        "visible_child_count": 23,
+        "field_count": 0
+      },
+      "widest_contents_allocated_bytes": 438160,
+      "widest_contents_allocation_pass": true,
       "operations": [
         {
           "operation": "navigation",
           "iterations": 200,
           "p50_ms": 0,
           "p95_ms": 1,
-          "max_ms": 1,
+          "max_ms": 7,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
           "operation": "search",
           "iterations": 200,
-          "p50_ms": 0,
+          "p50_ms": 1,
           "p95_ms": 1,
-          "max_ms": 6,
+          "max_ms": 10,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -338,7 +592,7 @@
           "iterations": 200,
           "p50_ms": 0,
           "p95_ms": 1,
-          "max_ms": 8,
+          "max_ms": 9,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -365,7 +619,16 @@
           "iterations": 200,
           "p50_ms": 0,
           "p95_ms": 1,
-          "max_ms": 6,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "logical_roots",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 8,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -373,26 +636,80 @@
           "operation": "hierarchy_navigation",
           "iterations": 200,
           "p50_ms": 3,
-          "p95_ms": 10,
-          "max_ms": 13,
+          "p95_ms": 7.25,
+          "max_ms": 14,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
-          "operation": "collapsed_hierarchy_shell",
+          "operation": "hierarchy_visible_path",
           "iterations": 200,
           "p50_ms": 2,
-          "p95_ms": 4,
+          "p95_ms": 3,
           "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_parent_navigation",
+          "iterations": 200,
+          "p50_ms": 2,
+          "p95_ms": 2.65,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "compact_hierarchy_shell",
+          "iterations": 200,
+          "p50_ms": 4,
+          "p95_ms": 9,
+          "max_ms": 10,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
           "operation": "hierarchy_panel_render",
           "iterations": 200,
-          "p50_ms": 26,
-          "p95_ms": 33,
-          "max_ms": 91,
+          "p50_ms": 5,
+          "p95_ms": 11,
+          "max_ms": 16,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_dialog_render",
+          "iterations": 200,
+          "p50_ms": 4,
+          "p95_ms": 11,
+          "max_ms": 12,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_comparison",
+          "iterations": 200,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_contents_render",
+          "iterations": 200,
+          "p50_ms": 10,
+          "p95_ms": 16.65,
+          "max_ms": 98,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "widest_contents_render",
+          "iterations": 200,
+          "p50_ms": 28.5,
+          "p95_ms": 39,
+          "max_ms": 120,
           "design_target_pass": true,
           "hard_gate_pass": true
         }
@@ -404,17 +721,32 @@
       "group_count": 7683,
       "node_count": 12925,
       "index_bytes": 35702368,
-      "hierarchy_allocated_bytes": 7444392,
+      "section_index_bytes": 1661488,
+      "section_index_memory_pass": true,
+      "hierarchy_allocated_bytes": 7541312,
       "hierarchy_allocation_pass": true,
-      "hierarchy_panel_allocated_bytes": 7850760,
+      "hierarchy_panel_allocated_bytes": 7140640,
       "hierarchy_panel_allocation_pass": true,
+      "hierarchy_dialog_allocated_bytes": 7196976,
+      "hierarchy_dialog_allocation_pass": true,
+      "focus_contents_allocated_bytes": 4967544,
+      "focus_contents_allocation_pass": true,
+      "widest_contents": {
+        "node_id": "metadata_node_00001030_scale_1",
+        "label": "variable_inventory",
+        "exact_child_count": 145,
+        "visible_child_count": 15,
+        "field_count": 0
+      },
+      "widest_contents_allocated_bytes": 3194632,
+      "widest_contents_allocation_pass": true,
       "operations": [
         {
           "operation": "navigation",
           "iterations": 120,
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "max_ms": 8,
+          "p50_ms": 3,
+          "p95_ms": 9.65,
+          "max_ms": 15,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -423,25 +755,25 @@
           "iterations": 120,
           "p50_ms": 3,
           "p95_ms": 4,
-          "max_ms": 9,
+          "max_ms": 11,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
           "operation": "filtering",
           "iterations": 120,
-          "p50_ms": 1,
-          "p95_ms": 4.6,
-          "max_ms": 7,
+          "p50_ms": 2,
+          "p95_ms": 9,
+          "max_ms": 10,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
           "operation": "sorting",
           "iterations": 120,
-          "p50_ms": 1,
-          "p95_ms": 6,
-          "max_ms": 7,
+          "p50_ms": 2,
+          "p95_ms": 8.65,
+          "max_ms": 12,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -450,7 +782,7 @@
           "iterations": 120,
           "p50_ms": 0,
           "p95_ms": 1,
-          "max_ms": 8,
+          "max_ms": 7,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
@@ -459,40 +791,405 @@
           "iterations": 120,
           "p50_ms": 1,
           "p95_ms": 2,
-          "max_ms": 7,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "logical_roots",
+          "iterations": 120,
+          "p50_ms": 11,
+          "p95_ms": 13,
+          "max_ms": 18,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
           "operation": "hierarchy_navigation",
           "iterations": 120,
-          "p50_ms": 9,
-          "p95_ms": 15,
-          "max_ms": 73,
+          "p50_ms": 16,
+          "p95_ms": 23,
+          "max_ms": 133,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
-          "operation": "collapsed_hierarchy_shell",
+          "operation": "hierarchy_visible_path",
           "iterations": 120,
-          "p50_ms": 2,
-          "p95_ms": 3,
-          "max_ms": 7,
+          "p50_ms": 15,
+          "p95_ms": 21,
+          "max_ms": 22,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_parent_navigation",
+          "iterations": 120,
+          "p50_ms": 14,
+          "p95_ms": 21,
+          "max_ms": 22,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "compact_hierarchy_shell",
+          "iterations": 120,
+          "p50_ms": 4,
+          "p95_ms": 10,
+          "max_ms": 11,
           "design_target_pass": true,
           "hard_gate_pass": true
         },
         {
           "operation": "hierarchy_panel_render",
           "iterations": 120,
-          "p50_ms": 44,
-          "p95_ms": 46.65,
-          "max_ms": 51,
+          "p50_ms": 19,
+          "p95_ms": 26,
+          "max_ms": 33,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "hierarchy_dialog_render",
+          "iterations": 120,
+          "p50_ms": 22,
+          "p95_ms": 28,
+          "max_ms": 31,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_comparison",
+          "iterations": 120,
+          "p50_ms": 3,
+          "p95_ms": 10,
+          "max_ms": 10,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "focus_contents_render",
+          "iterations": 120,
+          "p50_ms": 6,
+          "p95_ms": 13,
+          "max_ms": 94,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "widest_contents_render",
+          "iterations": 120,
+          "p50_ms": 20,
+          "p95_ms": 27,
+          "max_ms": 33,
           "design_target_pass": true,
           "hard_gate_pass": true
         }
       ]
     }
   ],
+  "integration_timing": [
+    {
+      "case_id": "tum-medi-only",
+      "variable": "MEDI",
+      "relationship_file_group_rows": 5,
+      "relationship_dataset_rows": 5,
+      "operations": [
+        {
+          "operation": "label_unit_resolution",
+          "iterations": 120,
+          "p50_ms": 2,
+          "p95_ms": 2,
+          "max_ms": 15,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "exact_variable_crosslink",
+          "iterations": 120,
+          "p50_ms": 5,
+          "p95_ms": 11,
+          "max_ms": 12,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "exact_dataset_crosslink",
+          "iterations": 120,
+          "p50_ms": 5,
+          "p95_ms": 12,
+          "max_ms": 14,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "relationship_selection",
+          "iterations": 120,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "relationship_context_table",
+          "iterations": 120,
+          "p50_ms": 2,
+          "p95_ms": 3,
+          "max_ms": 10,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        }
+      ]
+    },
+    {
+      "case_id": "iztech-light-subset",
+      "variable": "MEDI",
+      "relationship_file_group_rows": 6,
+      "relationship_dataset_rows": 5,
+      "operations": [
+        {
+          "operation": "label_unit_resolution",
+          "iterations": 120,
+          "p50_ms": 2,
+          "p95_ms": 3.65,
+          "max_ms": 10,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "exact_variable_crosslink",
+          "iterations": 120,
+          "p50_ms": 5,
+          "p95_ms": 11,
+          "max_ms": 13,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "exact_dataset_crosslink",
+          "iterations": 120,
+          "p50_ms": 5,
+          "p95_ms": 11,
+          "max_ms": 12,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "relationship_selection",
+          "iterations": 120,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "relationship_context_table",
+          "iterations": 120,
+          "p50_ms": 2,
+          "p95_ms": 2.65,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        }
+      ]
+    },
+    {
+      "case_id": "ucr-all-light-variables",
+      "variable": "MEDI",
+      "relationship_file_group_rows": 5,
+      "relationship_dataset_rows": 5,
+      "operations": [
+        {
+          "operation": "label_unit_resolution",
+          "iterations": 120,
+          "p50_ms": 2,
+          "p95_ms": 2,
+          "max_ms": 8,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "exact_variable_crosslink",
+          "iterations": 120,
+          "p50_ms": 10,
+          "p95_ms": 16,
+          "max_ms": 107,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "exact_dataset_crosslink",
+          "iterations": 120,
+          "p50_ms": 10,
+          "p95_ms": 17,
+          "max_ms": 29,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "relationship_selection",
+          "iterations": 120,
+          "p50_ms": 1,
+          "p95_ms": 1,
+          "max_ms": 7,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        },
+        {
+          "operation": "relationship_context_table",
+          "iterations": 120,
+          "p50_ms": 2,
+          "p95_ms": 3,
+          "max_ms": 9,
+          "design_target_pass": true,
+          "hard_gate_pass": true
+        }
+      ]
+    }
+  ],
+  "appended_integration": {
+    "case_id": "tum-iztech-appended",
+    "focus_variables": ["tum_MEDI", "iztech_MEDI", "iztech_LIGHT"],
+    "relationship_state": "ready",
+    "relationship_rows": 11,
+    "tum_namespace_ids": "dataset_m7tummedionly",
+    "tum_participant_ids": "TUM_S001",
+    "iztech_namespace_ids": "dataset_m7iztechlightsubset",
+    "iztech_participant_ids": "IZTECH_S004",
+    "iztech_device_ids": ["IZTECH_AL03", "IZTECH_AL04"],
+    "device_action_ids": ["open_device_metadata_6335f82ebde2c848f3d7bb1a1e53f944f1554d57b20ca70b84a032c301cdb137", "open_device_metadata_ad009367147316c1d64b860e809d659078a700a08ce9e9ccc20755be8f5c64f4"],
+    "device_action_ids_unique": true,
+    "derived_relationship_index_entries": 0,
+    "operations": [
+      {
+        "operation": "appended_relationship_selection",
+        "iterations": 120,
+        "p50_ms": 0,
+        "p95_ms": 1,
+        "max_ms": 1,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      },
+      {
+        "operation": "appended_mapped_focus_view",
+        "iterations": 120,
+        "p50_ms": 23,
+        "p95_ms": 30.65,
+        "max_ms": 42,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      },
+      {
+        "operation": "appended_device_action_identity",
+        "iterations": 120,
+        "p50_ms": 0,
+        "p95_ms": 1,
+        "max_ms": 1,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      }
+    ]
+  },
+  "entity_action_contract": {
+    "case_id": "iztech-five-participant-four-device-actions",
+    "entity_limit": 4,
+    "participant_ids": ["IZTECH_S001", "IZTECH_S002", "IZTECH_S003", "IZTECH_S004", "IZTECH_S005"],
+    "participant_action_ids": ["open_participant_metadata_a3f5bead9d8f417fac869a845b63e0849457fa7801f2aa03cf3d2c5f66e13bea", "open_participant_metadata_c571895203f14c49be3030a83de869d4b5ba7fcdcd378996e98fcf92b211ce75", "open_participant_metadata_026378a219282e9d0f1eff0cd25bc4d16660ebb3205a434dfa59be62609da01d", "open_participant_metadata_490aca6cfa20289f5af008eeca17ea4db165261cdd5b21c9efc059aafc60b9fc", "open_participant_metadata_461ac669b2e63471709e3ecf6e74c618c117db15ed9064f534c808f521f28fa8"],
+    "participant_reduction_shown": true,
+    "participant_actions_hidden_above_limit": true,
+    "first_four_participant_actions_shown": true,
+    "device_ids": ["IZTECH_AL03", "IZTECH_AL05_FW1_7", "IZTECH_AL04", "IZTECH_AL06_FW1_7"],
+    "device_action_ids": ["open_device_metadata_e5c7232d4a12d9e024644eeaf4dde92e2c348b8f9dbb380e8d184e45b9a75006", "open_device_metadata_e1169905c7d76508c83ec7c52a99ac1fee2d28ecf89cfc59950d2a2b5e81d896", "open_device_metadata_5928f0e7afcb80d46154fd0151547896fbc25705f70c798e5ed5731aa6932d56", "open_device_metadata_635e02c64ff5512d3f2c26decb10984264f613d976f86c5d41f02aad8b37228b"],
+    "all_four_device_actions_shown": true,
+    "action_ids_unique": true,
+    "operations": [
+      {
+        "operation": "entity_reference_resolution",
+        "iterations": 120,
+        "p50_ms": 0,
+        "p95_ms": 1,
+        "max_ms": 7,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      },
+      {
+        "operation": "four_participant_actions_render",
+        "iterations": 120,
+        "p50_ms": 2,
+        "p95_ms": 6.25,
+        "max_ms": 99,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      },
+      {
+        "operation": "five_participant_reduction_render",
+        "iterations": 120,
+        "p50_ms": 0,
+        "p95_ms": 1,
+        "max_ms": 7,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      },
+      {
+        "operation": "four_device_actions_render",
+        "iterations": 120,
+        "p50_ms": 2,
+        "p95_ms": 6.25,
+        "max_ms": 9,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      }
+    ]
+  },
+  "fallback_timing": [
+    {
+      "case_id": "tum-iztech-appended",
+      "variable": "iztech_MEDI",
+      "target_state": "resolved",
+      "operation": {
+        "operation": "appended_label_unit_resolution",
+        "iterations": 200,
+        "p50_ms": 2,
+        "p95_ms": 2.65,
+        "max_ms": 8,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      }
+    },
+    {
+      "case_id": "metadata-absent",
+      "variable": "MEDI",
+      "label": "MEDI",
+      "unit": "unit not specified",
+      "operation": {
+        "operation": "raw_name_unit_fallback",
+        "iterations": 200,
+        "p50_ms": 0,
+        "p95_ms": 1,
+        "max_ms": 6,
+        "design_target_pass": true,
+        "hard_gate_pass": true
+      }
+    }
+  ],
+  "relationship_add_50000": {
+    "case_id": "ucr-derived-relationship-add-50000",
+    "rows": 50000,
+    "fields": ["dataset_internal_id", "dataset_timezone", "participant_age", "participant_sex", "participant_gender", "study_internal_id", "study_title", "study_short_description", "study_setting", "study_geographical_location", "device_internal_id", "device_manufacturer", "device_model", "device_serial_number", "device_calibration_date", "device_datasheet_id", "participant_internal_id"],
+    "input_bytes": 1204552,
+    "allocated_bytes": 15670096,
+    "allocation_pass": true,
+    "disposable_derived_context": true,
+    "canonical_fixture_data_unchanged": true,
+    "iterations": 30,
+    "p50_ms": 12,
+    "p95_ms": 19.15,
+    "max_ms": 20,
+    "design_target_pass": true,
+    "hard_gate_pass": true
+  },
   "memory": {
     "bundles": [
       {
@@ -501,7 +1198,7 @@
         "node_count": 364,
         "entry_count": 1428,
         "group_count": 354,
-        "bundle_bytes": 1344968,
+        "bundle_bytes": 1366008,
         "pass": true
       },
       {
@@ -510,7 +1207,7 @@
         "node_count": 317,
         "entry_count": 1144,
         "group_count": 326,
-        "bundle_bytes": 1149072,
+        "bundle_bytes": 1167024,
         "pass": true
       },
       {
@@ -519,13 +1216,13 @@
         "node_count": 1175,
         "entry_count": 4874,
         "group_count": 723,
-        "bundle_bytes": 3731632,
+        "bundle_bytes": 3753136,
         "pass": true
       }
     ],
-    "combined_bundle_bytes": 6225672,
+    "combined_bundle_bytes": 6286168,
     "combined_bundle_pass": true,
-    "appended_review_bundle_bytes": 5036512,
+    "appended_review_bundle_bytes": 5089384,
     "appended_review_bundle_pass": true,
     "scaled_index_bytes": 35702368,
     "scaled_index_pass": true
@@ -543,12 +1240,12 @@
       "medi_records": ["MELIDOS_IZTECH_S001:18", "MELIDOS_IZTECH_S002:18", "MELIDOS_IZTECH_S003:18", "MELIDOS_IZTECH_S004:19", "MELIDOS_IZTECH_S004:20", "MELIDOS_IZTECH_S005:18"],
       "pass": true
     },
-    "appended_bundle_bytes": 5036512,
+    "appended_bundle_bytes": 5089384,
     "construction": {
       "iterations": 20,
-      "p50_ms": 4609.5,
-      "p95_ms": 4739.6,
-      "max_ms": 4748,
+      "p50_ms": 3389,
+      "p95_ms": 3601.3,
+      "max_ms": 3623,
       "interaction_gate_not_applicable": true,
       "reason": "Development showcase startup, not a user-local interaction"
     },
@@ -563,10 +1260,70 @@
     "package_reopen_count": 0,
     "record_deserialization_count_after_startup": 0
   },
+  "navigation_correction_contract": {
+    "fixture_section_choices": {
+      "tum-medi-only": ["all", "core_metadata", "dataset_inventory", "variable_inventory"],
+      "iztech-light-subset": ["all", "core_metadata", "dataset_inventory", "variable_inventory"],
+      "ucr-all-light-variables": ["all", "core_metadata", "dataset_inventory", "variable_inventory"]
+    },
+    "ucr_dataset_inventory_filter": {
+      "total": 13,
+      "shown": 13,
+      "limited": false,
+      "filter_before_cap_pass": true
+    },
+    "iztech_s004_focus": {
+      "root_field_count": 0,
+      "comparison_fields": ["dataset_id", "device_ids", "file_count", "file_group_count", "latitude", "longitude", "modalities", "participant_associated", "participant_id", "primary_variables", "schema_version", "study_id", "timezone"],
+      "device_ids_entry_count": 6
+    },
+    "ucr_melanopic_edi_focus": {
+      "comparison_fields": ["calibration", "dataset_id", "description", "file_group", "file_group_id", "label", "name", "primary", "term", "term_name", "type", "unit"],
+      "unit": "lx"
+    },
+    "logical_section_pass": true,
+    "focus_comparison_pass": true
+  },
+  "repeated_crosslink_contract": {
+    "participant": {
+      "operation": "repeated_crosslink_redelivery",
+      "record_identity": "IZTECH_S004",
+      "request_id": "metadata_focus_id134e94b52f8a8",
+      "repeated_delivery_count": 2,
+      "request_id_stable": true,
+      "reapplied_focus": "IZTECH_S004",
+      "reapplied_focus_pass": true,
+      "iterations": 120,
+      "p50_ms": 1,
+      "p95_ms": 2,
+      "max_ms": 10,
+      "design_target_pass": true,
+      "hard_gate_pass": true
+    },
+    "device": {
+      "operation": "repeated_crosslink_redelivery",
+      "record_identity": "IZTECH_AL03",
+      "request_id": "metadata_focus_id134e93443043a",
+      "repeated_delivery_count": 2,
+      "request_id_stable": true,
+      "reapplied_focus": "IZTECH_AL03",
+      "reapplied_focus_pass": true,
+      "iterations": 120,
+      "p50_ms": 1,
+      "p95_ms": 2,
+      "max_ms": 7,
+      "design_target_pass": true,
+      "hard_gate_pass": true
+    },
+    "pass": true
+  },
   "gates": {
-    "design_target_pass": true,
+    "design_target_pass": false,
     "hard_timing_gate_pass": true,
     "memory_gate_pass": true,
+    "navigation_correction_pass": true,
+    "repeated_crosslink_route_pass": true,
+    "relationship_contract_pass": true,
     "appended_file_group_identity_pass": true,
     "package_reopen_count": 0,
     "record_deserialization_count": 0

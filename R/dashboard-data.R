@@ -209,30 +209,424 @@ dashboard_grouping_summary <- function(record) {
 }
 
 dashboard_variable_metadata <- function(record, variable) {
-  variables <- record$factual_metadata$variables %||% list()
-  metadata <- variables[[variable]] %||% list()
-  units <- record$source_manifest$details$units %||% list()
-  unit <- metadata$unit %||% units[[variable]] %||% NA_character_
-  calibration <- metadata$calibration %||%
-    (record$source_manifest$details$calibration %||% list())[[variable]] %||%
-    NA_character_
+  resolved <- metadata_resolve_variable(record, variable)
   list(
-    unit = if (
-      is.character(unit) && length(unit) == 1L && !is.na(unit) && nzchar(unit)
-    ) {
-      unit
-    } else {
-      "Unit not specified"
-    },
-    calibration = if (
-      is.character(calibration) &&
-        length(calibration) == 1L &&
-        !is.na(calibration) &&
-        nzchar(calibration)
-    ) {
-      calibration
-    } else {
-      "Not available"
+    raw_name = resolved$raw_name,
+    label = resolved$display_label,
+    unit = resolved$unit,
+    calibration = resolved$calibration,
+    provenance = resolved$provenance,
+    label_provenance = resolved$label_provenance,
+    unit_provenance = resolved$unit_provenance,
+    calibration_provenance = resolved$calibration_provenance,
+    conflict = resolved$conflict,
+    candidates = resolved$candidates,
+    target = resolved$target
+  )
+}
+
+dashboard_append_relationship_rows <- function(record, data, contexts) {
+  sources <- record$provenance$append_merge$source_records %||% list()
+  if (
+    length(sources) == 0L ||
+      !all(c("Id", "llw_source_dataset_id") %in% names(data))
+  ) {
+    return(NULL)
+  }
+  source_ids <- vapply(
+    sources,
+    function(source) source$dataset_id %||% "",
+    character(1)
+  )
+  if (any(!nzchar(source_ids)) || anyDuplicated(source_ids)) return(NULL)
+  names(sources) <- source_ids
+  lineage <- as.character(data$llw_source_dataset_id)
+  output_id <- as.character(data$Id)
+  rows <- list()
+  warnings <- character()
+  retained_source_rows <- 0L
+
+  for (context_name in names(contexts)) {
+    context <- contexts[[context_name]]
+    source_matches <- source_ids[
+      context_name == source_ids |
+        startsWith(context_name, paste0(source_ids, "::"))
+    ]
+    if (length(source_matches) != 1L) {
+      warnings <- c(
+        warnings,
+        paste0(
+          "Relationship namespace `",
+          context_name,
+          "` could not be bound to one appended source."
+        )
+      )
+      next
+    }
+    source_id <- source_matches[[1L]]
+    source <- sources[[source_id]]
+    mapping <- source$mapping %||% list()
+    prefix <- mapping$participant_prefix %||% ""
+    available_ids <- unique(output_id[lineage == source_id])
+    available_ids <- metadata_nonempty_text(available_ids)
+    file_groups <- context$file_groups
+    retained_source_rows <- retained_source_rows + nrow(file_groups)
+    if (nrow(file_groups) == 0L || length(available_ids) == 0L) next
+
+    matched_output_id <- vapply(
+      seq_len(nrow(file_groups)),
+      function(index) {
+        identities <- unique(metadata_nonempty_text(c(
+          if ("participant_internal_id" %in% names(file_groups)) {
+            file_groups$participant_internal_id[[index]]
+          } else {
+            character()
+          },
+          if ("dataset_internal_id" %in% names(file_groups)) {
+            file_groups$dataset_internal_id[[index]]
+          } else {
+            character()
+          }
+        )))
+        candidates <- if (nzchar(prefix)) {
+          paste(prefix, identities, sep = "_")
+        } else {
+          identities
+        }
+        matches <- unique(intersect(candidates, available_ids))
+        if (length(matches) == 1L) matches[[1L]] else NA_character_
+      },
+      character(1)
+    )
+    keep <- !is.na(matched_output_id)
+    if (!any(keep)) {
+      warnings <- c(
+        warnings,
+        paste0(
+          "No exact appended participant identity matched relationship ",
+          "namespace `",
+          source_id,
+          "`."
+        )
+      )
+      next
+    }
+    relationship_fields <- intersect(
+      c(
+        "file_group_id",
+        "dataset_internal_id",
+        "participant_internal_id",
+        "device_internal_id",
+        "study_internal_id"
+      ),
+      names(file_groups)
+    )
+    retained <- file_groups[keep, relationship_fields, drop = FALSE]
+    retained <- retained[,
+      setdiff(names(retained), c("Id", "llw_source_dataset_id")),
+      drop = FALSE
+    ]
+    rows[[length(rows) + 1L]] <- data.frame(
+      Id = matched_output_id[keep],
+      llw_source_dataset_id = rep(source_id, sum(keep)),
+      retained,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+    unmatched <- setdiff(available_ids, unique(matched_output_id[keep]))
+    if (length(unmatched) > 0L) {
+      warnings <- c(
+        warnings,
+        paste0(
+          length(unmatched),
+          " appended participant identity value(s) in `",
+          source_id,
+          "` have no exact retained relationship match."
+        )
+      )
+    }
+    warnings <- c(warnings, context$warnings)
+  }
+  rows <- if (length(rows) == 0L) {
+    data.frame()
+  } else {
+    dplyr::bind_rows(rows)
+  }
+  list(
+    data = rows,
+    warnings = unique(metadata_nonempty_text(warnings)),
+    source_rows = retained_source_rows
+  )
+}
+
+dashboard_relationship_view <- function(record, data, api = NULL) {
+  dashboard_assert_canonical_data(data, "data")
+  contexts <- metadata_relationships_for_record(record)
+  unavailable <- function(state, message) {
+    structure(
+      list(
+        state = state,
+        data = data.frame(),
+        namespace_id = NULL,
+        warnings = message,
+        added_fields = character(),
+        source_rows = 0L
+      ),
+      class = c("llw_dashboard_relationship_view", "list")
+    )
+  }
+  if (length(contexts) == 0L) {
+    return(unavailable(
+      "absent",
+      "No retained relationship context is available for this dataset."
+    ))
+  }
+  appended <- dashboard_append_relationship_rows(record, data, contexts)
+  if (!is.null(appended)) {
+    if (nrow(appended$data) == 0L) {
+      return(unavailable(
+        "unavailable",
+        paste(
+          "Retained source relationships could not be matched to exact",
+          "appended lineage. Source namespaces remain separately explorable."
+        )
+      ))
+    }
+    return(structure(
+      list(
+        state = "ready",
+        data = appended$data,
+        namespace_id = NULL,
+        warnings = appended$warnings,
+        added_fields = setdiff(
+          names(appended$data),
+          c("Id", "llw_source_dataset_id", "file_group_id")
+        ),
+        source_rows = appended$source_rows
+      ),
+      class = c("llw_dashboard_relationship_view", "list")
+    ))
+  }
+  if (length(contexts) != 1L || !"file_group_id" %in% names(data)) {
+    return(unavailable(
+      "unavailable",
+      paste(
+        "Exact row-level relationship enrichment is unavailable for this",
+        "multi-source or metadata-free table. Source namespaces remain",
+        "separately explorable."
+      )
+    ))
+  }
+  context <- contexts[[1L]]
+  keys <- unique(data[,
+    intersect(c("Id", "file_group_id"), names(data)),
+    drop = FALSE
+  ])
+  if (!all(c("Id", "file_group_id") %in% names(keys))) {
+    return(unavailable(
+      "unavailable",
+      "The data do not retain both dataset and file-group relationship keys."
+    ))
+  }
+  fields <- setdiff(context$resolved_file_group_fields, names(keys))
+  add <- tryCatch(
+    if (is.null(api)) glcdp_api()$add_metadata else api,
+    error = identity
+  )
+  if (inherits(add, "error")) {
+    return(unavailable(
+      "error",
+      paste(
+        "Related metadata are retained, but the exported glcdp enrichment",
+        "boundary is unavailable:",
+        conditionMessage(add)
+      )
+    ))
+  }
+  if (!is.function(add)) {
+    abort_llw(
+      "`api` must be exported glcdp `add_metadata()`.",
+      type = "validation"
+    )
+  }
+  key_before <- keys[c("Id", "file_group_id")]
+  groups_before <- dplyr::group_vars(keys)
+  dropped_before <- if (inherits(keys, "grouped_df")) {
+    attr(dplyr::group_data(keys), ".drop")
+  } else {
+    NULL
+  }
+  enriched <- if (length(fields) == 0L) {
+    keys
+  } else {
+    tryCatch(
+      add(
+        dataset = keys,
+        metadata = context$file_groups,
+        fields = fields,
+        by = "file_group_id",
+        resource = NULL,
+        overwrite = FALSE
+      ),
+      error = identity
+    )
+  }
+  if (inherits(enriched, "error")) {
+    return(unavailable(
+      "error",
+      paste(
+        "Related metadata could not be added to the disposable context",
+        "table:",
+        conditionMessage(enriched)
+      )
+    ))
+  }
+  if (
+    !is.data.frame(enriched) ||
+      nrow(enriched) != nrow(keys) ||
+      !all(vapply(
+        c("Id", "file_group_id"),
+        function(key) identical(enriched[[key]], key_before[[key]]),
+        logical(1)
+      )) ||
+      !identical(dplyr::group_vars(enriched), groups_before) ||
+      (!is.null(dropped_before) &&
+        !identical(attr(dplyr::group_data(enriched), ".drop"), dropped_before))
+  ) {
+    abort_llw(
+      paste(
+        "Exported glcdp relationship enrichment changed row membership,",
+        "order, grouping, or identifiers."
+      ),
+      type = "validation"
+    )
+  }
+  namespace_id <- names(contexts)[[1L]]
+  structure(
+    list(
+      state = "ready",
+      data = enriched,
+      namespace_id = namespace_id,
+      warnings = context$warnings,
+      added_fields = fields,
+      source_rows = nrow(context$file_groups)
+    ),
+    class = c("llw_dashboard_relationship_view", "list")
+  )
+}
+
+dashboard_relationship_scoped_rows <- function(relationship_view, dataset_ids) {
+  if (
+    !inherits(relationship_view, "llw_dashboard_relationship_view") ||
+      !identical(relationship_view$state, "ready")
+  ) {
+    return(NULL)
+  }
+  rows <- relationship_view$data
+  dataset_ids <- metadata_nonempty_text(dataset_ids)
+  if ("Id" %in% names(rows) && length(dataset_ids) > 0L) {
+    rows <- rows[
+      as.character(rows$Id) %in% dataset_ids,
+      ,
+      drop = FALSE
+    ]
+  } else if (
+    "dataset_internal_id" %in% names(rows) && length(dataset_ids) > 0L
+  ) {
+    rows <- rows[
+      as.character(rows$dataset_internal_id) %in% dataset_ids,
+      ,
+      drop = FALSE
+    ]
+  }
+  rows
+}
+
+dashboard_relationship_entity_refs <- function(
+  relationship_view,
+  dataset_ids,
+  entity = c("participant", "device")
+) {
+  entity <- match.arg(entity)
+  rows <- dashboard_relationship_scoped_rows(relationship_view, dataset_ids)
+  empty <- data.frame(
+    identity = character(),
+    namespace_id = character(),
+    stringsAsFactors = FALSE
+  )
+  column <- c(
+    participant = "participant_internal_id",
+    device = "device_internal_id"
+  )[[entity]]
+  if (is.null(rows) || !column %in% names(rows) || nrow(rows) == 0L) {
+    return(empty)
+  }
+
+  identity <- trimws(as.character(rows[[column]]))
+  keep <- !is.na(identity) & nzchar(identity)
+  if (!any(keep)) return(empty)
+  identity <- identity[keep]
+  namespace_id <- rep(NA_character_, length(identity))
+  if ("llw_source_dataset_id" %in% names(rows)) {
+    namespace_id <- trimws(as.character(rows$llw_source_dataset_id[keep]))
+    namespace_id[!nzchar(namespace_id)] <- NA_character_
+  }
+  fallback_namespace <- relationship_view$namespace_id %||% NULL
+  if (
+    is.character(fallback_namespace) &&
+      length(fallback_namespace) == 1L &&
+      !is.na(fallback_namespace) &&
+      nzchar(fallback_namespace)
+  ) {
+    namespace_id[is.na(namespace_id)] <- fallback_namespace
+  }
+  keys <- paste(
+    ifelse(is.na(namespace_id), "<namespace unavailable>", namespace_id),
+    identity,
+    sep = "\r"
+  )
+  result <- data.frame(
+    identity = identity[!duplicated(keys)],
+    namespace_id = namespace_id[!duplicated(keys)],
+    stringsAsFactors = FALSE
+  )
+  rownames(result) <- NULL
+  result
+}
+
+dashboard_relationship_entities <- function(relationship_view, dataset_ids) {
+  rows <- dashboard_relationship_scoped_rows(relationship_view, dataset_ids)
+  if (is.null(rows)) {
+    return(list(
+      dataset_ids = character(),
+      participant_ids = character(),
+      device_ids = character(),
+      study_ids = character(),
+      namespace_ids = character()
+    ))
+  }
+  values <- function(column) {
+    if (!column %in% names(rows)) character() else
+      unique(metadata_nonempty_text(rows[[column]]))
+  }
+  list(
+    dataset_ids = values("dataset_internal_id"),
+    participant_ids = values("participant_internal_id"),
+    device_ids = values("device_internal_id"),
+    study_ids = values("study_internal_id"),
+    namespace_ids = {
+      ids <- values("llw_source_dataset_id")
+      if (
+        length(ids) == 0L &&
+          is.character(relationship_view$namespace_id) &&
+          length(relationship_view$namespace_id) == 1L &&
+          !is.na(relationship_view$namespace_id) &&
+          nzchar(relationship_view$namespace_id)
+      ) {
+        relationship_view$namespace_id
+      } else {
+        ids
+      }
     }
   )
 }
@@ -262,9 +656,11 @@ dashboard_variable_inventory <- function(data, record, primary_variable) {
     }
     data.frame(
       Variable = variable,
+      `Display label` = metadata$label,
       Role = dashboard_variable_role(variable, primary_variable),
       Type = paste(class(value), collapse = "/"),
       Unit = metadata$unit,
+      Provenance = metadata$provenance,
       Missing = missing,
       `Missing (%)` = if (rows == 0L) NA_real_ else 100 * missing / rows,
       `Exact zeros` = exact_zero,
@@ -292,6 +688,31 @@ dashboard_numeric_focus_variables <- function(data, eligibility = NULL) {
     numeric <- intersect(eligible, numeric)
   }
   numeric
+}
+
+dashboard_append_mapped_focus_variables <- function(record, data) {
+  dashboard_assert_canonical_data(data, "data")
+  sources <- record$provenance$append_merge$source_records %||% list()
+  if (length(sources) == 0L) return(character())
+  targets <- unique(metadata_nonempty_text(unlist(
+    lapply(sources, function(source) {
+      mapping <- source$mapping %||% list()
+      c(
+        mapping$measurement_target %||% character(),
+        mapping$optional_targets %||% character()
+      )
+    }),
+    use.names = FALSE
+  )))
+  targets <- intersect(names(data), targets)
+  targets[vapply(
+    data[targets],
+    function(value) {
+      is.numeric(value) &&
+        !inherits(value, c("POSIXct", "Date", "difftime"))
+    },
+    logical(1)
+  )]
 }
 
 dashboard_day_boundaries <- function(dates, timezone) {
@@ -938,21 +1359,25 @@ dashboard_append_source_inventory <- function(record, raw_data) {
       )
     )
   }
-  source_ids <- vapply(source_records, function(source) {
-    value <- source$dataset_id %||% NA_character_
-    if (
-      !is.character(value) ||
-        length(value) != 1L ||
-        is.na(value) ||
-        !nzchar(value)
-    ) {
-      abort_llw(
-        "A preserved append source has no stable dataset ID.",
-        type = "validation"
-      )
-    }
-    value
-  }, character(1))
+  source_ids <- vapply(
+    source_records,
+    function(source) {
+      value <- source$dataset_id %||% NA_character_
+      if (
+        !is.character(value) ||
+          length(value) != 1L ||
+          is.na(value) ||
+          !nzchar(value)
+      ) {
+        abort_llw(
+          "A preserved append source has no stable dataset ID.",
+          type = "validation"
+        )
+      }
+      value
+    },
+    character(1)
+  )
   if (anyDuplicated(source_ids)) {
     abort_llw(
       "Preserved append source dataset IDs must be unique.",
@@ -1068,35 +1493,38 @@ dashboard_append_source_inventory <- function(record, raw_data) {
   })
   names(items) <- source_ids
 
-  overview <- do.call(rbind, lapply(items, function(source) {
-    namespaces <- source$metadata_namespaces
-    data.frame(
-      `Stable source dataset ID` = source$dataset_id,
-      `Source dataset` = source$display_name,
-      Rows = source$row_count,
-      `Source row range` = paste0(
-        format(source$source_row_min, scientific = FALSE, trim = TRUE),
-        "-",
-        format(source$source_row_max, scientific = FALSE, trim = TRUE)
-      ),
-      Revision = paste0("r", source$revision),
-      `Source time zone` = dashboard_format_available(
-        source$source_timezone,
-        "Not supplied"
-      ),
-      `Metadata namespaces` = if (length(namespaces) == 0L) {
-        "None recorded"
-      } else {
-        paste(namespaces, collapse = ", ")
-      },
-      `Source files` = dashboard_format_available(
-        source$source_files,
-        "No source filename supplied"
-      ),
-      check.names = FALSE,
-      stringsAsFactors = FALSE
-    )
-  }))
+  overview <- do.call(
+    rbind,
+    lapply(items, function(source) {
+      namespaces <- source$metadata_namespaces
+      data.frame(
+        `Stable source dataset ID` = source$dataset_id,
+        `Source dataset` = source$display_name,
+        Rows = source$row_count,
+        `Source row range` = paste0(
+          format(source$source_row_min, scientific = FALSE, trim = TRUE),
+          "-",
+          format(source$source_row_max, scientific = FALSE, trim = TRUE)
+        ),
+        Revision = paste0("r", source$revision),
+        `Source time zone` = dashboard_format_available(
+          source$source_timezone,
+          "Not supplied"
+        ),
+        `Metadata namespaces` = if (length(namespaces) == 0L) {
+          "None recorded"
+        } else {
+          paste(namespaces, collapse = ", ")
+        },
+        `Source files` = dashboard_format_available(
+          source$source_files,
+          "No source filename supplied"
+        ),
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+    })
+  )
   rownames(overview) <- NULL
 
   inventory <- structure(
@@ -1159,6 +1587,17 @@ dashboard_dataset_snapshot <- function(record) {
   if (length(focus_variables) == 0L) {
     focus_variables <- dashboard_numeric_focus_variables(prepared_data)
   }
+  mapped_focus_variables <- dashboard_append_mapped_focus_variables(
+    record,
+    prepared_data
+  )
+  focus_variables <- names(prepared_data)[
+    names(prepared_data) %in%
+      unique(c(
+        focus_variables,
+        mapped_focus_variables
+      ))
+  ]
   if (!primary_variable %in% focus_variables) {
     focus_variables <- unique(c(primary_variable, focus_variables))
   }
@@ -1182,6 +1621,7 @@ dashboard_dataset_snapshot <- function(record) {
   glc_metadata <- record$factual_metadata$glc_metadata %||% NULL
   if (!is.null(glc_metadata)) validate_glc_selected_metadata(glc_metadata)
   append_sources <- dashboard_append_source_inventory(record, raw_data)
+  relationship_view <- dashboard_relationship_view(record, prepared_data)
 
   structure(
     list(
@@ -1199,8 +1639,15 @@ dashboard_dataset_snapshot <- function(record) {
       source_timezone = record$source_manifest$source_timezone,
       primary_variable = primary_variable,
       focus_variables = focus_variables,
+      focus_variable_choices = metadata_variable_choice_labels(
+        record,
+        focus_variables
+      ),
+      primary_label = variable_metadata$label,
       primary_unit = variable_metadata$unit,
       calibration = variable_metadata$calibration,
+      calibration_provenance = variable_metadata$calibration_provenance,
+      variable_metadata_provenance = variable_metadata$provenance,
       variable_inventory = inventory,
       quality = quality_info$quality,
       quality_origin = quality_info$origin,
@@ -1208,7 +1655,8 @@ dashboard_dataset_snapshot <- function(record) {
       recipe = dashboard_recipe_summary(record),
       grouping = dashboard_grouping_summary(record),
       glc_metadata = glc_metadata,
-      append_sources = append_sources
+      append_sources = append_sources,
+      relationship_view = relationship_view
     ),
     class = c("llw_dashboard_snapshot", "list")
   )
@@ -1276,11 +1724,15 @@ dashboard_focus_view <- function(
       focus_variable = focus_variable
     )
   }
-  inventory <- if (
-    identical(data_stage, "preprocessed") &&
-      identical(focus_variable, snapshot$primary_variable)
-  ) {
-    snapshot$variable_inventory
+  inventory <- if (identical(data_stage, "preprocessed")) {
+    result <- snapshot$variable_inventory
+    result$Role <- vapply(
+      result$Variable,
+      dashboard_variable_role,
+      character(1),
+      primary_variable = focus_variable
+    )
+    result
   } else {
     dashboard_variable_inventory(data, snapshot$record, focus_variable)
   }
@@ -1308,8 +1760,12 @@ dashboard_focus_view <- function(
         "Pre-processed data"
       },
       focus_variable = focus_variable,
+      focus_label = metadata$label,
       focus_unit = metadata$unit,
+      metadata_provenance = metadata$provenance,
+      metadata_target = metadata$target,
       calibration = metadata$calibration,
+      calibration_provenance = metadata$calibration_provenance,
       missing_count = missing_count,
       missing_percent = if (nrow(data) == 0L) {
         NA_real_
@@ -1712,7 +2168,10 @@ dashboard_nonempty_time_chunks <- function(
   time_basis
 ) {
   if (!inherits(focus_view, "llw_dashboard_focus_view")) {
-    abort_llw("`focus_view` must be a dashboard focus view.", type = "validation")
+    abort_llw(
+      "`focus_view` must be a dashboard focus view.",
+      type = "validation"
+    )
   }
   if (!is.data.frame(chunks) || nrow(chunks) == 0L) return(chunks)
   values <- focus_view$data[[focus_view$focus_variable]]
@@ -2812,6 +3271,7 @@ dashboard_plot_preview <- function(
         notice = paste(page_label, reduction),
         page_label = page_label,
         focus_variable = focus_view$focus_variable,
+        focus_label = focus_view$focus_label,
         focus_unit = focus_view$focus_unit,
         data_stage = focus_view$data_stage,
         stage_label = focus_view$stage_label,
@@ -2885,6 +3345,7 @@ dashboard_plot_preview <- function(
       ),
       page_label = page_label,
       focus_variable = focus_view$focus_variable,
+      focus_label = focus_view$focus_label,
       focus_unit = focus_view$focus_unit,
       data_stage = focus_view$data_stage,
       stage_label = focus_view$stage_label,
@@ -2910,10 +3371,19 @@ dashboard_focus_axis_label <- function(preview, scale = NULL) {
       tolower(trimws(unit[[1L]])),
       tolower(trimws(preview$focus_variable))
     )
+  display_label <- preview$focus_label %||% preview$focus_variable
+  if (!identical(display_label, preview$focus_variable)) {
+    display_label <- paste0(
+      display_label,
+      " [",
+      preview$focus_variable,
+      "]"
+    )
+  }
   label <- if (omit_unit) {
-    preview$focus_variable
+    display_label
   } else {
-    paste0(preview$focus_variable, " (", unit[[1L]], ")")
+    paste0(display_label, " (", unit[[1L]], ")")
   }
   if (is.null(scale)) return(label)
   scale <- match.arg(scale, c("symlog", "linear", "log"))
@@ -3947,17 +4417,53 @@ dashboard_table_options <- function(data, column_visibility = TRUE) {
   )
 }
 
+dashboard_metadata_display_table <- function(data, record) {
+  if (!is.data.frame(data)) {
+    abort_llw("`data` must be a data frame.", type = "validation")
+  }
+  original <- names(data)
+  labels <- vapply(
+    original,
+    function(variable) {
+      if (variable %in% c("Id", "Datetime") || startsWith(variable, "llw_")) {
+        return(variable)
+      }
+      metadata <- dashboard_variable_metadata(record, variable)
+      known <- !identical(metadata$provenance, "Not specified")
+      measurement <- is.numeric(data[[variable]]) &&
+        !inherits(data[[variable]], c("POSIXct", "Date", "difftime"))
+      if (!known && !measurement) return(variable)
+      label <- metadata$label
+      if (!identical(label, variable)) {
+        label <- paste0(label, " [", variable, "]")
+      }
+      paste0(label, " \u00b7 ", metadata$unit)
+    },
+    character(1)
+  )
+  names(data) <- make.unique(labels, sep = " \u00b7 duplicate ")
+  attr(data, "llw_raw_column_names") <- original
+  data
+}
+
 dashboard_datatable <- function(
   data,
   caption,
   column_visibility = TRUE,
-  display_timezone = "UTC"
+  display_timezone = "UTC",
+  selection = "none"
 ) {
   if (!is.data.frame(data)) {
     abort_llw("`data` must be a data frame.", type = "validation")
   }
   assert_scalar_string(caption, "caption")
   assert_scalar_string(display_timezone, "display_timezone")
+  if (!selection %in% c("none", "single", "multiple")) {
+    abort_llw(
+      "`selection` must be none, single, or multiple.",
+      type = "validation"
+    )
+  }
   if (!display_timezone %in% OlsonNames()) {
     abort_llw(
       "`display_timezone` must be a valid Olson time zone.",
@@ -3968,7 +4474,7 @@ dashboard_datatable <- function(
     data,
     rownames = FALSE,
     filter = "none",
-    selection = "none",
+    selection = selection,
     extensions = if (isTRUE(column_visibility)) "Buttons" else character(),
     escape = TRUE,
     caption = htmltools::tags$caption(
@@ -4261,7 +4767,9 @@ dashboard_state_table <- function(snapshot) {
       "Grouping detail",
       "Primary measurement",
       "Primary unit",
-      "Calibration evidence"
+      "Label and unit provenance",
+      "Calibration evidence",
+      "Calibration provenance"
     ),
     Value = c(
       snapshot$recipe$label,
@@ -4273,7 +4781,9 @@ dashboard_state_table <- function(snapshot) {
       snapshot$grouping$detail,
       snapshot$primary_variable,
       snapshot$primary_unit,
-      snapshot$calibration
+      snapshot$variable_metadata_provenance,
+      snapshot$calibration,
+      snapshot$calibration_provenance
     ),
     check.names = FALSE,
     stringsAsFactors = FALSE

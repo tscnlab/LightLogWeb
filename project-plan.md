@@ -834,19 +834,154 @@ Milestone 7 is divided into three independently reviewable vertical slices:
 The owner-approved Slice 1B extends only the read-only explorer foundation.
 Selecting a result exposes every sibling property belonging to the same exact
 source item, then permits focus-based traversal through retained ancestors,
-children, and nearby structural branches. Shared containment is displayed as
-containment and never as inferred semantic equivalence. This extension does
-not pull relationship-aware library/dashboard integration forward from Slice
-2.
+children, and meaningful top-level metadata areas. Shared containment is
+displayed as containment and never as inferred semantic equivalence. This
+extension does not pull relationship-aware library/dashboard integration
+forward from Slice 2.
 
-The owner-approved Slice 1B hierarchy reorder places the same-item and
-structural hierarchy selectors in one collapsed-by-default panel immediately
-above the selected-field detail. The panel is an upstream controller: branch
-choices change only its hierarchy focus, while a concrete field choice changes
-the selected-field content below. Search text, filters, result ordering, and
-the matching-result list above remain unchanged. The accordion shell is stable
-while its contents update, so hierarchy interactions do not close the panel.
-This reorder adds no visualization dependency or bespoke JavaScript.
+The owner-approved Slice 2A navigation correction keeps the matching-field
+list inside the Find metadata card. The owner's subsequent compact-path
+correction replaces the collapsed panel with an always-visible, one-row path
+inside one Metadata explorer card: at most four blocky hierarchy levels, or the current level on
+narrow phones with compact, accessibly named navigation controls.
+It starts at meaningful source areas such as Core metadata, Dataset inventory,
+and Variable inventory, omitting duplicate resource wrappers while preserving
+their exact retained paths. If earlier levels are hidden, a left ellipsis opens
+a Shiny-native full-path modal with ancestor jumps and nothing else. There is
+no Browse control or hidden navigation menu. The blocks use the former Where
+this field lives styling, including friendly names and exact raw node labels;
+that duplicate sequence is removed from selected-field detail. There is no
+redundant Fields at this level list. Nearby structural branches and the
+separate exact-item selector stay absent; exact node and record identities
+remain in the in-memory routing contract.
+
+The contents in that same Metadata explorer card follow the path and always
+reflect the current hierarchy focus. The single visible contents list merges
+contained child branches and direct field properties. Arrow actions enter
+children and extend the path; radio buttons select a field without changing
+the path or available choices. In-place field selection keeps the contents
+list mounted and does not request scrolling or move keyboard focus; native
+radio updates synchronize selections from other entry points. Search results
+and deliberate hierarchy/dashboard navigation still land at the explorer.
+The retained-item count shares the One level up toolbar, wrapping only when
+the narrow viewport cannot fit both controls. One level up moves to exactly
+one meaningful
+parent, including ancestors hidden from the compact path. From a top-level
+area it returns to the area overview, where it is disabled. The overview
+exposes the meaningful top-level areas in this same list. A keyboard- and
+touch-accessible header help button opens native bslib popup help with Escape,
+Close, and focus return. There are no redundant inner headings or persistent
+help paragraph. Branch names and chevrons retain dark text in hover, focus,
+and active states, with a visible keyboard-focus outline. Structural nodes with no
+direct fields explain that their contained items can be opened. Selected-field
+detail remains stable until a field is explicitly chosen, and its Values in
+this field section precedes About this field. Dataset state, identity,
+source/overlay provenance, and
+the selected-item notice appear at the bottom of the Metadata tab, after field
+detail. Dashboard metadata context follows the dashboard workbench. A small
+local browser helper scrolls and transfers keyboard focus to Metadata explorer
+after explicit result selection, hierarchy jumps, or dashboard routes.
+It waits for the matching rendered selection, coalesces superseded requests,
+and does not change data, query/filter state, or route identities. Native Shiny
+controls handle all selections and modals. No visualization dependency is
+introduced. The owner has authorized custom JavaScript where no Shiny-native
+equivalent exists. The owner requested reviewer subagents but subsequently
+authorized the existing external reviewer for actual visual inspection when
+those subagents lacked browser access. The same responsibilities and owner
+gates apply; neither route may substitute programmer screenshots for an
+independent visual pass.
+
+The explorer's Section control is derived from grouped field paths rather than
+transport resource names. It exposes logical Core Metadata, Dataset Inventory,
+Variable Inventory, and retained unknown top-level areas within the selected
+source scope. The filter is applied to the complete grouped in-memory index
+before the 40-row display cap. It is omitted when fewer than two specific
+sections exist.
+
+Every enabled dashboard metadata crosslink is an activation event, including
+a second activation of the same participant or device after the user has
+navigated elsewhere in the hierarchy. The app-level delivery bridge reapplies
+the exact request without changing its schema or stable request ID. Query,
+logical section, selected field, hierarchy focus, and the focus-driven
+comparison therefore return to one consistent destination. Deterministic
+dashboard action identities, stale-event rejection, and record-refresh clearing
+remain unchanged.
+
+Within one parent location and exact source namespace, repeated same-level
+nodes with the same label, kind, resource, and layer are one logical navigation
+branch. Counts, sibling fields, retained records, and the exact-path disclosure
+cover every grouped peer. Thus a repeated variable such as Melanopic Edi is
+listed once under Variable Inventory and opens the fields from all included
+file-group instances. This display grouping never crosses a source namespace
+and does not flatten or reconcile source metadata. A record refresh also clears
+any stale checked matching-field control together with the server selection.
+
+The owner-approved Slice 2 relationship and integration contract retains one
+typed, versioned `llw-metadata-relationships` context per exact GLC source. It
+is built during the existing inspection while the package is already open,
+using only exported `extract_metadata()`. File-group traversal uses
+`file_group_id`; explicitly dataset-level traversal uses `by = "Id"`.
+Ambiguous participant identity is resolved through the exported API with the
+explicit `participants` resource. The retained relationship context is
+fingerprinted and serializable, but it is a LightLogWeb integration artifact,
+not another package metadata resource. It is therefore excluded from source
+metadata search results while the exact source records remain fully indexed.
+Projection scopes both records and relationships to the selected datasets,
+participants, devices, datasheets, studies, file groups, and variables.
+For appended dashboard navigation, a disposable relationship view may project
+only exact dataset, participant, device, study, and file-group identities
+across immediate sources. Every projected row remains qualified by
+`llw_source_dataset_id`, and each selected entity carries its one exact source
+namespace into the metadata crosslink. Source relationship contexts and
+descriptive metadata remain separate and unchanged.
+
+Slice 2 may use exported `add_metadata()` only on a disposable derived key or
+analysis table with `overwrite = FALSE`. LightLogWeb asserts row membership,
+order, key values and types, and dplyr grouping before showing the result. The
+canonical source and prepared payloads are never passed to this enrichment
+boundary and remain byte-identical. Missing or ambiguous links, multi-device
+datasets, incomplete append lineage, unavailable APIs, and column conflicts
+are recoverable states. In particular, IZTECH S004 must retain its distinct
+AL03 and AL04 devices and file groups without reconciliation.
+
+Metadata display resolution is also owner-approved for Slice 2. Raw variable
+identities remain authoritative. Display label and unit precedence is the
+exact matching LightLogWeb overlay row, then the exact retained source
+namespace, then imported source details, followed by the raw name and the
+literal `unit not specified` fallback. Precedence is resolved separately for
+each property, so an overlay label or unit never hides immutable source
+calibration evidence. Appended variables resolve only through their exact
+source mapping and `llw_source_dataset_id`; conflicting sources are never
+flattened or reconciled.
+
+The dataset library and dashboard expose these labels, units, and provenance,
+plus exact metadata crosslinks for source, dataset, focus variable, selected
+participant, related devices, and a selected variable-inventory row. The
+metadata explorer resolves each crosslink against its existing in-memory
+index and retains the valid current selection when a target is absent or
+ambiguous. Source timezone and source calibration remain factual provenance.
+Analysis timezone, focus choice, view scale, missingness denominator, and
+other display choices remain analysis or view settings. The dashboard source
+view shows the source timezone rather than the display timezone.
+
+Dynamic participant and device actions use deterministic identities derived
+from their exact dataset, namespace, field, path, and record identity, never
+their visible list position. Up to four participants and up to four related
+devices are shown as individual actions. Above either limit, that entity group
+shows a reduction-required state and no partial or arbitrarily truncated list.
+A participant refresh baselines only identities in the new scope.
+Consequently, a briefly retained browser button cannot silently route its old
+label to a different newly ordered entity.
+
+For Slice 2, label and unit resolution, relationship selection, crosslink
+resolution, and ordinary dashboard metadata context must meet the existing
+50 ms p95 design target and 100 ms p95 hard gate in memory. A 50,000-row
+disposable `add_metadata()` operation must meet the 100 ms p95 hard gate and
+allocate at most 64 MiB temporarily. It must preserve row order, keys, and
+grouping. The three fixtures, widest UCR inventory, appended review state,
+metadata-absent fallback, and 50,000-row derived case are all benchmarked
+offline. Routine use and tests never reopen a published package or
+deserialize a record for an ordinary metadata interaction.
 
 Milestone 6 remains the owner of data/metadata transport, task recovery, and
 session record recovery. Milestone 7 carries its metadata bundle through those
@@ -879,6 +1014,23 @@ are offline and never reopen these public packages. The fixture manifest
 labels every snapshot as derived, bounded, and not current or complete
 published evidence. Under the owner's no-filtering instruction, exact bounded
 public source values are retained and no privacy transform is applied.
+Fixture schema 2.1.0 adds only the source-scoped relationship context from
+exported `extract_metadata()` calls. Its successful metadata-only augmentation
+at `2026-09-02T09:11:00Z` reused the existing measurements, made zero public
+measurement reads, and wrote all three fixtures transactionally. The Slice 2A
+acceptance run at `2026-09-02T19:06:14Z` passes the 100 ms p95 hard timing
+gate, memory gate, navigation-correction gate, repeated-crosslink gate,
+relationship-integrity gate, append-lineage gate, no-reopen gate, and
+no-deserialization gate. Repeated delivery of the same exact IZTECH S004
+participant and AL03 device routes takes 2 ms p95 and retains stable request
+IDs. Every realistic fixture and appended-state interaction remains within the
+50 ms p95 design target. The artificial 50,000-entry hierarchy-panel render is
+73 ms p95, below the hard gate but above the design target; its ordinary
+navigation, search, filtering, sorting, selection, path, and focus-comparison
+operations remain at or below 23.65 ms p95. This includes the realistic
+fixtures, appended view, synthetic 50,000-entry stress inventory, 50,000-row
+derived enrichment, logical-section filtering before the display cap, stable
+participant/device action identity, and idempotent repeated route activation.
 
 The Slice 1 offline review route also constructs one deterministic appended
 state in memory from the frozen TUM and IZTECH fixtures. Its 352 rows retain
@@ -896,29 +1048,31 @@ items, such as photopic and melanopic variables in the same variable table,
 remain separate selectable results. Selecting a result shows every exact
 retained record value and path. Parent dataset or file-group identity remains
 separate from the semantic item and leaf value, preserving readable file to
-device and file to variable relationships. A separate hierarchy names the
-source dataset, section, nested subsection levels, semantic item, and field.
-The selected item also exposes all same-record properties as directly
-selectable fields. These field choices and a separate hierarchy focus now sit
-in one folded-by-default structure panel above the display-only selected-field
-card. Its collapsed summary names the selected field and current focus, and
-its expanded direction text states which choices navigate a branch and which
-replace the field below. The hierarchy focus shows its ancestor path,
-contained nodes, and structural branches that share an ancestor. Repeated
-items retain a selectable exact-record instance for path inspection. When a
+device and file to variable relationships. The always-visible Metadata explorer
+starts with a compact path through meaningful source areas, then shows direct
+fields and contained metadata in one list. A left ellipsis reveals the full
+path when ancestors are hidden. One level up selects the immediate meaningful
+parent; native popup help explains branch arrows and field radios.
+Duplicate source/resource wrappers, nearby-branch shortcuts, and a separate
+exact-record selector are not shown. Exact record node identities remain
+available internally for crosslink routing and the current exact focus path.
+Repeated same-level structural nodes are collapsed into one logical branch
+only when parent, label, kind, source namespace, layer, and resource all match;
+all exact peers and paths remain disclosed below that branch.
+The same explorer exposes same-item properties as selectable fields across
+the included records. When a
 source is carried through append, file-group lookup recurses only through that
 source namespace's retained immutable metadata bundle. This preserves exact
-file-group identities in values, instance choices, hierarchy nodes, and focus
-paths. For example, IZTECH participant S004 retains separate `:19` and `:20`
-records linked to AL03 and AL04 instead of falling back to the shared parent
-dataset id. Separately,
+file-group identities in values, hierarchy nodes, and focus paths. For example,
+IZTECH participant S004 retains separate `:19` and `:20` records linked to AL03
+and AL04 instead of falling back to the shared parent dataset id. Separately,
 the source term `melanopic_edi` remains distinct from a concrete `MEDI`
 variable whose retained unit is `lx`; the explorer permits navigation between
 their containing branches without assigning the concrete unit to the term.
-Single-source records omit a source selector and source labels from matching results;
-appended records keep their source selector and provenance. Native section,
-layer, source, and sort controls are used so their menus are not clipped by the
-search card.
+Single-source records omit a source selector and source labels from matching
+results; appended records keep their source selector and provenance. Native
+section, layer, source, and sort controls are used so their menus are not
+clipped by the search card.
 Free-text search covers raw and plain-language field names plus retained
 values. It does not copy source labels, record labels, or whole paths into
 every field's search text, so direct variable matches remain visible within

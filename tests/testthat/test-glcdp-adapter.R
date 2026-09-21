@@ -440,16 +440,60 @@ glc_adapter_rich_api <- function() {
   fake$api$glc_metadata <- function(x, resources = NULL) {
     list(
       study = data.frame(
-        study_id = "study-a",
-        title = "Fixture study",
+        study_internal_id = "study-a",
+        study_title = "Fixture study",
         stringsAsFactors = FALSE
       ),
       participants = data.frame(
-        participant_id = c("participant-a", "participant-b"),
-        age = c(30, NA_real_),
+        participant_internal_id = c("participant-a", "participant-b"),
+        participant_age = c(30, NA_real_),
+        participant_sex = c("female", "male"),
+        stringsAsFactors = FALSE
+      ),
+      datasets = data.frame(
+        dataset_internal_id = c("dataset-a", "dataset-b"),
+        dataset_timezone = "UTC",
+        stringsAsFactors = FALSE
+      ),
+      devices = data.frame(
+        device_internal_id = c("device-a", "device-b"),
+        device_manufacturer = "Fixture",
+        device_model = c("WristOne", "ChestOne"),
         stringsAsFactors = FALSE
       )
     )
+  }
+  fake$api$extract_metadata <- function(
+    dataset,
+    metadata,
+    fields,
+    by = "file_group_id",
+    resource = NULL
+  ) {
+    fake$calls$extract <- c(
+      fake$calls$extract %||% list(),
+      list(list(by = by, fields = fields, resource = resource))
+    )
+    keys <- dataset[!duplicated(as.character(dataset[[by]])), by, drop = FALSE]
+    ids <- if (identical(by, "Id")) {
+      as.character(keys[[by]])
+    } else {
+      sub(":.*$", "", as.character(keys[[by]]))
+    }
+    values <- list(
+      dataset_internal_id = ids,
+      dataset_timezone = rep("UTC", length(ids)),
+      participant_internal_id = sub("dataset", "participant", ids),
+      participant_age = ifelse(ids == "dataset-a", 30, NA_real_),
+      participant_sex = ifelse(ids == "dataset-a", "female", "male"),
+      study_internal_id = rep("study-a", length(ids)),
+      study_title = rep("Fixture study", length(ids)),
+      device_internal_id = sub("dataset", "device", ids),
+      device_manufacturer = rep("Fixture", length(ids)),
+      device_model = ifelse(ids == "dataset-a", "WristOne", "ChestOne")
+    )
+    for (field in fields) keys[[field]] <- values[[field]]
+    keys
   }
   fake$api$glc_read <- function(...) {
     fake$calls$read <- list(...)
@@ -1039,6 +1083,7 @@ test_that("exact-package inspection reports phases and never reads measurements"
       "description",
       "inventory",
       "metadata",
+      "metadata_relationships",
       "metadata_index",
       "terms",
       "validation"
@@ -1047,6 +1092,27 @@ test_that("exact-package inspection reports phases and never reads measurements"
   expect_true(all(progress$status == "complete"))
   expect_null(fake$calls$read)
   expect_null(fake$calls$collect)
+  expect_identical(
+    vapply(fake$calls$extract, `[[`, character(1), "by"),
+    c("file_group_id", "Id", "file_group_id", "Id")
+  )
+  expect_identical(
+    vapply(
+      fake$calls$extract,
+      function(call) call$resource %||% "",
+      character(1)
+    ),
+    c("", "", "participants", "participants")
+  )
+  relationships <- inspection$metadata_snapshot$bundle$sources[[
+    1L
+  ]]$records$relationship_context
+  expect_s3_class(relationships, "llw_metadata_relationships")
+  expect_identical(
+    relationships$file_groups$device_model,
+    c("WristOne", "ChestOne")
+  )
+  expect_false(relationships$provenance$measurement_contents_read)
   expect_false(glc_value_contains_path(inspection, cache_dir))
   expect_null(nonserializable_path(inspection))
   expect_type(serialize(inspection, NULL), "raw")

@@ -1,6 +1,6 @@
 {
   "manifest_schema": "llw-glc-derived-fixture-manifest",
-  "manifest_version": "2.0.0",
+  "manifest_version": "2.1.0",
   "generated_at": "2026-08-31T17:48:07Z",
   "derived_fixture_notice": "Every entry is a bounded derived test fixture retaining exact public source values. No entry is a complete published dataset or current measurement evidence. Offline tests must not reopen a source package.",
   "generation_policy": {
@@ -10,14 +10,27 @@
     "privacy_filtering": false,
     "retained_rows_per_source_file": 32,
     "selected_participants_per_fixture": 5,
-    "selected_files_per_fixture": [5, 6, 5],
+    "selected_files_per_fixture": [
+      5,
+      6,
+      5
+    ],
     "standardize": "lightlogr",
     "problems": "error",
     "source_package_reopen_in_tests": false,
     "per_fixture_byte_limit": 1048576,
-    "total_byte_limit": 3145728
+    "total_byte_limit": 3145728,
+    "relationship_extraction": {
+      "exported_glcdp_api": "extract_metadata",
+      "package_open_count_per_fixture": 1,
+      "public_measurement_reads": 0,
+      "existing_measurement_snapshots_reused": true,
+      "default_anchor": "file_group_id",
+      "explicit_dataset_anchor": "Id",
+      "offline_tests_reopen_packages": false
+    }
   },
-  "total_fixture_bytes": 159228,
+  "total_fixture_bytes": 163324,
   "offline_review_states": [
     {
       "review_state_id": "tum-iztech-appended",
@@ -30,7 +43,13 @@
           "fixture_id": "tum-medi-only",
           "label": "TUM MEDI-only derived fixture",
           "dataset_record_id": "dataset_m7tummedionly",
-          "package_dataset_ids": ["MELIDOS_TUM_S001", "MELIDOS_TUM_S002", "MELIDOS_TUM_S003", "MELIDOS_TUM_S004", "MELIDOS_TUM_S005"],
+          "package_dataset_ids": [
+            "MELIDOS_TUM_S001",
+            "MELIDOS_TUM_S002",
+            "MELIDOS_TUM_S003",
+            "MELIDOS_TUM_S004",
+            "MELIDOS_TUM_S005"
+          ],
           "retained_rows": 160,
           "citation": "https://doi.org/10.5281/zenodo.16893901",
           "repository": "https://github.com/tscnlab/melidos-tum-glc-dataset",
@@ -42,7 +61,13 @@
           "fixture_id": "iztech-light-subset",
           "label": "IZTECH photopic and melanopic subset derived fixture",
           "dataset_record_id": "dataset_m7iztechlightsubset",
-          "package_dataset_ids": ["MELIDOS_IZTECH_S001", "MELIDOS_IZTECH_S002", "MELIDOS_IZTECH_S003", "MELIDOS_IZTECH_S004", "MELIDOS_IZTECH_S005"],
+          "package_dataset_ids": [
+            "MELIDOS_IZTECH_S001",
+            "MELIDOS_IZTECH_S002",
+            "MELIDOS_IZTECH_S003",
+            "MELIDOS_IZTECH_S004",
+            "MELIDOS_IZTECH_S005"
+          ],
           "retained_rows": 192,
           "citation": "https://doi.org/10.5281/zenodo.16568109",
           "repository": "https://github.com/tscnlab/melidos-iztech-glc-dataset",
@@ -96,8 +121,8 @@
       "derived_fixture": true,
       "disclaimer": "Derived, bounded public-data test fixture containing exact retained source values. It is not the complete published dataset and is not fresh or live measurement evidence.",
       "file": "tum-medi-only.rds",
-      "file_bytes": 41476,
-      "file_sha256": "sha256:c6ac829eab4a39fd9e9afdfbe3ddbaf10c68ae20aa03ab1187fe654843eb6532",
+      "file_bytes": 43044,
+      "file_sha256": "sha256:664660fc59204eae7298adc8f83ac934bb7024d1f3d50f6a2bdad57011f56e04",
       "source": {
         "citation": "https://doi.org/10.5281/zenodo.16893901",
         "repository": "https://github.com/tscnlab/melidos-tum-glc-dataset",
@@ -119,14 +144,38 @@
         "public_accessibility": "Public GitHub repository and DOI landing page"
       },
       "selection": {
-        "dataset_ids": ["MELIDOS_TUM_S001", "MELIDOS_TUM_S002", "MELIDOS_TUM_S003", "MELIDOS_TUM_S004", "MELIDOS_TUM_S005"],
-        "participant_ids": ["TUM_S001", "TUM_S002", "TUM_S003", "TUM_S004", "TUM_S005"],
+        "dataset_ids": [
+          "MELIDOS_TUM_S001",
+          "MELIDOS_TUM_S002",
+          "MELIDOS_TUM_S003",
+          "MELIDOS_TUM_S004",
+          "MELIDOS_TUM_S005"
+        ],
+        "participant_ids": [
+          "TUM_S001",
+          "TUM_S002",
+          "TUM_S003",
+          "TUM_S004",
+          "TUM_S005"
+        ],
         "device_ids": "TUM_AL01",
         "compatibility_id": "glcc_5f35f72ffbea9c9ad5a49710ae4d88b69d0d9b1f9c8ab0ad075ee4e5a47b1620",
         "unit_id": "glcu_c1175af6fb135f2f7c1eaff471e2607bcba997abcd603ee394661131d87cddb3",
         "final_unit_count": 1,
-        "file_group_ids": ["MELIDOS_TUM_S001:18", "MELIDOS_TUM_S002:17", "MELIDOS_TUM_S003:18", "MELIDOS_TUM_S004:18", "MELIDOS_TUM_S005:18"],
-        "files": ["data/files/sensor/TUM_S001_light_glasses.csv", "data/files/sensor/TUM_S002_light_glasses.csv", "data/files/sensor/TUM_S003_light_glasses.csv", "data/files/sensor/TUM_S004_light_glasses.csv", "data/files/sensor/TUM_S005_light_glasses.csv"],
+        "file_group_ids": [
+          "MELIDOS_TUM_S001:18",
+          "MELIDOS_TUM_S002:17",
+          "MELIDOS_TUM_S003:18",
+          "MELIDOS_TUM_S004:18",
+          "MELIDOS_TUM_S005:18"
+        ],
+        "files": [
+          "data/files/sensor/TUM_S001_light_glasses.csv",
+          "data/files/sensor/TUM_S002_light_glasses.csv",
+          "data/files/sensor/TUM_S003_light_glasses.csv",
+          "data/files/sensor/TUM_S004_light_glasses.csv",
+          "data/files/sensor/TUM_S005_light_glasses.csv"
+        ],
         "cases": [
           {
             "dataset_id": "MELIDOS_TUM_S001",
@@ -176,21 +225,82 @@
         ],
         "requested_variables": "MEDI",
         "request_mode": "explicit",
-        "metadata_resources": ["study", "participants", "participant_characteristics", "datasets", "devices", "device_datasheets"],
+        "metadata_resources": [
+          "study",
+          "participants",
+          "participant_characteristics",
+          "datasets",
+          "devices",
+          "device_datasheets"
+        ],
         "metadata_resource_exclusions": [],
         "read_columns": {
-          "MELIDOS_TUM_S001:18": ["MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_TUM_S002:17": ["MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_TUM_S003:18": ["MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_TUM_S004:18": ["MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_TUM_S005:18": ["MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"]
+          "MELIDOS_TUM_S001:18": [
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_TUM_S002:17": [
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_TUM_S003:18": [
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_TUM_S004:18": [
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_TUM_S005:18": [
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ]
         },
-        "result_columns": ["MEDI", "Id", "file_group_id", "participant_Id", "Datetime", "file.name"],
+        "result_columns": [
+          "MEDI",
+          "Id",
+          "file_group_id",
+          "participant_Id",
+          "Datetime",
+          "file.name"
+        ],
         "n_max_per_file": 32,
         "standardize": "lightlogr",
         "problems": "error",
-        "source_file_declared_bytes": [12743300, 12397779, 12249004, 12446232, 11526112],
-        "source_file_git_blob_sha1": ["c6ac02fa1d2c779a149388db53c9335546c8a1f2", "f6d7d27a0d302a636066a96432935f4baf0a0f13", "e8242e14c2f55ea673adea8c6485a6b9ad1f71d1", "bc7eb2114524d3b744651710068fa54bee50a316", "a700d74735b57254bd8e32b85d385726b89c0eca"],
+        "source_file_declared_bytes": [
+          12743300,
+          12397779,
+          12249004,
+          12446232,
+          11526112
+        ],
+        "source_file_git_blob_sha1": [
+          "c6ac02fa1d2c779a149388db53c9335546c8a1f2",
+          "f6d7d27a0d302a636066a96432935f4baf0a0f13",
+          "e8242e14c2f55ea673adea8c6485a6b9ad1f71d1",
+          "bc7eb2114524d3b744651710068fa54bee50a316",
+          "a700d74735b57254bd8e32b85d385726b89c0eca"
+        ],
         "rationale": "Melanopic equivalent daylight illuminance is the sole requested measurement; automatic identity, time, key, and result columns remain."
       },
       "public_value_retention": {
@@ -214,9 +324,28 @@
         "generated_at": "2026-08-31T17:48:07Z",
         "retained_rows": 160,
         "source_rows_parsed": 160,
-        "source_read_sha256": ["sha256:1eb201b53601bbea58a39d78695ec09638a2c62a6ac76d8c3b91b8feeda5addf", "sha256:fc128dd9f9b339dbe9372b40af2dca5befa4c307f8d49550ff9e677339890577", "sha256:8b1a2dd393b2426e34967df8a41eaec49e51d4728a24503fe8a3bfe9362bcd9b", "sha256:aa476cb365985a043fb642dcae0ac42e1e68e5b3e24a95c535963030eeca5dfa", "sha256:cd9960d2b17d96a645b7d8d841f8032b71672d49cd332827d9c39ff088d69f73"],
-        "source_file_sha256": ["sha256:cc71cc216d32360361631a2d7744c7d5737786ee7e9b85b5e9674048fd312c4e", "sha256:bf71d89f71cda42da44cfc9f559b02c24976db6457f3775466a5709c4f4d6871", "sha256:c31bbc528b5a160ac3f63796a8fe396b7854a4d22b2457c3a9a0ac7fc864268c", "sha256:2644ec86ce07bab320fe086193dbe4b71b33f3a5c90b68bb43395f0ce6d7a572", "sha256:b8c4ce5e1a8749e3442f96966c4a1a5bd51a454516a1cf8f3b0b1249dea1ccc1"],
-        "source_column_classes": ["numeric", "factor", "character", "character", "POSIXct/POSIXt", "character"],
+        "source_read_sha256": [
+          "sha256:1eb201b53601bbea58a39d78695ec09638a2c62a6ac76d8c3b91b8feeda5addf",
+          "sha256:fc128dd9f9b339dbe9372b40af2dca5befa4c307f8d49550ff9e677339890577",
+          "sha256:8b1a2dd393b2426e34967df8a41eaec49e51d4728a24503fe8a3bfe9362bcd9b",
+          "sha256:aa476cb365985a043fb642dcae0ac42e1e68e5b3e24a95c535963030eeca5dfa",
+          "sha256:cd9960d2b17d96a645b7d8d841f8032b71672d49cd332827d9c39ff088d69f73"
+        ],
+        "source_file_sha256": [
+          "sha256:cc71cc216d32360361631a2d7744c7d5737786ee7e9b85b5e9674048fd312c4e",
+          "sha256:bf71d89f71cda42da44cfc9f559b02c24976db6457f3775466a5709c4f4d6871",
+          "sha256:c31bbc528b5a160ac3f63796a8fe396b7854a4d22b2457c3a9a0ac7fc864268c",
+          "sha256:2644ec86ce07bab320fe086193dbe4b71b33f3a5c90b68bb43395f0ce6d7a572",
+          "sha256:b8c4ce5e1a8749e3442f96966c4a1a5bd51a454516a1cf8f3b0b1249dea1ccc1"
+        ],
+        "source_column_classes": [
+          "numeric",
+          "factor",
+          "character",
+          "character",
+          "POSIXct/POSIXt",
+          "character"
+        ],
         "synthetic_cells": false,
         "privacy_filtering": false,
         "retention": {
@@ -237,7 +366,24 @@
         "r_version": "R version 4.6.1 (2026-06-24)",
         "glcdp_version": "1.0.0.9000",
         "glcdp_revision": "e49fcf153a114916ce2680f8b40eb475e694e10d",
-        "LightLogWeb_baseline": "b704d24ee6eab066163bb88e7125faf19e09543d"
+        "LightLogWeb_baseline": "b704d24ee6eab066163bb88e7125faf19e09543d",
+        "relationship_extraction": {
+          "generated_at": "2026-09-02T09:11:00Z",
+          "extractor": "glcdp::extract_metadata",
+          "glcdp_revision": "e49fcf153a114916ce2680f8b40eb475e694e10d",
+          "source_package_open_count": 1,
+          "public_measurement_reads": 0,
+          "existing_measurement_snapshot_reused": true,
+          "anchor": "file_group_id",
+          "dataset_anchor": "Id",
+          "requested_fields": ["dataset_internal_id", "dataset_timezone", "participant_internal_id", "participant_age", "participant_sex", "participant_gender", "study_internal_id", "study_title", "study_short_description", "study_setting", "study_geographical_location", "device_internal_id", "device_manufacturer", "device_model", "device_serial_number", "device_calibration_date", "device_datasheet_id", "datasheet_id", "datasheet_manufacturer", "datasheet_model", "datasheet_calibration_range", "datasheet_calibration_notes"],
+          "resolved_file_group_fields": ["dataset_internal_id", "dataset_timezone", "participant_age", "participant_sex", "participant_gender", "study_internal_id", "study_title", "study_short_description", "study_setting", "study_geographical_location", "device_internal_id", "device_manufacturer", "device_model", "device_serial_number", "device_calibration_date", "device_datasheet_id", "participant_internal_id"],
+          "resolved_dataset_fields": ["dataset_internal_id", "dataset_timezone", "participant_age", "participant_sex", "participant_gender", "study_internal_id", "study_title", "study_short_description", "study_setting", "study_geographical_location", "participant_internal_id"],
+          "warnings": "Only 16 of 21 requested metadata fields were found.\n! Missing fields: \"datasheet_id\", \"datasheet_manufacturer\", \"datasheet_model\",\n  \"datasheet_calibration_range\", and \"datasheet_calibration_notes\".",
+          "file_group_rows": 5,
+          "dataset_rows": 5,
+          "relationship_fingerprint": "sha256:675562ca4ca76cd24dd8e8289608b644c994c979507dc75ee57ebc5b8b965cba"
+        }
       }
     },
     {
@@ -246,8 +392,8 @@
       "derived_fixture": true,
       "disclaimer": "Derived, bounded public-data test fixture containing exact retained source values. It is not the complete published dataset and is not fresh or live measurement evidence.",
       "file": "iztech-light-subset.rds",
-      "file_bytes": 37284,
-      "file_sha256": "sha256:56f9cbf3434d3f55f61c44e6bcc5527c61447725448849f20c8fe7a94fa2c44f",
+      "file_bytes": 38784,
+      "file_sha256": "sha256:6f85478a1c83774a3d26a48142b0fb3599bd354aaec635928daef1f7271bd77c",
       "source": {
         "citation": "https://doi.org/10.5281/zenodo.16568109",
         "repository": "https://github.com/tscnlab/melidos-iztech-glc-dataset",
@@ -269,14 +415,45 @@
         "public_accessibility": "Public GitHub repository and DOI landing page"
       },
       "selection": {
-        "dataset_ids": ["MELIDOS_IZTECH_S001", "MELIDOS_IZTECH_S002", "MELIDOS_IZTECH_S003", "MELIDOS_IZTECH_S004", "MELIDOS_IZTECH_S005"],
-        "participant_ids": ["IZTECH_S001", "IZTECH_S002", "IZTECH_S003", "IZTECH_S004", "IZTECH_S005"],
-        "device_ids": ["IZTECH_AL03", "IZTECH_AL05_FW1_7", "IZTECH_AL04", "IZTECH_AL06_FW1_7"],
+        "dataset_ids": [
+          "MELIDOS_IZTECH_S001",
+          "MELIDOS_IZTECH_S002",
+          "MELIDOS_IZTECH_S003",
+          "MELIDOS_IZTECH_S004",
+          "MELIDOS_IZTECH_S005"
+        ],
+        "participant_ids": [
+          "IZTECH_S001",
+          "IZTECH_S002",
+          "IZTECH_S003",
+          "IZTECH_S004",
+          "IZTECH_S005"
+        ],
+        "device_ids": [
+          "IZTECH_AL03",
+          "IZTECH_AL05_FW1_7",
+          "IZTECH_AL04",
+          "IZTECH_AL06_FW1_7"
+        ],
         "compatibility_id": "glcc_8c714caba48d4c2885d1c9f0dfeb34bcad088c829dc420e6a005cc4c9dec07b8",
         "unit_id": "glcu_5c96116e9497b48ade74e50520666d741431be11184760642be44b63627734e9",
         "final_unit_count": 1,
-        "file_group_ids": ["MELIDOS_IZTECH_S001:18", "MELIDOS_IZTECH_S002:18", "MELIDOS_IZTECH_S003:18", "MELIDOS_IZTECH_S004:19", "MELIDOS_IZTECH_S004:20", "MELIDOS_IZTECH_S005:18"],
-        "files": ["data/files/sensor/IZTECH_S001_light_glasses.csv", "data/files/sensor/IZTECH_S002_light_glasses.csv", "data/files/sensor/IZTECH_S003_light_glasses.csv", "data/files/sensor/IZTECH_S004_light_glasses_AL03.csv", "data/files/sensor/IZTECH_S004_light_glasses_AL04.csv", "data/files/sensor/IZTECH_S005_light_glasses.csv"],
+        "file_group_ids": [
+          "MELIDOS_IZTECH_S001:18",
+          "MELIDOS_IZTECH_S002:18",
+          "MELIDOS_IZTECH_S003:18",
+          "MELIDOS_IZTECH_S004:19",
+          "MELIDOS_IZTECH_S004:20",
+          "MELIDOS_IZTECH_S005:18"
+        ],
+        "files": [
+          "data/files/sensor/IZTECH_S001_light_glasses.csv",
+          "data/files/sensor/IZTECH_S002_light_glasses.csv",
+          "data/files/sensor/IZTECH_S003_light_glasses.csv",
+          "data/files/sensor/IZTECH_S004_light_glasses_AL03.csv",
+          "data/files/sensor/IZTECH_S004_light_glasses_AL04.csv",
+          "data/files/sensor/IZTECH_S005_light_glasses.csv"
+        ],
         "cases": [
           {
             "dataset_id": "MELIDOS_IZTECH_S001",
@@ -333,27 +510,105 @@
             "git_blob_sha1": "21b8bfa573b35958bef09363e17b4b5bd1c3d928"
           }
         ],
-        "requested_variables": ["LIGHT", "MEDI"],
+        "requested_variables": [
+          "LIGHT",
+          "MEDI"
+        ],
         "request_mode": "explicit",
-        "metadata_resources": ["participants", "datasets", "devices", "device_datasheets"],
+        "metadata_resources": [
+          "participants",
+          "datasets",
+          "devices",
+          "device_datasheets"
+        ],
         "metadata_resource_exclusions": {
           "study": "Declared core resource data/study.json returned HTTP 400 from the GitHub raw endpoint at the exact revision on 2026-08-31. The object exists in Git and through GitHub's contents API. It is not silently substituted or copied around glcdp; this fixture remains partial.",
           "participant_characteristics": "Declared optional resource data/participant_characteristics.csv returned HTTP 400 through exported glc_metadata() at the exact revision on 2026-08-31. It is retained as unavailable, not absent from or reinterpreted on behalf of the published package."
         },
         "read_columns": {
-          "MELIDOS_IZTECH_S001:18": ["LIGHT", "MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_IZTECH_S002:18": ["LIGHT", "MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_IZTECH_S003:18": ["LIGHT", "MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_IZTECH_S004:19": ["LIGHT", "MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_IZTECH_S004:20": ["LIGHT", "MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_IZTECH_S005:18": ["LIGHT", "MEDI", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"]
+          "MELIDOS_IZTECH_S001:18": [
+            "LIGHT",
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_IZTECH_S002:18": [
+            "LIGHT",
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_IZTECH_S003:18": [
+            "LIGHT",
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_IZTECH_S004:19": [
+            "LIGHT",
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_IZTECH_S004:20": [
+            "LIGHT",
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_IZTECH_S005:18": [
+            "LIGHT",
+            "MEDI",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ]
         },
-        "result_columns": ["LIGHT", "MEDI", "Id", "file_group_id", "participant_Id", "Datetime", "file.name"],
+        "result_columns": [
+          "LIGHT",
+          "MEDI",
+          "Id",
+          "file_group_id",
+          "participant_Id",
+          "Datetime",
+          "file.name"
+        ],
         "n_max_per_file": 32,
         "standardize": "lightlogr",
         "problems": "error",
-        "source_file_declared_bytes": [11868229, 10882377, 10967292, 1691503, 8956228, 10801890],
-        "source_file_git_blob_sha1": ["74ca26574ba04fdedf06222ff776293b2055b020", "c7a3781740644a032e239e779b35599514fa3131", "6b748fcc56d6102e793da9a95c4f2960cd6fae3a", "9ebf9eb1f548ec452672d8531c9279ae607355ef", "8b004ec53c17d6530646162be6f445c154d5b858", "21b8bfa573b35958bef09363e17b4b5bd1c3d928"],
+        "source_file_declared_bytes": [
+          11868229,
+          10882377,
+          10967292,
+          1691503,
+          8956228,
+          10801890
+        ],
+        "source_file_git_blob_sha1": [
+          "74ca26574ba04fdedf06222ff776293b2055b020",
+          "c7a3781740644a032e239e779b35599514fa3131",
+          "6b748fcc56d6102e793da9a95c4f2960cd6fae3a",
+          "9ebf9eb1f548ec452672d8531c9279ae607355ef",
+          "8b004ec53c17d6530646162be6f445c154d5b858",
+          "21b8bfa573b35958bef09363e17b4b5bd1c3d928"
+        ],
         "rationale": "Photopic illuminance and melanopic EDI form a plausible paired light subset. Other available channels are deliberately not requested."
       },
       "public_value_retention": {
@@ -377,9 +632,31 @@
         "generated_at": "2026-08-31T17:48:07Z",
         "retained_rows": 192,
         "source_rows_parsed": 192,
-        "source_read_sha256": ["sha256:8b34665eb95b6300d17f7b1c1304cc46afa9b7b861b38b5171f153158c5e25f4", "sha256:a7ec870ceaa116005c53e5f0e981bdad89e647492acb95206a47f7c9a6afe1e8", "sha256:e2f037bf427ad212ce810c2e5755fc000eacddfbd0c4ff2239ae89b2f0b2bc2c", "sha256:d01c0acb8ac3bee1bed6079380650ed4ec170c770073923b9630c13a20b782dd", "sha256:82a61cdee967c18648fa9b0ff70eb2135cd3c96e103bc94ba56ed17c96788f27", "sha256:b51b14eb1fbf847470757ab137706be2fde003d594d70fe1a12ed8f709aa6281"],
-        "source_file_sha256": ["sha256:7e111eaf665c6408cedc66980391bc1f3ccec2af046bf05e0212873c707fd362", "sha256:2a99fbfa40b1a52fc566b120f412bf12cd0ca8a49bc11d72516f456ef08ac177", "sha256:5b5b1a1d10d9f70c92ab9d5137b4aa0003c759101721262448461f444210caf1", "sha256:e55f04a4976f30b92f47880467be9526df717c7629e442acc771f7edcf3a1f13", "sha256:885e522262ee80d2c29b13dd8bfb1f483d7ee7fb45f9a63410ec37d3bfc4ed48", "sha256:24d424ef5f6bdd94e40319da66da2df51047560844dd58608bf42154f59bfc88"],
-        "source_column_classes": ["numeric", "numeric", "factor", "character", "character", "POSIXct/POSIXt", "character"],
+        "source_read_sha256": [
+          "sha256:8b34665eb95b6300d17f7b1c1304cc46afa9b7b861b38b5171f153158c5e25f4",
+          "sha256:a7ec870ceaa116005c53e5f0e981bdad89e647492acb95206a47f7c9a6afe1e8",
+          "sha256:e2f037bf427ad212ce810c2e5755fc000eacddfbd0c4ff2239ae89b2f0b2bc2c",
+          "sha256:d01c0acb8ac3bee1bed6079380650ed4ec170c770073923b9630c13a20b782dd",
+          "sha256:82a61cdee967c18648fa9b0ff70eb2135cd3c96e103bc94ba56ed17c96788f27",
+          "sha256:b51b14eb1fbf847470757ab137706be2fde003d594d70fe1a12ed8f709aa6281"
+        ],
+        "source_file_sha256": [
+          "sha256:7e111eaf665c6408cedc66980391bc1f3ccec2af046bf05e0212873c707fd362",
+          "sha256:2a99fbfa40b1a52fc566b120f412bf12cd0ca8a49bc11d72516f456ef08ac177",
+          "sha256:5b5b1a1d10d9f70c92ab9d5137b4aa0003c759101721262448461f444210caf1",
+          "sha256:e55f04a4976f30b92f47880467be9526df717c7629e442acc771f7edcf3a1f13",
+          "sha256:885e522262ee80d2c29b13dd8bfb1f483d7ee7fb45f9a63410ec37d3bfc4ed48",
+          "sha256:24d424ef5f6bdd94e40319da66da2df51047560844dd58608bf42154f59bfc88"
+        ],
+        "source_column_classes": [
+          "numeric",
+          "numeric",
+          "factor",
+          "character",
+          "character",
+          "POSIXct/POSIXt",
+          "character"
+        ],
         "synthetic_cells": false,
         "privacy_filtering": false,
         "retention": {
@@ -400,7 +677,24 @@
         "r_version": "R version 4.6.1 (2026-06-24)",
         "glcdp_version": "1.0.0.9000",
         "glcdp_revision": "e49fcf153a114916ce2680f8b40eb475e694e10d",
-        "LightLogWeb_baseline": "b704d24ee6eab066163bb88e7125faf19e09543d"
+        "LightLogWeb_baseline": "b704d24ee6eab066163bb88e7125faf19e09543d",
+        "relationship_extraction": {
+          "generated_at": "2026-09-02T09:11:00Z",
+          "extractor": "glcdp::extract_metadata",
+          "glcdp_revision": "e49fcf153a114916ce2680f8b40eb475e694e10d",
+          "source_package_open_count": 1,
+          "public_measurement_reads": 0,
+          "existing_measurement_snapshot_reused": true,
+          "anchor": "file_group_id",
+          "dataset_anchor": "Id",
+          "requested_fields": ["dataset_internal_id", "dataset_timezone", "participant_internal_id", "participant_age", "participant_sex", "participant_gender", "device_internal_id", "device_manufacturer", "device_model", "device_serial_number", "device_calibration_date", "device_datasheet_id", "datasheet_id", "datasheet_manufacturer", "datasheet_model", "datasheet_calibration_method", "datasheet_calibration_accuracy", "datasheet_calibration_range", "datasheet_calibration_notes"],
+          "resolved_file_group_fields": ["dataset_internal_id", "dataset_timezone", "participant_age", "participant_sex", "participant_gender", "device_internal_id", "device_manufacturer", "device_model", "device_serial_number", "device_calibration_date", "device_datasheet_id", "participant_internal_id"],
+          "resolved_dataset_fields": ["dataset_internal_id", "dataset_timezone", "participant_age", "participant_sex", "participant_gender", "participant_internal_id"],
+          "warnings": "Only 11 of 18 requested metadata fields were found.\n! Missing fields: \"datasheet_id\", \"datasheet_manufacturer\", \"datasheet_model\",\n  \"datasheet_calibration_method\", \"datasheet_calibration_accuracy\",\n  \"datasheet_calibration_range\", and \"datasheet_calibration_notes\".",
+          "file_group_rows": 6,
+          "dataset_rows": 5,
+          "relationship_fingerprint": "sha256:a7f41e1ca1f9140c833c2cb8c53bed66ceb99f1b27998cc850aaf3754c9885ad"
+        }
       }
     },
     {
@@ -409,8 +703,8 @@
       "derived_fixture": true,
       "disclaimer": "Derived, bounded public-data test fixture containing exact retained source values. It is not the complete published dataset and is not fresh or live measurement evidence.",
       "file": "ucr-all-light-variables.rds",
-      "file_bytes": 80468,
-      "file_sha256": "sha256:edaad60c2d5d3330ff2542dbd89d75325d550a8fb8c8d0c6ecfac26c43d592fe",
+      "file_bytes": 81496,
+      "file_sha256": "sha256:754c7ad5e028807c11821aec4b98cd6ad682a74d2223871e3fc0b310a3ab9581",
       "source": {
         "citation": "https://doi.org/10.5281/zenodo.17289456",
         "repository": "https://github.com/tscnlab/melidos-ucr-glc-dataset",
@@ -432,14 +726,42 @@
         "public_accessibility": "Public GitHub repository and DOI landing page"
       },
       "selection": {
-        "dataset_ids": ["MELIDOS_UCR_S001", "MELIDOS_UCR_S002", "MELIDOS_UCR_S003", "MELIDOS_UCR_S004", "MELIDOS_UCR_S005"],
-        "participant_ids": ["UCR_S001", "UCR_S002", "UCR_S003", "UCR_S004", "UCR_S005"],
-        "device_ids": ["UCR_AL03", "UCR_AL06", "UCR_AL09"],
+        "dataset_ids": [
+          "MELIDOS_UCR_S001",
+          "MELIDOS_UCR_S002",
+          "MELIDOS_UCR_S003",
+          "MELIDOS_UCR_S004",
+          "MELIDOS_UCR_S005"
+        ],
+        "participant_ids": [
+          "UCR_S001",
+          "UCR_S002",
+          "UCR_S003",
+          "UCR_S004",
+          "UCR_S005"
+        ],
+        "device_ids": [
+          "UCR_AL03",
+          "UCR_AL06",
+          "UCR_AL09"
+        ],
         "compatibility_id": "glcc_a6aa68bac79e3236d9f1d46788dbd6bcaec6c4994fa4737cbf22a0f21f8ede12",
         "unit_id": "glcu_f6d259c843347e3d10d784cd1d26e4b74d8651d21529d39222213c59bbd3e853",
         "final_unit_count": 1,
-        "file_group_ids": ["MELIDOS_UCR_S001:18", "MELIDOS_UCR_S002:18", "MELIDOS_UCR_S003:18", "MELIDOS_UCR_S004:18", "MELIDOS_UCR_S005:18"],
-        "files": ["data/files/sensor/UCR_S001_light_wrist.csv", "data/files/sensor/UCR_S002_light_wrist.csv", "data/files/sensor/UCR_S003_light_wrist.csv", "data/files/sensor/UCR_S004_light_wrist.csv", "data/files/sensor/UCR_S005_light_wrist.csv"],
+        "file_group_ids": [
+          "MELIDOS_UCR_S001:18",
+          "MELIDOS_UCR_S002:18",
+          "MELIDOS_UCR_S003:18",
+          "MELIDOS_UCR_S004:18",
+          "MELIDOS_UCR_S005:18"
+        ],
+        "files": [
+          "data/files/sensor/UCR_S001_light_wrist.csv",
+          "data/files/sensor/UCR_S002_light_wrist.csv",
+          "data/files/sensor/UCR_S003_light_wrist.csv",
+          "data/files/sensor/UCR_S004_light_wrist.csv",
+          "data/files/sensor/UCR_S005_light_wrist.csv"
+        ],
         "cases": [
           {
             "dataset_id": "MELIDOS_UCR_S001",
@@ -487,23 +809,279 @@
             "git_blob_sha1": "3fd884ef264376c06f8c0851b5b8960db4ce0690"
           }
         ],
-        "requested_variables": ["Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE", "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT", "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position"],
+        "requested_variables": [
+          "Id",
+          "file.name",
+          "Datetime",
+          "is.implicit",
+          "EVENT",
+          "TEMPERATURE",
+          "ORIENTATION",
+          "PIM",
+          "PIMn",
+          "TAT",
+          "TATn",
+          "ZCM",
+          "ZCMn",
+          "LIGHT",
+          "IR.LIGHT",
+          "CAP_SENS_1",
+          "CAP_SENS_2",
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5",
+          "F6",
+          "F7",
+          "F8",
+          "MEDI",
+          "CLEAR",
+          "STATE",
+          "position"
+        ],
         "request_mode": "all",
-        "metadata_resources": ["study", "participants", "participant_characteristics", "datasets", "devices", "device_datasheets"],
+        "metadata_resources": [
+          "study",
+          "participants",
+          "participant_characteristics",
+          "datasets",
+          "devices",
+          "device_datasheets"
+        ],
         "metadata_resource_exclusions": [],
         "read_columns": {
-          "MELIDOS_UCR_S001:18": ["Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE", "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT", "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_UCR_S002:18": ["Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE", "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT", "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_UCR_S003:18": ["Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE", "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT", "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_UCR_S004:18": ["Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE", "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT", "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"],
-          "MELIDOS_UCR_S005:18": ["Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE", "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT", "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position", ".glc_dataset_id", ".glc_file_group", ".glc_participant_id", ".glc_source_file", ".glc_datetime"]
+          "MELIDOS_UCR_S001:18": [
+            "Id",
+            "file.name",
+            "Datetime",
+            "is.implicit",
+            "EVENT",
+            "TEMPERATURE",
+            "ORIENTATION",
+            "PIM",
+            "PIMn",
+            "TAT",
+            "TATn",
+            "ZCM",
+            "ZCMn",
+            "LIGHT",
+            "IR.LIGHT",
+            "CAP_SENS_1",
+            "CAP_SENS_2",
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F7",
+            "F8",
+            "MEDI",
+            "CLEAR",
+            "STATE",
+            "position",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_UCR_S002:18": [
+            "Id",
+            "file.name",
+            "Datetime",
+            "is.implicit",
+            "EVENT",
+            "TEMPERATURE",
+            "ORIENTATION",
+            "PIM",
+            "PIMn",
+            "TAT",
+            "TATn",
+            "ZCM",
+            "ZCMn",
+            "LIGHT",
+            "IR.LIGHT",
+            "CAP_SENS_1",
+            "CAP_SENS_2",
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F7",
+            "F8",
+            "MEDI",
+            "CLEAR",
+            "STATE",
+            "position",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_UCR_S003:18": [
+            "Id",
+            "file.name",
+            "Datetime",
+            "is.implicit",
+            "EVENT",
+            "TEMPERATURE",
+            "ORIENTATION",
+            "PIM",
+            "PIMn",
+            "TAT",
+            "TATn",
+            "ZCM",
+            "ZCMn",
+            "LIGHT",
+            "IR.LIGHT",
+            "CAP_SENS_1",
+            "CAP_SENS_2",
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F7",
+            "F8",
+            "MEDI",
+            "CLEAR",
+            "STATE",
+            "position",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_UCR_S004:18": [
+            "Id",
+            "file.name",
+            "Datetime",
+            "is.implicit",
+            "EVENT",
+            "TEMPERATURE",
+            "ORIENTATION",
+            "PIM",
+            "PIMn",
+            "TAT",
+            "TATn",
+            "ZCM",
+            "ZCMn",
+            "LIGHT",
+            "IR.LIGHT",
+            "CAP_SENS_1",
+            "CAP_SENS_2",
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F7",
+            "F8",
+            "MEDI",
+            "CLEAR",
+            "STATE",
+            "position",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ],
+          "MELIDOS_UCR_S005:18": [
+            "Id",
+            "file.name",
+            "Datetime",
+            "is.implicit",
+            "EVENT",
+            "TEMPERATURE",
+            "ORIENTATION",
+            "PIM",
+            "PIMn",
+            "TAT",
+            "TATn",
+            "ZCM",
+            "ZCMn",
+            "LIGHT",
+            "IR.LIGHT",
+            "CAP_SENS_1",
+            "CAP_SENS_2",
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F7",
+            "F8",
+            "MEDI",
+            "CLEAR",
+            "STATE",
+            "position",
+            ".glc_dataset_id",
+            ".glc_file_group",
+            ".glc_participant_id",
+            ".glc_source_file",
+            ".glc_datetime"
+          ]
         },
-        "result_columns": ["Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE", "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT", "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position", "file_group_id", "participant_Id"],
+        "result_columns": [
+          "Id",
+          "file.name",
+          "Datetime",
+          "is.implicit",
+          "EVENT",
+          "TEMPERATURE",
+          "ORIENTATION",
+          "PIM",
+          "PIMn",
+          "TAT",
+          "TATn",
+          "ZCM",
+          "ZCMn",
+          "LIGHT",
+          "IR.LIGHT",
+          "CAP_SENS_1",
+          "CAP_SENS_2",
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5",
+          "F6",
+          "F7",
+          "F8",
+          "MEDI",
+          "CLEAR",
+          "STATE",
+          "position",
+          "file_group_id",
+          "participant_Id"
+        ],
         "n_max_per_file": 32,
         "standardize": "lightlogr",
         "problems": "error",
-        "source_file_declared_bytes": [11033699, 10819615, 11069984, 10462952, 10495760],
-        "source_file_git_blob_sha1": ["b6ffea655f0673a94f5b39808c9af925201c216c", "333daf2ec7c1ac3b1117a277d1fd4711d646afb5", "d8df8c5017ce8286090af94a67ecf11cd9f84ff0", "4c93dc6b7093a419e1b96c497f6a7cc5b2214f45", "3fd884ef264376c06f8c0851b5b8960db4ce0690"],
+        "source_file_declared_bytes": [
+          11033699,
+          10819615,
+          11069984,
+          10462952,
+          10495760
+        ],
+        "source_file_git_blob_sha1": [
+          "b6ffea655f0673a94f5b39808c9af925201c216c",
+          "333daf2ec7c1ac3b1117a277d1fd4711d646afb5",
+          "d8df8c5017ce8286090af94a67ecf11cd9f84ff0",
+          "4c93dc6b7093a419e1b96c497f6a7cc5b2214f45",
+          "3fd884ef264376c06f8c0851b5b8960db4ce0690"
+        ],
         "rationale": "Every variable available in the compatible wrist light unit is requested. This is the widest metadata and output contract."
       },
       "public_value_retention": {
@@ -527,9 +1105,53 @@
         "generated_at": "2026-08-31T17:48:07Z",
         "retained_rows": 160,
         "source_rows_parsed": 160,
-        "source_read_sha256": ["sha256:a1854f362f08d8c38e4e132199b43799057c7c3c836c02f9b0b352f8727e083d", "sha256:8bd41825d47839dccfd4adf3c532f8264de8be731f08078fc6bf76460a8a2587", "sha256:68f6bbb5c40406e2cd99d3ea12bcfc23f284128333d85e217e6776d5d62704bc", "sha256:4bd3b892f44e6320553a47393e524e98870536b69b20fd792bc636f55bcc2ec6", "sha256:096d20e1c39d5961c65986c1e1a26a1e83eb97d55807ff4f3e575a95ab1cc68a"],
-        "source_file_sha256": ["sha256:1787fd69d9ab76e09b134a977ca92f07b72e79b4d3b67f1cd0ecfe26489c96e6", "sha256:92165299fd1fa1c32f2c0cd7ac6c53e5cc09f616ea7fa05e78fb3c67fe554fdd", "sha256:55961a462072bb062d4389296b47867edeff4ac6c3a4e27436851fbb2926d75e", "sha256:c169b5a164dc8dd45c9ccec451ab55faa6df151d22bfe22caafeac72f79b5009", "sha256:b8557a59ccff661a4dc2bc61e354a770827d48389d2bd45dba0fee7047fb8017"],
-        "source_column_classes": ["factor", "character", "POSIXct/POSIXt", "logical", "integer", "numeric", "factor", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "factor", "character", "character", "character"],
+        "source_read_sha256": [
+          "sha256:a1854f362f08d8c38e4e132199b43799057c7c3c836c02f9b0b352f8727e083d",
+          "sha256:8bd41825d47839dccfd4adf3c532f8264de8be731f08078fc6bf76460a8a2587",
+          "sha256:68f6bbb5c40406e2cd99d3ea12bcfc23f284128333d85e217e6776d5d62704bc",
+          "sha256:4bd3b892f44e6320553a47393e524e98870536b69b20fd792bc636f55bcc2ec6",
+          "sha256:096d20e1c39d5961c65986c1e1a26a1e83eb97d55807ff4f3e575a95ab1cc68a"
+        ],
+        "source_file_sha256": [
+          "sha256:1787fd69d9ab76e09b134a977ca92f07b72e79b4d3b67f1cd0ecfe26489c96e6",
+          "sha256:92165299fd1fa1c32f2c0cd7ac6c53e5cc09f616ea7fa05e78fb3c67fe554fdd",
+          "sha256:55961a462072bb062d4389296b47867edeff4ac6c3a4e27436851fbb2926d75e",
+          "sha256:c169b5a164dc8dd45c9ccec451ab55faa6df151d22bfe22caafeac72f79b5009",
+          "sha256:b8557a59ccff661a4dc2bc61e354a770827d48389d2bd45dba0fee7047fb8017"
+        ],
+        "source_column_classes": [
+          "factor",
+          "character",
+          "POSIXct/POSIXt",
+          "logical",
+          "integer",
+          "numeric",
+          "factor",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "numeric",
+          "factor",
+          "character",
+          "character",
+          "character"
+        ],
         "synthetic_cells": false,
         "privacy_filtering": false,
         "retention": {
@@ -550,8 +1172,26 @@
         "r_version": "R version 4.6.1 (2026-06-24)",
         "glcdp_version": "1.0.0.9000",
         "glcdp_revision": "e49fcf153a114916ce2680f8b40eb475e694e10d",
-        "LightLogWeb_baseline": "b704d24ee6eab066163bb88e7125faf19e09543d"
+        "LightLogWeb_baseline": "b704d24ee6eab066163bb88e7125faf19e09543d",
+        "relationship_extraction": {
+          "generated_at": "2026-09-02T09:11:00Z",
+          "extractor": "glcdp::extract_metadata",
+          "glcdp_revision": "e49fcf153a114916ce2680f8b40eb475e694e10d",
+          "source_package_open_count": 1,
+          "public_measurement_reads": 0,
+          "existing_measurement_snapshot_reused": true,
+          "anchor": "file_group_id",
+          "dataset_anchor": "Id",
+          "requested_fields": ["dataset_internal_id", "dataset_timezone", "participant_internal_id", "participant_age", "participant_sex", "participant_gender", "study_internal_id", "study_title", "study_short_description", "study_setting", "study_geographical_location", "device_internal_id", "device_manufacturer", "device_model", "device_serial_number", "device_calibration_date", "device_datasheet_id", "datasheet_id", "datasheet_manufacturer", "datasheet_model", "datasheet_calibration_range", "datasheet_calibration_notes"],
+          "resolved_file_group_fields": ["dataset_internal_id", "dataset_timezone", "participant_age", "participant_sex", "participant_gender", "study_internal_id", "study_title", "study_short_description", "study_setting", "study_geographical_location", "device_internal_id", "device_manufacturer", "device_model", "device_serial_number", "device_calibration_date", "device_datasheet_id", "participant_internal_id"],
+          "resolved_dataset_fields": ["dataset_internal_id", "dataset_timezone", "participant_age", "participant_sex", "participant_gender", "study_internal_id", "study_title", "study_short_description", "study_setting", "study_geographical_location", "participant_internal_id"],
+          "warnings": "Only 16 of 21 requested metadata fields were found.\n! Missing fields: \"datasheet_id\", \"datasheet_manufacturer\", \"datasheet_model\",\n  \"datasheet_calibration_range\", and \"datasheet_calibration_notes\".",
+          "file_group_rows": 5,
+          "dataset_rows": 5,
+          "relationship_fingerprint": "sha256:c7efa884319a3c8ae572ac2132192f92c540496053afe7cb4ac865ce7c12cc60"
+        }
       }
     }
-  ]
+  ],
+  "relationships_generated_at": "2026-09-02T09:11:00Z"
 }

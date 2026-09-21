@@ -349,17 +349,26 @@ fixture_file_row_indices <- function(file_rows, paths, fixture_id) {
   row_paths <- lapply(seq_len(nrow(file_rows)), function(row) {
     fixture_nonempty_values(file_rows$dataset_file_names[row])
   })
-  vapply(paths, function(path) {
-    matches <- which(vapply(
-      row_paths,
-      function(values) path %in% values,
-      logical(1)
-    ))
-    if (length(matches) != 1L) {
-      stop("Selected file metadata are not unique for ", fixture_id, ": ", path)
-    }
-    matches[[1L]]
-  }, integer(1))
+  vapply(
+    paths,
+    function(path) {
+      matches <- which(vapply(
+        row_paths,
+        function(values) path %in% values,
+        logical(1)
+      ))
+      if (length(matches) != 1L) {
+        stop(
+          "Selected file metadata are not unique for ",
+          fixture_id,
+          ": ",
+          path
+        )
+      }
+      matches[[1L]]
+    },
+    integer(1)
+  )
 }
 
 fixture_scope_file_variables <- function(selected_files, retained_names) {
@@ -387,18 +396,21 @@ fixture_file_terms <- function(selected_files) {
   if (!"dataset_file_variables" %in% names(selected_files)) {
     return(character())
   }
-  unique(unlist(lapply(
-    selected_files$dataset_file_variables,
-    function(variables) {
-      if (
-        !is.data.frame(variables) ||
-          !"dataset_file_variables_term" %in% names(variables)
-      ) {
-        return(character())
+  unique(unlist(
+    lapply(
+      selected_files$dataset_file_variables,
+      function(variables) {
+        if (
+          !is.data.frame(variables) ||
+            !"dataset_file_variables_term" %in% names(variables)
+        ) {
+          return(character())
+        }
+        fixture_nonempty_values(variables$dataset_file_variables_term)
       }
-      fixture_nonempty_values(variables$dataset_file_variables_term)
-    }
-  ), use.names = FALSE))
+    ),
+    use.names = FALSE
+  ))
 }
 
 fixture_scope_study <- function(study, study_ids, dataset_ids) {
@@ -450,7 +462,10 @@ prepare_public_case_metadata <- function(
   dataset_ids <- unique(as.character(cases$dataset_id))
   participant_ids <- unique(as.character(cases$participant_id))
   if (length(dataset_ids) != 5L || length(participant_ids) != 5L) {
-    stop("Exactly five datasets and participants are required for ", source$fixture_id)
+    stop(
+      "Exactly five datasets and participants are required for ",
+      source$fixture_id
+    )
   }
 
   metadata_dataset_ids <- as.character(metadata$datasets$dataset_internal_id)
@@ -495,7 +510,8 @@ prepare_public_case_metadata <- function(
 
     selected_terms <- fixture_file_terms(file_rows)
     if (
-      "dataset_variable_terms" %in% names(selected_datasets) &&
+      "dataset_variable_terms" %in%
+        names(selected_datasets) &&
         is.data.frame(selected_datasets$dataset_variable_terms[[index]])
     ) {
       term_table <- selected_datasets$dataset_variable_terms[[index]]
@@ -534,7 +550,10 @@ prepare_public_case_metadata <- function(
     }
   }
 
-  selected_device_ids <- unique(unlist(device_ids_by_dataset, use.names = FALSE))
+  selected_device_ids <- unique(unlist(
+    device_ids_by_dataset,
+    use.names = FALSE
+  ))
   devices_source <- metadata$devices
   devices <- if (is.data.frame(devices_source)) {
     devices_source[
@@ -580,7 +599,10 @@ prepare_public_case_metadata <- function(
         participant_ids
       )
   ) {
-    stop("Five participant metadata records are required for ", source$fixture_id)
+    stop(
+      "Five participant metadata records are required for ",
+      source$fixture_id
+    )
   }
 
   characteristics_source <- metadata$participant_characteristics
@@ -608,7 +630,8 @@ prepare_public_case_metadata <- function(
     device_datasheets = datasheets
   )
   selected_variables <- variables[
-    as.character(variables$file_group_id) %in% cases$file_group_id &
+    as.character(variables$file_group_id) %in%
+      cases$file_group_id &
       as.character(variables$name) %in% retained_names,
     ,
     drop = FALSE
@@ -735,11 +758,17 @@ generate_fixture <- function(source, cache_root) {
   plan_unit <- plan$units[1L, , drop = FALSE]
   planned_groups <- fixture_nonempty_values(plan_unit$file_group_ids)
   if (
-    !identical(as.character(plan_unit$compatibility_id), source$compatibility_id) ||
+    !identical(
+      as.character(plan_unit$compatibility_id),
+      source$compatibility_id
+    ) ||
       !identical(as.character(plan_unit$unit_id), source$unit_id) ||
       !setequal(planned_groups, cases$file_group_id)
   ) {
-    stop("The exported collection-plan identity changed for ", source$fixture_id)
+    stop(
+      "The exported collection-plan identity changed for ",
+      source$fixture_id
+    )
   }
 
   download_directory <- file.path(source_cache, "verified-download")
@@ -791,13 +820,25 @@ generate_fixture <- function(source, cache_root) {
       anyDuplicated(names(observed)) > 0L ||
         !setequal(names(observed), source$expected_result_columns)
     ) {
-      stop("The collected result-column contract changed for ", source$fixture_id)
+      stop(
+        "The collected result-column contract changed for ",
+        source$fixture_id
+      )
     }
     if (
-      !identical(unique(as.character(observed$file_group_id)), case$file_group_id) ||
-        !identical(unique(as.character(observed$participant_Id)), case$participant_id)
+      !identical(
+        unique(as.character(observed$file_group_id)),
+        case$file_group_id
+      ) ||
+        !identical(
+          unique(as.character(observed$participant_Id)),
+          case$participant_id
+        )
     ) {
-      stop("Collected participant or file-group lineage changed for ", source$fixture_id)
+      stop(
+        "Collected participant or file-group lineage changed for ",
+        source$fixture_id
+      )
     }
 
     read_columns <- if (
@@ -820,11 +861,13 @@ generate_fixture <- function(source, cache_root) {
   })
   observed_cases <- lapply(case_results, function(result) result$data)
   result_columns <- names(observed_cases[[1L]])
-  if (!all(vapply(
-    observed_cases,
-    function(observed) identical(names(observed), result_columns),
-    logical(1)
-  ))) {
+  if (
+    !all(vapply(
+      observed_cases,
+      function(observed) identical(names(observed), result_columns),
+      logical(1)
+    ))
+  ) {
     stop("Collected result-column order differs between fixture cases.")
   }
   class_signatures <- lapply(observed_cases, function(observed) {
@@ -834,12 +877,14 @@ generate_fixture <- function(source, cache_root) {
       character(1)
     )
   })
-  if (!all(vapply(
-    class_signatures,
-    identical,
-    logical(1),
-    class_signatures[[1L]]
-  ))) {
+  if (
+    !all(vapply(
+      class_signatures,
+      identical,
+      logical(1),
+      class_signatures[[1L]]
+    ))
+  ) {
     stop("Collected result-column classes differ between fixture cases.")
   }
   observed <- fixture_bind_rows(observed_cases)
@@ -859,6 +904,17 @@ generate_fixture <- function(source, cache_root) {
     source,
     result_columns
   )
+  relationship_files <- unique(data.frame(
+    dataset_id = as.character(observed$Id),
+    file_group_id = as.character(observed$file_group_id),
+    stringsAsFactors = FALSE
+  ))
+  relationships <- glcdp_extract_relationship_context(
+    handle = handle,
+    files = relationship_files,
+    metadata = prepared_metadata$metadata,
+    api = glcdp_api()
+  )
   snapshot <- new_glc_source_metadata_snapshot(
     source = list(
       registry_url = registry_url,
@@ -875,13 +931,14 @@ generate_fixture <- function(source, cache_root) {
     metadata = prepared_metadata$metadata,
     datasets = prepared_metadata$datasets,
     variables = prepared_metadata$variables,
+    relationships = relationships,
     state = source$metadata_state
   )
 
   fixture <- structure(
     list(
       fixture_schema = "llw-glc-derived-fixture",
-      fixture_version = "2.0.0",
+      fixture_version = "2.1.0",
       fixture_id = source$fixture_id,
       label = source$label,
       disclaimer = paste(
@@ -929,7 +986,22 @@ generate_fixture <- function(source, cache_root) {
         privacy_filtering = FALSE,
         retention = prepared_metadata$retention,
         glcdp_plan_schema = plan$plan_schema,
-        glcdp_plan_version = plan$plan_version
+        glcdp_plan_version = plan$plan_version,
+        relationship_extraction = list(
+          extractor = "glcdp::extract_metadata",
+          glcdp_revision = expected_glcdp_sha,
+          source_package_open_count = 1L,
+          public_measurement_reads = 0L,
+          anchor = relationships$anchor,
+          dataset_anchor = relationships$dataset_anchor,
+          requested_fields = relationships$requested_fields,
+          resolved_file_group_fields = relationships$resolved_file_group_fields,
+          resolved_dataset_fields = relationships$resolved_dataset_fields,
+          warnings = relationships$warnings,
+          file_group_rows = nrow(relationships$file_groups),
+          dataset_rows = nrow(relationships$datasets),
+          relationship_fingerprint = relationships$fingerprint
+        )
       ),
       data = observed,
       metadata_snapshot = snapshot
@@ -1020,7 +1092,8 @@ fixture_manifest_entries <- lapply(seq_along(sources), function(index) {
         "privacy_filtering",
         "retention",
         "glcdp_plan_schema",
-        "glcdp_plan_version"
+        "glcdp_plan_version",
+        "relationship_extraction"
       )],
       list(
         r_version = R.version.string,
@@ -1071,7 +1144,7 @@ offline_review_states <- list(metadata_append_review_contract(
 
 manifest <- list(
   manifest_schema = "llw-glc-derived-fixture-manifest",
-  manifest_version = "2.0.0",
+  manifest_version = "2.1.0",
   generated_at = generated_at,
   derived_fixture_notice = paste(
     "Every entry is a bounded derived test fixture retaining exact public",
@@ -1093,6 +1166,14 @@ manifest <- list(
     standardize = "lightlogr",
     problems = "error",
     source_package_reopen_in_tests = FALSE,
+    relationship_extraction = list(
+      exported_glcdp_api = "extract_metadata",
+      package_open_count_per_fixture = 1L,
+      public_measurement_reads = 0L,
+      default_anchor = "file_group_id",
+      explicit_dataset_anchor = "Id",
+      offline_tests_reopen_packages = FALSE
+    ),
     per_fixture_byte_limit = 1024^2,
     total_byte_limit = 3 * 1024^2
   ),

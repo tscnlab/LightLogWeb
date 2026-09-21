@@ -70,6 +70,18 @@ datasetSidebarUI <- function(id, example_choices = dataset_example_choices()) {
         class = "btn-primary"
       ),
       actionButton(
+        ns("explore_metadata"),
+        "Explore metadata" |>
+          tooltip2(
+            paste(
+              "Open the selected dataset's retained source metadata and",
+              "separate LightLogWeb overlay."
+            )
+          ),
+        icon = icon("magnifying-glass"),
+        class = "btn-outline-secondary"
+      ),
+      actionButton(
         ns("rename_dataset"),
         "Rename dataset" |>
           tooltip2(
@@ -122,6 +134,7 @@ new_dataset_manager_event <- function(type, dataset_id = NULL, value = NULL) {
       "open_import",
       "load_example",
       "open_append",
+      "open_metadata",
       "select",
       "rename",
       "duplicate",
@@ -129,7 +142,17 @@ new_dataset_manager_event <- function(type, dataset_id = NULL, value = NULL) {
       "remove"
     )
   )
-  if (type %in% c("select", "rename", "duplicate", "reset", "remove")) {
+  if (
+    type %in%
+      c(
+        "open_metadata",
+        "select",
+        "rename",
+        "duplicate",
+        "reset",
+        "remove"
+      )
+  ) {
     assert_scalar_string(dataset_id, "dataset_id")
   } else if (!is.null(dataset_id)) {
     abort_llw(
@@ -365,6 +388,24 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
       } else {
         paste(inventory$warning_count, "recorded warning(s)")
       }
+      primary_label <- inventory$primary_display_label
+      primary_raw <- inventory$primary_variable
+      if (
+        !is.character(primary_raw) ||
+          length(primary_raw) != 1L ||
+          is.na(primary_raw) ||
+          !nzchar(primary_raw)
+      ) {
+        primary_raw <- "not specified"
+      }
+      if (!identical(primary_label, primary_raw)) {
+        primary_label <- paste0(
+          primary_label,
+          " [",
+          primary_raw,
+          "]"
+        )
+      }
       tags$div(
         class = "mt-3 pt-3 border-top small",
         tags$div(class = "fw-semibold", "Selected dataset"),
@@ -386,6 +427,19 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
             if (is.na(inventory$source_timezone)) "Unknown" else
               inventory$source_timezone
           )
+        ),
+        tags$div(
+          class = "llw-secondary",
+          paste0(
+            "Primary: ",
+            primary_label,
+            " \u00b7 ",
+            inventory$primary_display_unit
+          )
+        ),
+        tags$div(
+          class = "llw-secondary",
+          paste("Metadata:", inventory$primary_metadata_provenance)
         ),
         tags$div(class = "llw-secondary", warning_label)
       )
@@ -423,6 +477,13 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
       emit("open_append")
     }) |>
       bindEvent(input$append_datasets, ignoreInit = TRUE)
+
+    observe({
+      dataset_id <- selected_dataset_id()
+      req(dataset_id)
+      emit("open_metadata", dataset_id = dataset_id)
+    }) |>
+      bindEvent(input$explore_metadata, ignoreInit = TRUE)
 
     observe({
       dataset_id <- selected_dataset_id()
@@ -638,6 +699,9 @@ dataset_manager_app <- function(...) {
             paste("Load-example event returned for", event$value)
           ),
           open_append = showNotification("Open-append event returned."),
+          open_metadata = showNotification(
+            paste("Open-metadata event returned for", event$dataset_id)
+          ),
           select = store$dispatch(new_session_event(
             "select",
             dataset_id = event$dataset_id

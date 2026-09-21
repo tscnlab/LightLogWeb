@@ -150,15 +150,22 @@ dashboard_metadata_value_text <- function(value) {
 
 dashboard_metadata_table_ui <- function(data, max_rows = 10L) {
   if (!is.data.frame(data)) {
-    abort_llw("Metadata table display requires a data frame.", type = "validation")
+    abort_llw(
+      "Metadata table display requires a data frame.",
+      type = "validation"
+    )
   }
   max_rows <- as.integer(max_rows)
   shown <- utils::head(data, max_rows)
   shown[] <- lapply(shown, function(value) {
     if (is.list(value) && !is.data.frame(value)) {
-      vapply(value, function(item) {
-        paste(dashboard_metadata_value_text(item), collapse = ", ")
-      }, character(1))
+      vapply(
+        value,
+        function(item) {
+          paste(dashboard_metadata_value_text(item), collapse = ", ")
+        },
+        character(1)
+      )
     } else {
       dashboard_metadata_value_text(value)
     }
@@ -206,7 +213,10 @@ dashboard_metadata_value_ui <- function(value, depth = 0L) {
     if (depth >= 3L) {
       return(tags$pre(
         class = "llw-dashboard-metadata-code mb-0",
-        paste(utils::capture.output(utils::str(value, give.attr = FALSE)), collapse = "\n")
+        paste(
+          utils::capture.output(utils::str(value, give.attr = FALSE)),
+          collapse = "\n"
+        )
       ))
     }
     return(tags$div(
@@ -250,7 +260,10 @@ dashboard_appended_source_metadata_ui <- function(
 ) {
   if (is.null(inventory)) return(NULL)
   if (!inherits(inventory, "llw_dashboard_append_sources")) {
-    abort_llw("Appended source metadata inventory is invalid.", type = "validation")
+    abort_llw(
+      "Appended source metadata inventory is invalid.",
+      type = "validation"
+    )
   }
   if (
     !is.character(heading_id) ||
@@ -471,328 +484,328 @@ datasetDashboardUI <- function(id) {
             class = "llw-explorer-workbench",
             htmltools::tagAppendAttributes(
               layout_sidebar(
-              sidebar = sidebar(
-                title = NULL,
-                width = 300,
-                padding = 0,
-                gap = 0,
-                class = "llw-explorer-sidebar",
-                tags$div(
-                  class = "llw-explorer-sidebar__header",
+                sidebar = sidebar(
+                  title = NULL,
+                  width = 300,
+                  padding = 0,
+                  gap = 0,
+                  class = "llw-explorer-sidebar",
                   tags$div(
-                    class = "llw-explorer-sidebar__title",
-                    tags$span(
-                      class = "llw-explorer-sidebar__eyebrow",
-                      icon("sliders"),
-                      "Explorer"
-                    ),
-                    tags$h2(class = "h5 mb-0", "View controls")
-                  ),
-                  uiOutput(ns("view_recommendation"))
-                ),
-                tags$section(
-                  class = paste(
-                    "llw-explorer-control-group",
-                    "llw-explorer-control-group--display"
-                  ),
-                  `aria-label` = "Display controls",
-                  htmltools::tagAppendAttributes(
-                    radioButtons(
-                      ns("view_mode"),
-                      "View",
-                      choiceNames = list(
-                        tags$span(
-                          class = "llw-dashboard-view-mode__option",
-                          `data-view-mode` = "auto",
-                          title = "Choose the view from the focus-metric span",
-                          icon("wand-magic-sparkles"),
-                          tags$span("Auto")
-                        ),
-                        tags$span(
-                          class = "llw-dashboard-view-mode__option",
-                          `data-view-mode` = "detailed",
-                          title = "Always show the detailed timeline",
-                          icon("chart-line"),
-                          tags$span("Timeline")
-                        ),
-                        tags$span(
-                          class = "llw-dashboard-view-mode__option",
-                          `data-view-mode` = "availability",
-                          `aria-label` = "Coverage overview",
-                          title = "Always show the focus-coverage overview",
-                          icon("circle-half-stroke"),
-                          tags$span("Coverage")
-                        )
-                      ),
-                      choiceValues = c("auto", "detailed", "availability"),
-                      selected = defaults$view_mode,
-                      inline = TRUE
-                    ),
-                    class = "llw-dashboard-view-mode"
-                  ),
-                  tags$div(
-                    class = "llw-explorer-display-options",
-                    uiOutput(ns("scale_control")),
-                    uiOutput(ns("y_range_control"))
-                  )
-                ),
-                tags$section(
-                  class = paste(
-                    "llw-explorer-control-group",
-                    "llw-explorer-control-group--data"
-                  ),
-                  `aria-label` = "Data controls",
-                  selectInput(
-                    ns("data_stage"),
-                    "Data stage",
-                    choices = c(
-                      "Pre-processed" = "preprocessed",
-                      "Source" = "source"
-                    ),
-                    selected = "preprocessed",
-                    selectize = FALSE
-                  )
-                ),
-                tags$section(
-                  class = paste(
-                    "llw-explorer-control-group",
-                    "llw-explorer-control-group--time"
-                  ),
-                  `aria-label` = "Time controls",
-                  tags$div(
-                    class = "llw-explorer-time-reference",
-                    bslib::popover(
-                      tags$button(
-                        type = "button",
-                        class = paste(
-                          "btn btn-sm btn-link",
-                          "llw-explorer-info-trigger"
-                        ),
-                        title = "Explain time scope and page navigation",
-                        `aria-label` = "Explain time scope and page navigation",
-                        icon("circle-info")
-                      ),
-                      title = "Time scope and navigation",
-                      placement = "right",
-                      tags$div(
-                        class = "llw-explorer-time-help",
-                        uiOutput(ns("time_basis_context")),
-                        tags$p(
-                          class = "llw-secondary small mb-0",
-                          paste(
-                            "Participant pages move up/down.",
-                            "Time pages move left/right.",
-                            "Automatic view uses each participant's available",
-                            "focus-metric duration."
-                          )
-                        )
-                      )
-                    ),
-                    selectInput(
-                      ns("time_basis"),
-                      "Time reference",
-                      choices = c(
-                        "Own recording dates" = "participant",
-                        "Shared calendar dates" = "calendar",
-                        "Days from first measurement" = "elapsed",
-                        "Day of week (calendar weeks)" = "week"
-                      ),
-                      selected = defaults$time_basis,
-                      selectize = FALSE
-                    )
-                  ),
-                  uiOutput(ns("date_window_ui")),
-                  tags$div(
-                    class = "llw-explorer-time-actions",
-                    tags$label(
-                      class = paste(
-                        "control-label",
-                        "llw-explorer-time-actions__label"
-                      ),
-                      `for` = ns("days_per_page"),
-                      "Max. days per time page"
-                    ),
-                    selectInput(
-                      ns("days_per_page"),
-                      NULL,
-                      choices = c(
-                        "1 day" = "1",
-                        "3 days" = "3",
-                        "7 days" = "7",
-                        "14 days" = "14",
-                        "30 days" = "30",
-                        "90 days" = "90",
-                        "1 year" = "365"
-                      ),
-                      selected = as.character(defaults$days_per_page),
-                      selectize = FALSE
-                    ),
-                    actionButton(
-                      ns("fit_time_scope"),
+                    class = "llw-explorer-sidebar__header",
+                    tags$div(
+                      class = "llw-explorer-sidebar__title",
                       tags$span(
-                        class = "llw-explorer-fit-time__label",
-                        "Fit window"
+                        class = "llw-explorer-sidebar__eyebrow",
+                        icon("sliders"),
+                        "Explorer"
                       ),
-                      icon = icon("expand"),
-                      title = "Fit the time window to the selected participants",
-                      `aria-label` = paste(
-                        "Fit the time window to the selected participants"
+                      tags$h2(class = "h5 mb-0", "View controls")
+                    ),
+                    uiOutput(ns("view_recommendation"))
+                  ),
+                  tags$section(
+                    class = paste(
+                      "llw-explorer-control-group",
+                      "llw-explorer-control-group--display"
+                    ),
+                    `aria-label` = "Display controls",
+                    htmltools::tagAppendAttributes(
+                      radioButtons(
+                        ns("view_mode"),
+                        "View",
+                        choiceNames = list(
+                          tags$span(
+                            class = "llw-dashboard-view-mode__option",
+                            `data-view-mode` = "auto",
+                            title = "Choose the view from the focus-metric span",
+                            icon("wand-magic-sparkles"),
+                            tags$span("Auto")
+                          ),
+                          tags$span(
+                            class = "llw-dashboard-view-mode__option",
+                            `data-view-mode` = "detailed",
+                            title = "Always show the detailed timeline",
+                            icon("chart-line"),
+                            tags$span("Timeline")
+                          ),
+                          tags$span(
+                            class = "llw-dashboard-view-mode__option",
+                            `data-view-mode` = "availability",
+                            `aria-label` = "Coverage overview",
+                            title = "Always show the focus-coverage overview",
+                            icon("circle-half-stroke"),
+                            tags$span("Coverage")
+                          )
+                        ),
+                        choiceValues = c("auto", "detailed", "availability"),
+                        selected = defaults$view_mode,
+                        inline = TRUE
                       ),
-                      class = paste(
-                        "btn-outline-secondary",
-                        "llw-explorer-fit-time"
+                      class = "llw-dashboard-view-mode"
+                    ),
+                    tags$div(
+                      class = "llw-explorer-display-options",
+                      uiOutput(ns("scale_control")),
+                      uiOutput(ns("y_range_control"))
+                    )
+                  ),
+                  tags$section(
+                    class = paste(
+                      "llw-explorer-control-group",
+                      "llw-explorer-control-group--data"
+                    ),
+                    `aria-label` = "Data controls",
+                    selectInput(
+                      ns("data_stage"),
+                      "Data stage",
+                      choices = c(
+                        "Pre-processed" = "preprocessed",
+                        "Source" = "source"
+                      ),
+                      selected = "preprocessed",
+                      selectize = FALSE
+                    )
+                  ),
+                  tags$section(
+                    class = paste(
+                      "llw-explorer-control-group",
+                      "llw-explorer-control-group--time"
+                    ),
+                    `aria-label` = "Time controls",
+                    tags$div(
+                      class = "llw-explorer-time-reference",
+                      bslib::popover(
+                        tags$button(
+                          type = "button",
+                          class = paste(
+                            "btn btn-sm btn-link",
+                            "llw-explorer-info-trigger"
+                          ),
+                          title = "Explain time scope and page navigation",
+                          `aria-label` = "Explain time scope and page navigation",
+                          icon("circle-info")
+                        ),
+                        title = "Time scope and navigation",
+                        placement = "right",
+                        tags$div(
+                          class = "llw-explorer-time-help",
+                          uiOutput(ns("time_basis_context")),
+                          tags$p(
+                            class = "llw-secondary small mb-0",
+                            paste(
+                              "Participant pages move up/down.",
+                              "Time pages move left/right.",
+                              "Automatic view uses each participant's available",
+                              "focus-metric duration."
+                            )
+                          )
+                        )
+                      ),
+                      selectInput(
+                        ns("time_basis"),
+                        "Time reference",
+                        choices = c(
+                          "Own recording dates" = "participant",
+                          "Shared calendar dates" = "calendar",
+                          "Days from first measurement" = "elapsed",
+                          "Day of week (calendar weeks)" = "week"
+                        ),
+                        selected = defaults$time_basis,
+                        selectize = FALSE
+                      )
+                    ),
+                    uiOutput(ns("date_window_ui")),
+                    tags$div(
+                      class = "llw-explorer-time-actions",
+                      tags$label(
+                        class = paste(
+                          "control-label",
+                          "llw-explorer-time-actions__label"
+                        ),
+                        `for` = ns("days_per_page"),
+                        "Max. days per time page"
+                      ),
+                      selectInput(
+                        ns("days_per_page"),
+                        NULL,
+                        choices = c(
+                          "1 day" = "1",
+                          "3 days" = "3",
+                          "7 days" = "7",
+                          "14 days" = "14",
+                          "30 days" = "30",
+                          "90 days" = "90",
+                          "1 year" = "365"
+                        ),
+                        selected = as.character(defaults$days_per_page),
+                        selectize = FALSE
+                      ),
+                      actionButton(
+                        ns("fit_time_scope"),
+                        tags$span(
+                          class = "llw-explorer-fit-time__label",
+                          "Fit window"
+                        ),
+                        icon = icon("expand"),
+                        title = "Fit the time window to the selected participants",
+                        `aria-label` = paste(
+                          "Fit the time window to the selected participants"
+                        ),
+                        class = paste(
+                          "btn-outline-secondary",
+                          "llw-explorer-fit-time"
+                        )
                       )
                     )
+                  ),
+                  tags$section(
+                    class = paste(
+                      "llw-explorer-control-group",
+                      "llw-explorer-control-group--participants"
+                    ),
+                    `aria-label` = "Participant controls",
+                    tags$div(
+                      class = "llw-dashboard-participant-control",
+                      conditionalPanel(
+                        condition = "!input.show_all_participants",
+                        ns = ns,
+                        selectizeInput(
+                          ns("participants"),
+                          "Participant IDs",
+                          choices = NULL,
+                          multiple = TRUE,
+                          options = list(
+                            placeholder = "Choose participant IDs",
+                            closeAfterSelect = TRUE
+                          )
+                        )
+                      ),
+                      conditionalPanel(
+                        condition = "input.show_all_participants",
+                        ns = ns,
+                        uiOutput(ns("show_all_warning"))
+                      )
+                    ),
+                    tags$div(
+                      class = "llw-explorer-participant-options",
+                      htmltools::tagAppendAttributes(
+                        checkboxInput(
+                          ns("show_all_participants"),
+                          tagList(
+                            tags$span(
+                              class = "visually-hidden",
+                              "Plot all participants"
+                            ),
+                            tags$span(
+                              class = "llw-explorer-show-all__label",
+                              "Plot all"
+                            )
+                          ),
+                          value = FALSE
+                        ),
+                        class = paste(
+                          "llw-dashboard-checkbox",
+                          "llw-explorer-show-all"
+                        )
+                      ),
+                      tags$div(
+                        class = "llw-dashboard-participants-per-page",
+                        tags$label(
+                          class = "control-label",
+                          `for` = ns("participants_per_page"),
+                          "Max. participants per page"
+                        ),
+                        tags$div(
+                          class = paste(
+                            "llw-dashboard-participants-per-page-control"
+                          ),
+                          selectInput(
+                            ns("participants_per_page"),
+                            label = NULL,
+                            choices = c(
+                              "1 participant" = "1",
+                              "2 participants" = "2",
+                              "4 participants" = "4",
+                              "6 participants" = "6",
+                              "8 participants" = "8",
+                              "12 participants" = "12"
+                            ),
+                            selected = as.character(limits$facets_per_page),
+                            selectize = FALSE
+                          )
+                        )
+                      )
+                    )
+                  ),
+                  uiOutput(
+                    ns("participant_pagination"),
+                    class = "llw-explorer-participant-pagination"
                   )
                 ),
                 tags$section(
-                  class = paste(
-                    "llw-explorer-control-group",
-                    "llw-explorer-control-group--participants"
-                  ),
-                  `aria-label` = "Participant controls",
-                  tags$div(
-                    class = "llw-dashboard-participant-control",
-                    conditionalPanel(
-                      condition = "!input.show_all_participants",
-                      ns = ns,
-                      selectizeInput(
-                        ns("participants"),
-                        "Participant IDs",
-                        choices = NULL,
-                        multiple = TRUE,
-                        options = list(
-                          placeholder = "Choose participant IDs",
-                          closeAfterSelect = TRUE
-                        )
-                      )
+                  class = "llw-explorer-canvas",
+                  `aria-labelledby` = ns("explorer_heading"),
+                  tags$header(
+                    class = "llw-explorer-canvas__header",
+                    tags$div(
+                      class = "llw-dashboard-heading-group",
+                      tags$h2(
+                        id = ns("explorer_heading"),
+                        class = "h5 mb-1",
+                        "Focus metric over time"
+                      ),
+                      uiOutput(ns("explore_context"))
                     ),
-                    conditionalPanel(
-                      condition = "input.show_all_participants",
-                      ns = ns,
-                      uiOutput(ns("show_all_warning"))
+                    tags$div(
+                      class = "llw-explorer-canvas__status",
+                      uiOutput(ns("log_omission_badge"))
                     )
                   ),
                   tags$div(
-                    class = "llw-explorer-participant-options",
-                    htmltools::tagAppendAttributes(
-                      checkboxInput(
-                        ns("show_all_participants"),
-                        tagList(
-                          tags$span(
-                            class = "visually-hidden",
-                            "Plot all participants"
-                          ),
-                          tags$span(
-                            class = "llw-explorer-show-all__label",
-                            "Plot all"
+                    class = "llw-explorer-canvas__body",
+                    tags$div(
+                      class = "llw-plot-stage",
+                      tags$nav(
+                        class = paste(
+                          "llw-participant-rail",
+                          "llw-participant-rail--vertical"
+                        ),
+                        `aria-label` = "Participant pages",
+                        uiOutput(
+                          ns("participant_previous_control"),
+                          class = paste(
+                            "llw-participant-rail__slot",
+                            "llw-participant-rail--previous"
                           )
                         ),
-                        value = FALSE
-                      ),
-                      class = paste(
-                        "llw-dashboard-checkbox",
-                        "llw-explorer-show-all"
-                      )
-                    ),
-                    tags$div(
-                      class = "llw-dashboard-participants-per-page",
-                      tags$label(
-                        class = "control-label",
-                        `for` = ns("participants_per_page"),
-                        "Max. participants per page"
+                        uiOutput(
+                          ns("participant_next_control"),
+                          class = paste(
+                            "llw-participant-rail__slot",
+                            "llw-participant-rail--next"
+                          )
+                        )
                       ),
                       tags$div(
-                        class = paste(
-                          "llw-dashboard-participants-per-page-control"
+                        class = "llw-dashboard-plot",
+                        role = "region",
+                        `aria-label` = paste(
+                          "Dataset coverage and measurement preview"
                         ),
-                        selectInput(
-                          ns("participants_per_page"),
-                          label = NULL,
-                          choices = c(
-                            "1 participant" = "1",
-                            "2 participants" = "2",
-                            "4 participants" = "4",
-                            "6 participants" = "6",
-                            "8 participants" = "8",
-                            "12 participants" = "12"
-                          ),
-                          selected = as.character(limits$facets_per_page),
-                          selectize = FALSE
-                        )
+                        tabindex = "0",
+                        plotOutput(ns("dashboard_plot"), height = "auto")
                       )
                     )
-                  )
-                ),
-                uiOutput(
-                  ns("participant_pagination"),
-                  class = "llw-explorer-participant-pagination"
-                )
-              ),
-              tags$section(
-                class = "llw-explorer-canvas",
-                `aria-labelledby` = ns("explorer_heading"),
-                tags$header(
-                  class = "llw-explorer-canvas__header",
-                  tags$div(
-                    class = "llw-dashboard-heading-group",
-                    tags$h2(
-                      id = ns("explorer_heading"),
-                      class = "h5 mb-1",
-                      "Focus metric over time"
-                    ),
-                    uiOutput(ns("explore_context"))
                   ),
-                  tags$div(
-                    class = "llw-explorer-canvas__status",
-                    uiOutput(ns("log_omission_badge"))
-                  )
-                ),
-                tags$div(
-                  class = "llw-explorer-canvas__body",
-                  tags$div(
-                    class = "llw-plot-stage",
+                  tags$footer(
+                    class = "llw-explorer-pager-strip",
                     tags$nav(
-                      class = paste(
-                        "llw-participant-rail",
-                        "llw-participant-rail--vertical"
-                      ),
-                      `aria-label` = "Participant pages",
-                      uiOutput(
-                        ns("participant_previous_control"),
-                        class = paste(
-                          "llw-participant-rail__slot",
-                          "llw-participant-rail--previous"
-                        )
-                      ),
-                      uiOutput(
-                        ns("participant_next_control"),
-                        class = paste(
-                          "llw-participant-rail__slot",
-                          "llw-participant-rail--next"
-                        )
-                      )
-                    ),
-                    tags$div(
-                      class = "llw-dashboard-plot",
-                      role = "region",
-                      `aria-label` = paste(
-                        "Dataset coverage and measurement preview"
-                      ),
-                      tabindex = "0",
-                      plotOutput(ns("dashboard_plot"), height = "auto")
+                      class = "llw-explorer-pager",
+                      `aria-label` = "Time and page navigation",
+                      uiOutput(ns("facet_pagination"))
                     )
                   )
                 ),
-                tags$footer(
-                  class = "llw-explorer-pager-strip",
-                  tags$nav(
-                    class = "llw-explorer-pager",
-                    `aria-label` = "Time and page navigation",
-                    uiOutput(ns("facet_pagination"))
-                  )
-                )
-              ),
                 border = FALSE,
                 border_radius = FALSE
               ),
@@ -804,344 +817,561 @@ datasetDashboardUI <- function(id) {
           )
         ),
         nav_panel(
-        title = "Quality & coverage",
-        value = "quality",
-        layout_column_wrap(
-          fill = FALSE,
-          width = "15rem",
-          gap = "0.75rem",
-          class = "llw-dashboard-value-grid",
-          uiOutput(ns("quality_explicit_missing")),
-          uiOutput(ns("quality_implicit_gaps")),
-          uiOutput(ns("quality_irregular")),
-          uiOutput(ns("quality_dst"))
-        ),
-        uiOutput(ns("quality_note")),
-        card(
-          class = paste(
-            "llw-dashboard-inventory-card",
-            "llw-dashboard-auto-height-card"
+          title = "Quality & coverage",
+          value = "quality",
+          layout_column_wrap(
+            fill = FALSE,
+            width = "15rem",
+            gap = "0.75rem",
+            class = "llw-dashboard-value-grid",
+            uiOutput(ns("quality_explicit_missing")),
+            uiOutput(ns("quality_implicit_gaps")),
+            uiOutput(ns("quality_irregular")),
+            uiOutput(ns("quality_dst"))
           ),
-          fill = FALSE,
-          full_screen = TRUE,
-          card_header(
-            tags$div(
-              class = "llw-dashboard-heading-group",
-              tags$h2(
-                class = "h5 mb-1",
-                "Pre-processed variable inventory"
-              ),
-              tags$p(
-                class = "llw-secondary small mb-0",
-                paste(
-                  "Missing values and exact measured zeros stay separate.",
-                  "Units remain explicit when they were not supplied."
-                )
-              )
-            )
-          ),
-          tags$div(
+          uiOutput(ns("quality_note")),
+          card(
             class = paste(
-              "llw-dashboard-flat-table-region",
-              "llw-dashboard-variable-inventory",
-              "llw-dashboard-auto-height-table"
+              "llw-dashboard-inventory-card",
+              "llw-dashboard-auto-height-card"
             ),
-            role = "region",
-            `aria-label` = "Pre-processed variable inventory and missingness",
-            tabindex = "0",
-            DT::dataTableOutput(ns("variable_inventory"), fill = FALSE)
-          )
-        ),
-        card(
-          class = paste(
-            "llw-dashboard-coverage-card",
-            "llw-dashboard-auto-height-card"
-          ),
-          fill = FALSE,
-          full_screen = TRUE,
-          card_header(
-            tags$div(
-              class = "llw-dashboard-heading-group",
-              tags$h2(class = "h5 mb-1", "Participant-day coverage"),
-              tags$p(
-                class = "llw-secondary small mb-0",
-                paste(
-                  "Coverage uses non-missing focus values, consecutive",
-                  "dominant-epoch intervals, and full participant-local day",
-                  "boundaries. Exact zero counts as observed; timing jitter",
-                  "remains a separate diagnostic."
-                )
-              )
-            )
-          ),
-          tags$div(
-            class = paste(
-              "llw-dashboard-flat-table-region",
-              "llw-dashboard-coverage-table",
-              "llw-dashboard-auto-height-table"
-            ),
-            role = "region",
-            `aria-label` = "Participant-day coverage table",
-            tabindex = "0",
-            DT::dataTableOutput(ns("coverage_table"), fill = FALSE)
-          )
-        )
-      ),
-      nav_panel(
-        title = "Pre-processed data",
-        value = "prepared",
-        tags$section(
-          class = paste(
-            "llw-dashboard-data-view",
-            "llw-dashboard-data-view--preprocessed"
-          ),
-          `aria-labelledby` = ns("prepared_heading"),
-          tags$div(
-            class = "llw-dashboard-data-view__header",
-            tags$div(
-              tags$p(class = "llw-eyebrow", "Active analysis table"),
-              tags$h2(
-                id = ns("prepared_heading"),
-                class = "h4 mb-1",
-                "Pre-processed data"
-              ),
-              tags$p(
-                class = "llw-secondary mb-0",
-                paste(
-                  "This is the active result used by later analyses. Search,",
-                  "sort, paginate, and choose a compact or full column view",
-                  "without changing the data."
-                )
-              )
-            ),
-            tags$div(
-              class = "llw-dashboard-data-view__counts",
-              tags$span("Rows"),
-              textOutput(ns("prepared_rows"), inline = TRUE),
-              tags$span("Revision"),
-              textOutput(ns("revision"), inline = TRUE),
-              tags$span("Time zone"),
-              textOutput(ns("prepared_timezone"), inline = TRUE)
-            )
-          ),
-          tags$div(
-            class = "llw-dashboard-state-note",
-            uiOutput(ns("prepared_state_note"))
-          ),
-          tags$div(
-            class = paste(
-              "llw-dashboard-table-mode",
-              "llw-dashboard-table-toolbar"
-            ),
-            input_switch(
-              ns("preprocessed_main_only"),
-              "Main columns only",
-              value = TRUE
-            ),
-            tags$span(
-              class = "llw-secondary small",
-              "Grouping / Id \u00b7 Datetime \u00b7 focus metric"
-            ),
-            uiOutput(ns("preprocessed_column_selector"))
-          ),
-          tags$div(
-            class = paste(
-              "llw-data-region llw-dashboard-wide-table",
-              "llw-dashboard-auto-height-table"
-            ),
-            role = "region",
-            `aria-label` = paste(
-              "Pre-processed dataset table with server-side search, sorting,",
-              "column visibility, and pagination"
-            ),
-            tabindex = "0",
-            DT::dataTableOutput(ns("prepared_table"), fill = FALSE)
-          ),
-          layout_columns(
-            col_widths = c(5, 7),
-            class = "llw-dashboard-preprocessed-support",
-            card(
-              class = "llw-dashboard-preprocessed-state",
-              full_screen = TRUE,
-              card_header(
+            fill = FALSE,
+            full_screen = TRUE,
+            card_header(
+              tags$div(
+                class = "llw-dashboard-heading-group",
                 tags$h2(
-                  id = ns("preprocessed_state_heading"),
-                  class = "h5 mb-0",
-                  "Recipe & grouping state"
-                )
-              ),
-              tags$div(
-                class = paste(
-                  "llw-dashboard-support-region",
-                  "llw-dashboard-summary-table"
+                  class = "h5 mb-1",
+                  "Pre-processed variable inventory"
                 ),
-                role = "region",
-                `aria-labelledby` = ns("preprocessed_state_heading"),
-                tabindex = "0",
-                tableOutput(ns("state_table"))
-              )
-            ),
-            card(
-              class = "llw-dashboard-preprocessed-integrity",
-              full_screen = TRUE,
-              card_header(
-                tags$div(
-                  class = "llw-dashboard-heading-group",
-                  tags$h2(
-                    id = ns("preprocessed_integrity_heading"),
-                    class = "h5 mb-1",
-                    "Pre-processed integrity"
-                  ),
-                  tags$p(
-                    class = "llw-secondary small mb-0",
-                    paste(
-                      "Checks the active result after recipe application.",
-                      "These are not source import diagnostics."
-                    )
-                  )
-                )
-              ),
-              tags$div(
-                class = paste(
-                  "llw-dashboard-support-region",
-                  "llw-dashboard-integrity-region"
-                ),
-                role = "region",
-                `aria-labelledby` = ns("preprocessed_integrity_heading"),
-                tabindex = "0",
-                uiOutput(ns("preprocessed_integrity"))
-              )
-            )
-          )
-        )
-      ),
-      nav_panel(
-        title = "Source data",
-        value = "raw",
-        tags$section(
-          class = "llw-dashboard-data-view llw-dashboard-data-view--source",
-          `aria-labelledby` = ns("raw_heading"),
-          tags$div(
-            class = "llw-dashboard-data-view__header",
-            tags$div(
-              tags$p(class = "llw-eyebrow", "Immutable imported source"),
-              tags$h2(
-                id = ns("raw_heading"),
-                class = "h4 mb-1",
-                "Source data"
-              ),
-              tags$p(
-                class = "llw-secondary mb-0",
-                paste(
-                  "This view preserves imported values and types. It is",
-                  "visually separated from the active pre-processed result."
-                )
-              )
-            ),
-            tags$div(
-              class = "llw-dashboard-data-view__counts",
-              tags$span("Rows"),
-              textOutput(ns("raw_rows"), inline = TRUE),
-              tags$span("Stable ID"),
-              textOutput(ns("dataset_id"), inline = TRUE),
-              tags$span("Time zone"),
-              textOutput(ns("source_timezone"), inline = TRUE)
-            )
-          ),
-          tags$div(
-            class = "llw-dashboard-state-note",
-            uiOutput(ns("raw_state_note"))
-          ),
-          tags$div(
-            class = paste(
-              "llw-dashboard-table-mode",
-              "llw-dashboard-table-toolbar"
-            ),
-            input_switch(
-              ns("source_main_only"),
-              "Main columns only",
-              value = TRUE
-            ),
-            tags$span(
-              class = "llw-secondary small",
-              "Grouping / Id \u00b7 Datetime \u00b7 focus metric"
-            ),
-            uiOutput(ns("source_column_selector"))
-          ),
-          tags$div(
-            class = paste(
-              "llw-data-region llw-dashboard-wide-table",
-              "llw-dashboard-auto-height-table"
-            ),
-            role = "region",
-            `aria-label` = paste(
-              "Source dataset table with server-side search, sorting,",
-              "column visibility, and pagination"
-            ),
-            tabindex = "0",
-            DT::dataTableOutput(ns("raw_table"), fill = FALSE)
-          ),
-          uiOutput(ns("appended_source_metadata")),
-          tags$div(
-            class = "llw-dashboard-source-support",
-            card(
-              class = "llw-dashboard-source-provenance",
-              full_screen = TRUE,
-              card_header(
-                tags$h2(
-                  id = ns("source_provenance_heading"),
-                  class = "h5 mb-0",
-                  "Source provenance"
-                )
-              ),
-              tags$div(
-                class = paste(
-                  "llw-dashboard-support-region",
-                  "llw-dashboard-summary-table"
-                ),
-                role = "region",
-                `aria-labelledby` = ns("source_provenance_heading"),
-                tabindex = "0",
-                tableOutput(ns("provenance_table"))
-              )
-            ),
-            accordion(
-              id = ns("source_import_checks"),
-              open = FALSE,
-              class = paste(
-                "llw-dashboard-import-checks",
-                "llw-dashboard-source-import-checks"
-              ),
-              accordion_panel(
-                title = "Source import checks",
                 tags$p(
-                  class = "llw-secondary small",
+                  class = "llw-secondary small mb-0",
                   paste(
-                    "Gap counts use complete dominant-epoch intervals between",
-                    "consecutive timestamps; phase shifts remain separate",
-                    "timing diagnostics. Nothing is imputed or turned into",
-                    "darkness."
+                    "Missing values and exact measured zeros stay separate.",
+                    "Units remain explicit when they were not supplied."
+                  )
+                )
+              )
+            ),
+            tags$div(
+              class = paste(
+                "llw-dashboard-flat-table-region",
+                "llw-dashboard-variable-inventory",
+                "llw-dashboard-auto-height-table"
+              ),
+              role = "region",
+              `aria-label` = "Pre-processed variable inventory and missingness",
+              tabindex = "0",
+              DT::dataTableOutput(ns("variable_inventory"), fill = FALSE)
+            ),
+            uiOutput(ns("variable_inventory_metadata_action"))
+          ),
+          card(
+            class = paste(
+              "llw-dashboard-relationship-card",
+              "llw-dashboard-auto-height-card"
+            ),
+            fill = FALSE,
+            full_screen = TRUE,
+            card_header(
+              tags$div(
+                class = "llw-dashboard-heading-group",
+                tags$h2(class = "h5 mb-1", "Related metadata by file group"),
+                tags$p(
+                  class = "llw-secondary small mb-0",
+                  paste(
+                    "This disposable context table is derived with exported",
+                    "glcdp relationship traversal. It does not modify source",
+                    "or pre-processed measurements."
+                  )
+                )
+              )
+            ),
+            uiOutput(ns("relationship_context_note")),
+            tags$div(
+              class = paste(
+                "llw-dashboard-flat-table-region",
+                "llw-dashboard-relationship-table",
+                "llw-dashboard-auto-height-table"
+              ),
+              role = "region",
+              `aria-label` = "Related metadata by file group",
+              tabindex = "0",
+              DT::dataTableOutput(
+                ns("relationship_context_table"),
+                fill = FALSE
+              )
+            )
+          ),
+          card(
+            class = paste(
+              "llw-dashboard-coverage-card",
+              "llw-dashboard-auto-height-card"
+            ),
+            fill = FALSE,
+            full_screen = TRUE,
+            card_header(
+              tags$div(
+                class = "llw-dashboard-heading-group",
+                tags$h2(class = "h5 mb-1", "Participant-day coverage"),
+                tags$p(
+                  class = "llw-secondary small mb-0",
+                  paste(
+                    "Coverage uses non-missing focus values, consecutive",
+                    "dominant-epoch intervals, and full participant-local day",
+                    "boundaries. Exact zero counts as observed; timing jitter",
+                    "remains a separate diagnostic."
+                  )
+                )
+              )
+            ),
+            tags$div(
+              class = paste(
+                "llw-dashboard-flat-table-region",
+                "llw-dashboard-coverage-table",
+                "llw-dashboard-auto-height-table"
+              ),
+              role = "region",
+              `aria-label` = "Participant-day coverage table",
+              tabindex = "0",
+              DT::dataTableOutput(ns("coverage_table"), fill = FALSE)
+            )
+          )
+        ),
+        nav_panel(
+          title = "Pre-processed data",
+          value = "prepared",
+          tags$section(
+            class = paste(
+              "llw-dashboard-data-view",
+              "llw-dashboard-data-view--preprocessed"
+            ),
+            `aria-labelledby` = ns("prepared_heading"),
+            tags$div(
+              class = "llw-dashboard-data-view__header",
+              tags$div(
+                tags$p(class = "llw-eyebrow", "Active analysis table"),
+                tags$h2(
+                  id = ns("prepared_heading"),
+                  class = "h4 mb-1",
+                  "Pre-processed data"
+                ),
+                tags$p(
+                  class = "llw-secondary mb-0",
+                  paste(
+                    "This is the active result used by later analyses. Search,",
+                    "sort, paginate, and choose a compact or full column view",
+                    "without changing the data."
+                  )
+                )
+              ),
+              tags$div(
+                class = "llw-dashboard-data-view__counts",
+                tags$span("Rows"),
+                textOutput(ns("prepared_rows"), inline = TRUE),
+                tags$span("Revision"),
+                textOutput(ns("revision"), inline = TRUE),
+                tags$span("Time zone"),
+                textOutput(ns("prepared_timezone"), inline = TRUE)
+              )
+            ),
+            tags$div(
+              class = "llw-dashboard-state-note",
+              uiOutput(ns("prepared_state_note"))
+            ),
+            tags$div(
+              class = paste(
+                "llw-dashboard-table-mode",
+                "llw-dashboard-table-toolbar"
+              ),
+              input_switch(
+                ns("preprocessed_main_only"),
+                "Main columns only",
+                value = TRUE
+              ),
+              tags$span(
+                class = "llw-secondary small",
+                "Grouping / Id \u00b7 Datetime \u00b7 focus metric"
+              ),
+              uiOutput(ns("preprocessed_column_selector"))
+            ),
+            tags$div(
+              class = paste(
+                "llw-data-region llw-dashboard-wide-table",
+                "llw-dashboard-auto-height-table"
+              ),
+              role = "region",
+              `aria-label` = paste(
+                "Pre-processed dataset table with server-side search, sorting,",
+                "column visibility, and pagination"
+              ),
+              tabindex = "0",
+              DT::dataTableOutput(ns("prepared_table"), fill = FALSE)
+            ),
+            layout_columns(
+              col_widths = c(5, 7),
+              class = "llw-dashboard-preprocessed-support",
+              card(
+                class = "llw-dashboard-preprocessed-state",
+                full_screen = TRUE,
+                card_header(
+                  tags$h2(
+                    id = ns("preprocessed_state_heading"),
+                    class = "h5 mb-0",
+                    "Recipe & grouping state"
                   )
                 ),
-                uiOutput(ns("merged_import_note")),
                 tags$div(
                   class = paste(
                     "llw-dashboard-support-region",
-                    "llw-dashboard-diagnostics"
+                    "llw-dashboard-summary-table"
                   ),
                   role = "region",
-                  `aria-label` = "Source import-quality diagnostics",
+                  `aria-labelledby` = ns("preprocessed_state_heading"),
                   tabindex = "0",
-                  uiOutput(ns("quality_diagnostics"))
+                  tableOutput(ns("state_table"))
+                )
+              ),
+              card(
+                class = "llw-dashboard-preprocessed-integrity",
+                full_screen = TRUE,
+                card_header(
+                  tags$div(
+                    class = "llw-dashboard-heading-group",
+                    tags$h2(
+                      id = ns("preprocessed_integrity_heading"),
+                      class = "h5 mb-1",
+                      "Pre-processed integrity"
+                    ),
+                    tags$p(
+                      class = "llw-secondary small mb-0",
+                      paste(
+                        "Checks the active result after recipe application.",
+                        "These are not source import diagnostics."
+                      )
+                    )
+                  )
+                ),
+                tags$div(
+                  class = paste(
+                    "llw-dashboard-support-region",
+                    "llw-dashboard-integrity-region"
+                  ),
+                  role = "region",
+                  `aria-labelledby` = ns("preprocessed_integrity_heading"),
+                  tabindex = "0",
+                  uiOutput(ns("preprocessed_integrity"))
+                )
+              )
+            )
+          )
+        ),
+        nav_panel(
+          title = "Source data",
+          value = "raw",
+          tags$section(
+            class = "llw-dashboard-data-view llw-dashboard-data-view--source",
+            `aria-labelledby` = ns("raw_heading"),
+            tags$div(
+              class = "llw-dashboard-data-view__header",
+              tags$div(
+                tags$p(class = "llw-eyebrow", "Immutable imported source"),
+                tags$h2(
+                  id = ns("raw_heading"),
+                  class = "h4 mb-1",
+                  "Source data"
+                ),
+                tags$p(
+                  class = "llw-secondary mb-0",
+                  paste(
+                    "This view preserves imported values and types. It is",
+                    "visually separated from the active pre-processed result."
+                  )
+                )
+              ),
+              tags$div(
+                class = "llw-dashboard-data-view__counts",
+                tags$span("Rows"),
+                textOutput(ns("raw_rows"), inline = TRUE),
+                tags$span("Stable ID"),
+                textOutput(ns("dataset_id"), inline = TRUE),
+                tags$span("Time zone"),
+                textOutput(ns("source_timezone"), inline = TRUE)
+              )
+            ),
+            tags$div(
+              class = "llw-dashboard-state-note",
+              uiOutput(ns("raw_state_note"))
+            ),
+            tags$div(
+              class = paste(
+                "llw-dashboard-table-mode",
+                "llw-dashboard-table-toolbar"
+              ),
+              input_switch(
+                ns("source_main_only"),
+                "Main columns only",
+                value = TRUE
+              ),
+              tags$span(
+                class = "llw-secondary small",
+                "Grouping / Id \u00b7 Datetime \u00b7 focus metric"
+              ),
+              uiOutput(ns("source_column_selector"))
+            ),
+            tags$div(
+              class = paste(
+                "llw-data-region llw-dashboard-wide-table",
+                "llw-dashboard-auto-height-table"
+              ),
+              role = "region",
+              `aria-label` = paste(
+                "Source dataset table with server-side search, sorting,",
+                "column visibility, and pagination"
+              ),
+              tabindex = "0",
+              DT::dataTableOutput(ns("raw_table"), fill = FALSE)
+            ),
+            uiOutput(ns("appended_source_metadata")),
+            tags$div(
+              class = "llw-dashboard-source-support",
+              card(
+                class = "llw-dashboard-source-provenance",
+                full_screen = TRUE,
+                card_header(
+                  tags$h2(
+                    id = ns("source_provenance_heading"),
+                    class = "h5 mb-0",
+                    "Source provenance"
+                  )
+                ),
+                tags$div(
+                  class = paste(
+                    "llw-dashboard-support-region",
+                    "llw-dashboard-summary-table"
+                  ),
+                  role = "region",
+                  `aria-labelledby` = ns("source_provenance_heading"),
+                  tabindex = "0",
+                  tableOutput(ns("provenance_table"))
+                )
+              ),
+              accordion(
+                id = ns("source_import_checks"),
+                open = FALSE,
+                class = paste(
+                  "llw-dashboard-import-checks",
+                  "llw-dashboard-source-import-checks"
+                ),
+                accordion_panel(
+                  title = "Source import checks",
+                  tags$p(
+                    class = "llw-secondary small",
+                    paste(
+                      "Gap counts use complete dominant-epoch intervals between",
+                      "consecutive timestamps; phase shifts remain separate",
+                      "timing diagnostics. Nothing is imputed or turned into",
+                      "darkness."
+                    )
+                  ),
+                  uiOutput(ns("merged_import_note")),
+                  tags$div(
+                    class = paste(
+                      "llw-dashboard-support-region",
+                      "llw-dashboard-diagnostics"
+                    ),
+                    role = "region",
+                    `aria-label` = "Source import-quality diagnostics",
+                    tabindex = "0",
+                    uiOutput(ns("quality_diagnostics"))
+                  )
                 )
               )
             )
           )
         )
-      )
       ),
       class = "llw-dashboard-tabs"
+    ),
+    uiOutput(ns("metadata_context"))
+  )
+}
+
+new_dashboard_event <- function(type, focus_request = NULL) {
+  type <- match.arg(type, c("open_import", "open_metadata"))
+  if (identical(type, "open_metadata")) {
+    focus_request <- validate_metadata_focus_request(focus_request)
+  } else if (!is.null(focus_request)) {
+    abort_llw(
+      "Only an open-metadata dashboard event accepts metadata focus.",
+      type = "validation"
     )
+  }
+  event <- structure(
+    list(
+      id = new_stable_id("dashboard_event"),
+      type = type,
+      focus_request = focus_request
+    ),
+    class = c("llw_dashboard_event", "list")
+  )
+  assert_serializable_value(event, "dashboard event")
+  event
+}
+
+dashboard_metadata_identity_request <- function(
+  record,
+  entity = c("dataset", "participant", "device", "study"),
+  identity = NULL,
+  namespace_id = NULL,
+  label = NULL
+) {
+  entity <- match.arg(entity)
+  bundle <- metadata_bundle_for_record(record)
+  if (is.null(namespace_id)) {
+    if (length(bundle$sources) != 1L) return(NULL)
+    namespace_id <- names(bundle$sources)[[1L]]
+  }
+  if (!namespace_id %in% names(bundle$sources)) return(NULL)
+  if (!is.null(identity)) assert_scalar_string(identity, "identity")
+  contract <- list(
+    dataset = c("dataset_internal_id", "/core_metadata/datasets"),
+    participant = c(
+      "participant_internal_id",
+      "/core_metadata/participants"
+    ),
+    device = c("device_internal_id", "/core_metadata/devices"),
+    study = c("study_internal_id", "/core_metadata/study")
+  )[[entity]]
+  request <- new_metadata_focus_request(
+    dataset_id = record$id,
+    namespace_id = namespace_id,
+    field = contract[[1L]],
+    path_contains = contract[[2L]],
+    record_identity = identity,
+    label = label %||% paste("Related", entity, "metadata")
+  )
+  if (
+    !identical(
+      metadata_resolve_focus_request(bundle, request)$state,
+      "resolved"
+    )
+  ) {
+    return(NULL)
+  }
+  request
+}
+
+dashboard_related_metadata_input_id <- function(
+  request,
+  entity = c("participant", "device")
+) {
+  entity <- match.arg(entity)
+  request <- validate_metadata_focus_request(request)
+  identity <- request[c(
+    "request_schema",
+    "request_version",
+    "dataset_id",
+    "namespace_id",
+    "field",
+    "path_contains",
+    "record_identity",
+    "group_id"
+  )]
+  paste0(
+    "open_",
+    entity,
+    "_metadata_",
+    digest::digest(identity, algo = "sha256", serialize = TRUE)
+  )
+}
+
+dashboard_participant_metadata_input_id <- function(request) {
+  dashboard_related_metadata_input_id(request, "participant")
+}
+
+dashboard_device_metadata_input_id <- function(request) {
+  dashboard_related_metadata_input_id(request, "device")
+}
+
+dashboard_metadata_entity_limit <- function() 4L
+
+dashboard_metadata_entity_group_ui <- function(
+  items,
+  entity = c("participant", "device"),
+  ns = identity,
+  limit = dashboard_metadata_entity_limit()
+) {
+  entity <- match.arg(entity)
+  if (!is.list(items)) {
+    abort_llw("Metadata action items must be a list.", type = "validation")
+  }
+  if (!is.function(ns)) {
+    abort_llw("`ns` must be a function.", type = "validation")
+  }
+  if (
+    length(limit) != 1L ||
+      is.na(limit) ||
+      !is.numeric(limit) ||
+      limit < 1 ||
+      limit != as.integer(limit)
+  ) {
+    abort_llw("`limit` must be a positive integer.", type = "validation")
+  }
+  limit <- as.integer(limit)
+  if (length(items) == 0L) return(NULL)
+
+  plural <- if (identical(entity, "participant")) "Participants" else "Devices"
+  icon_name <- if (identical(entity, "participant")) "user" else "microchip"
+  content <- if (length(items) > limit) {
+    instruction <- if (identical(entity, "participant")) {
+      "Reduce the participant selection to four or fewer to open individual participant metadata."
+    } else {
+      paste(
+        "Reduce the participant selection until four or fewer related",
+        "devices remain to open individual device metadata."
+      )
+    }
+    tags$div(
+      class = "llw-dashboard-metadata-context__reduction",
+      role = "status",
+      `aria-live` = "polite",
+      tags$strong(paste(length(items), tolower(plural), "in this context")),
+      tags$span(instruction)
+    )
+  } else {
+    tags$div(
+      class = "llw-dashboard-metadata-context__entity-actions",
+      lapply(items, function(item) {
+        request <- item$request %||% NULL
+        if (is.null(request)) {
+          return(tags$button(
+            type = "button",
+            class = "btn btn-outline-secondary btn-sm",
+            disabled = "disabled",
+            title = paste(
+              "No exact retained metadata target is available for",
+              item$label
+            ),
+            icon(icon_name),
+            item$label
+          ))
+        }
+        actionButton(
+          ns(dashboard_related_metadata_input_id(request, entity)),
+          item$label,
+          icon = icon(icon_name),
+          class = "btn-outline-secondary btn-sm",
+          title = paste("Open", item$title, "in the Metadata tab")
+        )
+      })
+    )
+  }
+  tags$section(
+    class = "llw-dashboard-metadata-context__entity-group",
+    `aria-label` = paste(plural, "metadata links"),
+    tags$h4(plural),
+    content
   )
 }
 
@@ -1153,12 +1383,23 @@ dashboard_record_signature <- function(record) {
     )
   }
   required <- c(
-    "id", "display_name", "raw_checksum", "prepared_payload", "revision",
-    "source_manifest", "factual_metadata", "analysis_settings", "recipe",
+    "id",
+    "display_name",
+    "raw_checksum",
+    "prepared_payload",
+    "revision",
+    "source_manifest",
+    "factual_metadata",
+    "metadata_bundle",
+    "analysis_settings",
+    "recipe",
     "provenance"
   )
   if (!all(required %in% names(record)) || !is.raw(record$prepared_payload)) {
-    abort_llw("The dashboard record contract is incomplete.", type = "validation")
+    abort_llw(
+      "The dashboard record contract is incomplete.",
+      type = "validation"
+    )
   }
   paste0(
     "sha256:",
@@ -1171,6 +1412,7 @@ dashboard_record_signature <- function(record) {
         prepared_checksum = sha256_raw(record$prepared_payload),
         source_manifest = record$source_manifest,
         factual_metadata = record$factual_metadata,
+        metadata_bundle = record$metadata_bundle,
         analysis_settings = record$analysis_settings,
         recipe = record$recipe,
         provenance = record$provenance
@@ -1187,16 +1429,25 @@ new_dashboard_snapshot_cache <- function(
   builder = dashboard_dataset_snapshot
 ) {
   if (
-    !is.numeric(max_bytes) || length(max_bytes) != 1L || is.na(max_bytes) ||
-      !is.finite(max_bytes) || max_bytes < 1
+    !is.numeric(max_bytes) ||
+      length(max_bytes) != 1L ||
+      is.na(max_bytes) ||
+      !is.finite(max_bytes) ||
+      max_bytes < 1
   ) {
     abort_llw("`max_bytes` must be positive and finite.", type = "validation")
   }
   if (
-    !is.numeric(max_entries) || length(max_entries) != 1L ||
-      is.na(max_entries) || max_entries < 1 || max_entries != floor(max_entries)
+    !is.numeric(max_entries) ||
+      length(max_entries) != 1L ||
+      is.na(max_entries) ||
+      max_entries < 1 ||
+      max_entries != floor(max_entries)
   ) {
-    abort_llw("`max_entries` must be a positive whole number.", type = "validation")
+    abort_llw(
+      "`max_entries` must be a positive whole number.",
+      type = "validation"
+    )
   }
   if (!is.function(builder)) {
     abort_llw("`builder` must be a function.", type = "validation")
@@ -1318,6 +1569,10 @@ datasetDashboardServer <- function(
     limits <- dashboard_plot_limits()
     table_contract <- dashboard_table_contract()
     event_value <- reactiveVal(NULL)
+    related_metadata_click_state <- reactiveVal(list(
+      scope = NULL,
+      counts = integer()
+    ))
     empty_modal_visible <- reactiveVal(FALSE)
     focus_cache <- new.env(parent = emptyenv())
     focus_cache_touched <- new.env(parent = emptyenv())
@@ -1366,10 +1621,7 @@ datasetDashboardServer <- function(
     observe({
       removeModal()
       empty_modal_visible(FALSE)
-      event_value(structure(
-        list(id = new_stable_id("dashboard_event"), type = "open_import"),
-        class = c("llw_dashboard_event", "list")
-      ))
+      event_value(new_dashboard_event("open_import"))
     }) |>
       bindEvent(input$to_import, ignoreInit = TRUE)
 
@@ -1462,7 +1714,10 @@ datasetDashboardServer <- function(
       on_error = function(condition) invisible(NULL)
     ) {
       if (!is.function(on_success) || !is.function(on_error)) {
-        abort_llw("Dashboard switch callbacks must be functions.", type = "validation")
+        abort_llw(
+          "Dashboard switch callbacks must be functions.",
+          type = "validation"
+        )
       }
       current_state <- shiny::isolate(dashboard_switch_state())
       if (is.list(current_state) && isTRUE(current_state$active)) {
@@ -1487,56 +1742,66 @@ datasetDashboardServer <- function(
         active = TRUE,
         state = "running",
         target = target,
-        message = paste0("Preparing `", target, "` while the current dashboard remains visible.")
+        message = paste0(
+          "Preparing `",
+          target,
+          "` while the current dashboard remains visible."
+        )
       ))
-      session$onFlushed(function() {
-        shiny::withReactiveDomain(session, shiny::isolate({
-          prepared <- prepare_dashboard_record(record)
-          if (inherits(prepared, "error")) {
-            dashboard_switch_state(list(
-              active = FALSE,
-              state = "error",
-              target = target,
-              message = paste(
-                llw_public_message(prepared),
-                "The previous dashboard is unchanged. Choose the dataset again to retry."
-              )
-            ))
-            on_error(prepared)
-            return(invisible(NULL))
-          }
-          applied <- tryCatch(on_success(), error = identity)
-          if (inherits(applied, "error") || !isTRUE(applied)) {
-            condition <- if (inherits(applied, "error")) {
-              normalize_task_error(applied, "preparation")
-            } else {
-              normalize_task_error(
-                simpleError("The selected dataset could not be activated."),
-                "preparation"
-              )
-            }
-            dashboard_switch_state(list(
-              active = FALSE,
-              state = "error",
-              target = target,
-              message = paste(
-                llw_public_message(condition),
-                "The previous dashboard is unchanged. Choose the dataset again to retry."
-              )
-            ))
-            on_error(condition)
-            return(invisible(NULL))
-          }
-          activate_dashboard_result(prepared)
-          dashboard_switch_state(list(
-            active = FALSE,
-            state = "complete",
-            target = target,
-            message = paste0("Now showing `", target, "`.")
-          ))
-          invisible(NULL)
-        }))
-      }, once = TRUE)
+      session$onFlushed(
+        function() {
+          shiny::withReactiveDomain(
+            session,
+            shiny::isolate({
+              prepared <- prepare_dashboard_record(record)
+              if (inherits(prepared, "error")) {
+                dashboard_switch_state(list(
+                  active = FALSE,
+                  state = "error",
+                  target = target,
+                  message = paste(
+                    llw_public_message(prepared),
+                    "The previous dashboard is unchanged. Choose the dataset again to retry."
+                  )
+                ))
+                on_error(prepared)
+                return(invisible(NULL))
+              }
+              applied <- tryCatch(on_success(), error = identity)
+              if (inherits(applied, "error") || !isTRUE(applied)) {
+                condition <- if (inherits(applied, "error")) {
+                  normalize_task_error(applied, "preparation")
+                } else {
+                  normalize_task_error(
+                    simpleError("The selected dataset could not be activated."),
+                    "preparation"
+                  )
+                }
+                dashboard_switch_state(list(
+                  active = FALSE,
+                  state = "error",
+                  target = target,
+                  message = paste(
+                    llw_public_message(condition),
+                    "The previous dashboard is unchanged. Choose the dataset again to retry."
+                  )
+                ))
+                on_error(condition)
+                return(invisible(NULL))
+              }
+              activate_dashboard_result(prepared)
+              dashboard_switch_state(list(
+                active = FALSE,
+                state = "complete",
+                target = target,
+                message = paste0("Now showing `", target, "`.")
+              ))
+              invisible(NULL)
+            })
+          )
+        },
+        once = TRUE
+      )
       invisible(TRUE)
     }
 
@@ -1555,7 +1820,7 @@ datasetDashboardServer <- function(
       updateSelectizeInput(
         session,
         "focus_variable",
-        choices = value$focus_variables,
+        choices = value$focus_variable_choices,
         selected = selected_focus,
         server = TRUE
       )
@@ -1575,6 +1840,14 @@ datasetDashboardServer <- function(
       req(active_snapshot_signature())
       active_snapshot_signature()
     })
+
+    observeEvent(
+      snapshot_signature(),
+      {
+        event_value(NULL)
+      },
+      ignoreInit = FALSE
+    )
 
     selected_focus_variable <- reactive({
       value <- snapshot()
@@ -1639,6 +1912,297 @@ datasetDashboardServer <- function(
         fallback_count = participants_per_page(),
         limits = limits
       )
+    })
+
+    metadata_entities <- reactive({
+      dashboard_relationship_entities(
+        snapshot()$relationship_view,
+        selected_participants()
+      )
+    })
+
+    metadata_entity_refs <- reactive({
+      relationship_view <- snapshot()$relationship_view
+      dataset_ids <- selected_participants()
+      list(
+        participants = dashboard_relationship_entity_refs(
+          relationship_view,
+          dataset_ids,
+          "participant"
+        ),
+        devices = dashboard_relationship_entity_refs(
+          relationship_view,
+          dataset_ids,
+          "device"
+        )
+      )
+    })
+
+    metadata_requests <- reactive({
+      value <- snapshot()
+      record <- value$record
+      entities <- metadata_entities()
+      refs <- metadata_entity_refs()
+      bundle <- metadata_bundle_for_record(record)
+      entity_items <- function(entity_refs, entity) {
+        if (nrow(entity_refs) == 0L) return(list())
+        duplicate_identity <- duplicated(entity_refs$identity) |
+          duplicated(entity_refs$identity, fromLast = TRUE)
+        lapply(seq_len(nrow(entity_refs)), function(index) {
+          identity <- entity_refs$identity[[index]]
+          namespace_id <- entity_refs$namespace_id[[index]]
+          if (is.na(namespace_id) || !nzchar(namespace_id)) {
+            namespace_id <- NULL
+          }
+          source_label <- if (
+            !is.null(namespace_id) && namespace_id %in% names(bundle$sources)
+          ) {
+            bundle$sources[[namespace_id]]$label
+          } else {
+            "retained source"
+          }
+          entity_label <- paste(
+            if (identical(entity, "participant")) "Participant" else "Device",
+            identity
+          )
+          visible_label <- if (duplicate_identity[[index]]) {
+            paste(entity_label, paste0("(", source_label, ")"))
+          } else {
+            entity_label
+          }
+          request <- dashboard_metadata_identity_request(
+            record,
+            entity,
+            identity,
+            namespace_id,
+            entity_label
+          )
+          list(
+            entity = entity,
+            identity = identity,
+            namespace_id = namespace_id,
+            source_label = source_label,
+            label = visible_label,
+            title = paste(entity_label, "from", source_label),
+            request = request
+          )
+        })
+      }
+      entity_namespace_id <- if (length(entities$namespace_ids) == 1L) {
+        entities$namespace_ids[[1L]]
+      } else {
+        value$relationship_view$namespace_id %||% NULL
+      }
+      dataset_identity <- if (length(entities$dataset_ids) == 1L) {
+        entities$dataset_ids[[1L]]
+      } else {
+        NULL
+      }
+      dataset <- dashboard_metadata_identity_request(
+        record,
+        "dataset",
+        dataset_identity,
+        entity_namespace_id,
+        if (is.null(dataset_identity)) {
+          "Included dataset metadata"
+        } else {
+          paste("Dataset", dataset_identity)
+        }
+      )
+      study_identity <- if (length(entities$study_ids) == 1L) {
+        entities$study_ids[[1L]]
+      } else {
+        NULL
+      }
+      study <- dashboard_metadata_identity_request(
+        record,
+        "study",
+        study_identity,
+        entity_namespace_id,
+        "Published source metadata"
+      )
+      variable <- preprocessed_focus_view()$metadata_target
+      list(
+        dataset = dataset,
+        study = study,
+        variable = variable,
+        participants = entity_items(refs$participants, "participant"),
+        devices = entity_items(refs$devices, "device")
+      )
+    })
+
+    output$metadata_context <- renderUI({
+      focus <- preprocessed_focus_view()
+      requests <- metadata_requests()
+      button <- function(id, label, icon_name, request) {
+        actionButton(
+          session$ns(id),
+          label,
+          icon = icon(icon_name),
+          class = "btn-outline-secondary btn-sm",
+          disabled = is.null(request),
+          title = if (is.null(request)) {
+            "No exact retained metadata target is available in this context."
+          } else {
+            paste("Open", request$label, "in the Metadata tab")
+          }
+        )
+      }
+      tags$section(
+        class = "llw-dashboard-metadata-context",
+        `aria-label` = "Metadata context and crosslinks",
+        tags$div(
+          class = "llw-dashboard-metadata-context__summary",
+          tags$div(
+            tags$p(class = "llw-eyebrow mb-1", "Metadata context"),
+            tags$p(
+              class = "mb-0",
+              tags$strong(focus$focus_label),
+              if (!identical(focus$focus_label, focus$focus_variable)) {
+                paste0(" [", focus$focus_variable, "]")
+              },
+              paste0(" \u00b7 ", focus$focus_unit)
+            ),
+            tags$p(
+              class = "llw-secondary small mb-0",
+              paste0(
+                "Label and unit provenance: ",
+                focus$metadata_provenance,
+                ". Source metadata stay immutable; settings do not alter it."
+              )
+            )
+          ),
+          tags$div(
+            class = "llw-dashboard-metadata-context__actions",
+            tags$div(
+              class = "llw-dashboard-metadata-context__primary-actions",
+              button(
+                "open_source_metadata",
+                "Source metadata",
+                "database",
+                requests$study %||% requests$dataset
+              ),
+              button(
+                "open_dataset_metadata",
+                "Dataset metadata",
+                "table-list",
+                requests$dataset
+              ),
+              button(
+                "open_variable_metadata",
+                "Focus variable metadata",
+                "bullseye",
+                requests$variable
+              )
+            ),
+            tags$div(
+              class = "llw-dashboard-metadata-context__entity-groups",
+              dashboard_metadata_entity_group_ui(
+                requests$participants,
+                "participant",
+                session$ns
+              ),
+              dashboard_metadata_entity_group_ui(
+                requests$devices,
+                "device",
+                session$ns
+              )
+            )
+          )
+        )
+      )
+    })
+
+    emit_metadata_request <- function(request) {
+      if (is.null(request)) {
+        showNotification(
+          paste(
+            "No exact metadata target is available for the current context.",
+            "The dashboard selection is unchanged."
+          ),
+          type = "warning",
+          duration = 7
+        )
+        return(invisible(FALSE))
+      }
+      event_value(new_dashboard_event("open_metadata", request))
+      invisible(TRUE)
+    }
+
+    observeEvent(
+      input$open_source_metadata,
+      emit_metadata_request(
+        metadata_requests()$study %||% metadata_requests()$dataset
+      ),
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      input$open_dataset_metadata,
+      emit_metadata_request(metadata_requests()$dataset),
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      input$open_variable_metadata,
+      emit_metadata_request(metadata_requests()$variable),
+      ignoreInit = TRUE
+    )
+    related_metadata_actions <- reactive({
+      request_sets <- metadata_requests()[c("participants", "devices")]
+      actions <- list()
+      for (entity_plural in names(request_sets)) {
+        items <- request_sets[[entity_plural]]
+        if (length(items) > dashboard_metadata_entity_limit()) next
+        entity <- if (identical(entity_plural, "participants")) {
+          "participant"
+        } else {
+          "device"
+        }
+        for (item in items) {
+          request <- item$request %||% NULL
+          if (is.null(request)) next
+          action_id <- dashboard_related_metadata_input_id(request, entity)
+          if (action_id %in% names(actions)) {
+            abort_llw(
+              "Related metadata actions must have unique identities.",
+              type = "validation"
+            )
+          }
+          actions[[action_id]] <- request
+        }
+      }
+      actions
+    })
+
+    observe({
+      requests <- related_metadata_actions()
+      action_ids <- names(requests)
+      if (is.null(action_ids)) action_ids <- character()
+      current <- vapply(
+        action_ids,
+        function(action_id) {
+          as.integer(input[[action_id]] %||% 0L)
+        },
+        integer(1)
+      )
+      names(current) <- action_ids
+      scope <- paste(
+        snapshot_signature(),
+        paste(selected_participants(), collapse = "\r"),
+        paste(action_ids, collapse = "\r"),
+        sep = "::"
+      )
+      previous <- isolate(related_metadata_click_state())
+      if (!identical(previous$scope, scope)) {
+        related_metadata_click_state(list(scope = scope, counts = current))
+        return()
+      }
+      counts <- previous$counts
+      if (!identical(names(counts), names(current))) counts <- current
+      changed <- which(current > counts)
+      related_metadata_click_state(list(scope = scope, counts = current))
+      if (length(changed) > 0L) {
+        emit_metadata_request(requests[[changed[[1L]]]])
+      }
     })
 
     view_recommendation <- reactive({
@@ -1744,8 +2308,7 @@ datasetDashboardServer <- function(
 
     view_mode <- reactive({
       value <- input$view_mode %||% "auto"
-      if (value %in% c("auto", "detailed", "availability")) value else
-        "auto"
+      if (value %in% c("auto", "detailed", "availability")) value else "auto"
     })
 
     days_per_page <- reactive({
@@ -2127,9 +2690,9 @@ datasetDashboardServer <- function(
         return(NULL)
       }
       participant_choices <- as.list(as.character(participant_pages))
-      participant_starts <- (
-        participant_pages - 1L
-      ) * value$participants_per_page + 1L
+      participant_starts <- (participant_pages - 1L) *
+        value$participants_per_page +
+        1L
       participant_ends <- pmin(
         length(value$participants),
         participant_starts + value$participants_per_page - 1L
@@ -2180,9 +2743,9 @@ datasetDashboardServer <- function(
       if (nrow(navigator) <= 1L) {
         return(NULL)
       }
-      participant_starts <- (
-        seq_len(value$participant_pages) - 1L
-      ) * value$participants_per_page + 1L
+      participant_starts <- (seq_len(value$participant_pages) - 1L) *
+        value$participants_per_page +
+        1L
       participant_ends <- pmin(
         length(value$participants),
         participant_starts + value$participants_per_page - 1L
@@ -2343,7 +2906,10 @@ datasetDashboardServer <- function(
                   )
                 ),
                 title = "Show the next time page",
-                disabled = identical(current_time, time_pages[[length(time_pages)]]),
+                disabled = identical(
+                  current_time,
+                  time_pages[[length(time_pages)]]
+                ),
                 class = paste(
                   "llw-dashboard-time-page-button",
                   "llw-dashboard-time-page-button--next",
@@ -2602,7 +3168,8 @@ datasetDashboardServer <- function(
       state <- dashboard_switch_state()
       notification_id <- session$ns("dashboard_ready_notice")
       if (
-        !is.list(state) || isTRUE(state$active) ||
+        !is.list(state) ||
+          isTRUE(state$active) ||
           !identical(state$state, "complete")
       ) {
         removeNotification(notification_id)
@@ -2625,7 +3192,19 @@ datasetDashboardServer <- function(
     output$dataset_id <- renderText(snapshot()$record$id)
     output$revision <- renderText(paste0("r", snapshot()$record$revision))
     output$prepared_timezone <- renderText(snapshot()$display_timezone)
-    output$source_timezone <- renderText(snapshot()$display_timezone)
+    output$source_timezone <- renderText({
+      timezone <- snapshot()$source_timezone
+      if (
+        is.character(timezone) &&
+          length(timezone) == 1L &&
+          !is.na(timezone) &&
+          nzchar(timezone)
+      ) {
+        timezone
+      } else {
+        "not specified"
+      }
+    })
     output$raw_rows <- renderText(format(
       nrow(snapshot()$raw_data),
       big.mark = ",",
@@ -2797,7 +3376,11 @@ datasetDashboardServer <- function(
           "Showing ",
           tolower(value$stage_label),
           " \u00b7 focus metric ",
-          value$focus_variable,
+          if (!identical(value$focus_label, value$focus_variable)) {
+            paste0(value$focus_label, " [", value$focus_variable, "]")
+          } else {
+            value$focus_variable
+          },
           " \u00b7 ",
           value$focus_unit,
           " \u00b7 "
@@ -3215,10 +3798,8 @@ datasetDashboardServer <- function(
         "warning"
       } else if (
         row_delta != 0L &&
-          (
-            isTRUE(value$recipe$unchanged) ||
-              value$recipe$step_count == 0L
-          )
+          (isTRUE(value$recipe$unchanged) ||
+            value$recipe$step_count == 0L)
       ) {
         "warning"
       } else if (row_delta == 0L) {
@@ -3583,18 +4164,113 @@ datasetDashboardServer <- function(
       )
     })
 
-    output$variable_inventory <- DT::renderDataTable({
+    output$variable_inventory <- DT::renderDataTable(
+      {
+        inventory <- preprocessed_focus_view()$variable_inventory
+        widget <- dashboard_datatable(
+          inventory,
+          "Pre-processed variable inventory and missingness",
+          column_visibility = FALSE,
+          selection = "single"
+        )
+        widget$x$options$dom <- "ftip"
+        widget$x$options$paging <- TRUE
+        widget$x$options$pageLength <- table_contract$page_length
+        widget
+      },
+      server = table_contract$server
+    )
+
+    selected_inventory_variable <- reactive({
+      row <- input$variable_inventory_rows_selected %||% integer()
       inventory <- preprocessed_focus_view()$variable_inventory
-      widget <- dashboard_datatable(
-        inventory,
-        "Pre-processed variable inventory and missingness",
-        column_visibility = FALSE
+      if (length(row) != 1L || row < 1L || row > nrow(inventory)) return(NULL)
+      as.character(inventory$Variable[[row]])
+    })
+
+    output$variable_inventory_metadata_action <- renderUI({
+      variable <- selected_inventory_variable()
+      actionButton(
+        session$ns("open_inventory_metadata"),
+        if (is.null(variable)) {
+          "Select a variable row to explore its metadata"
+        } else {
+          paste("Explore metadata for", variable)
+        },
+        icon = icon("up-right-from-square"),
+        class = "btn-outline-secondary btn-sm mt-2",
+        disabled = is.null(variable)
       )
-      widget$x$options$dom <- "ftip"
-      widget$x$options$paging <- TRUE
-      widget$x$options$pageLength <- table_contract$page_length
-      widget
-    }, server = table_contract$server)
+    })
+
+    observeEvent(
+      input$open_inventory_metadata,
+      {
+        variable <- selected_inventory_variable()
+        if (is.null(variable)) return()
+        request <- dashboard_variable_metadata(
+          snapshot()$record,
+          variable
+        )$target
+        emit_metadata_request(request)
+      },
+      ignoreInit = TRUE
+    )
+
+    output$relationship_context_note <- renderUI({
+      relationship <- snapshot()$relationship_view
+      if (identical(relationship$state, "ready")) {
+        details <- paste(
+          nrow(relationship$data),
+          "file-group row(s) and",
+          length(relationship$added_fields),
+          "related field(s)."
+        )
+        if (length(relationship$warnings) == 0L) {
+          return(llw_status_callout(
+            "complete",
+            details,
+            heading = "Related metadata ready",
+            compact = TRUE
+          ))
+        }
+        return(llw_status_callout(
+          "warning",
+          paste(details, paste(relationship$warnings, collapse = " | ")),
+          heading = "Related metadata are partial",
+          compact = TRUE
+        ))
+      }
+      llw_status_callout(
+        if (identical(relationship$state, "error")) "error" else "idle",
+        paste(relationship$warnings, collapse = " | "),
+        heading = if (identical(relationship$state, "error")) {
+          "Related metadata unavailable"
+        } else {
+          "No row-level relationship table"
+        },
+        compact = TRUE
+      )
+    })
+
+    output$relationship_context_table <- DT::renderDataTable(
+      {
+        relationship <- snapshot()$relationship_view
+        if (!identical(relationship$state, "ready")) return(NULL)
+        widget <- dashboard_datatable(
+          relationship$data,
+          paste(
+            "Disposable related metadata context by file group; immutable",
+            "measurements are not included"
+          ),
+          column_visibility = FALSE
+        )
+        widget$x$options$dom <- "ftip"
+        widget$x$options$pageLength <- table_contract$page_length
+        widget
+      },
+      server = table_contract$server
+    )
 
     output$coverage_table <- DT::renderDataTable(
       dashboard_datatable(
@@ -3835,7 +4511,10 @@ datasetDashboardServer <- function(
       data <- value$prepared_data
       columns <- selected_table_columns("preprocessed")
       columns <- intersect(columns, names(data))
-      data[, columns, drop = FALSE]
+      dashboard_metadata_display_table(
+        data[, columns, drop = FALSE],
+        value$record
+      )
     })
 
     source_table_data <- reactive({
@@ -3844,7 +4523,10 @@ datasetDashboardServer <- function(
       data <- value$raw_data
       columns <- selected_table_columns("source")
       columns <- intersect(columns, names(data))
-      data[, columns, drop = FALSE]
+      dashboard_metadata_display_table(
+        data[, columns, drop = FALSE],
+        value$record
+      )
     })
 
     output$prepared_table <- DT::renderDataTable(
@@ -3884,7 +4566,9 @@ datasetDashboardServer <- function(
       ready = reactive(list(
         revision = dashboard_ready_revision(),
         signature = active_snapshot_signature(),
-        dataset_id = if (inherits(snapshot_result(), "llw_dashboard_snapshot")) {
+        dataset_id = if (
+          inherits(snapshot_result(), "llw_dashboard_snapshot")
+        ) {
           snapshot_result()$record$id
         } else {
           NULL

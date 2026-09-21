@@ -4,7 +4,7 @@ test_that("the three-source fixture manifest freezes exact public provenance", {
   ids <- vapply(entries, function(entry) entry$fixture_id, character(1))
 
   expect_identical(manifest$manifest_schema, "llw-glc-derived-fixture-manifest")
-  expect_identical(manifest$manifest_version, "2.0.0")
+  expect_identical(manifest$manifest_version, "2.1.0")
   expect_identical(
     ids,
     c(
@@ -47,6 +47,21 @@ test_that("the three-source fixture manifest freezes exact public provenance", {
     32L
   )
   expect_false(manifest$generation_policy$source_package_reopen_in_tests)
+  expect_identical(
+    manifest$generation_policy$relationship_extraction$exported_glcdp_api,
+    "extract_metadata"
+  )
+  expect_identical(
+    manifest$generation_policy$relationship_extraction$package_open_count_per_fixture,
+    1L
+  )
+  expect_identical(
+    manifest$generation_policy$relationship_extraction$public_measurement_reads,
+    0L
+  )
+  expect_false(
+    manifest$generation_policy$relationship_extraction$offline_tests_reopen_packages
+  )
 
   for (entry in entries) {
     path <- file.path(m7_fixture_directory(), entry$file)
@@ -58,7 +73,13 @@ test_that("the three-source fixture manifest freezes exact public provenance", {
       info = entry$fixture_id
     )
     expect_false(entry$public_value_retention$filtering_applied)
-    expect_true(entry$public_value_retention$retention$public_source_values_retained)
+    expect_true(
+      entry$public_value_retention$retention$public_source_values_retained
+    )
+    expect_identical(
+      entry$generation$relationship_extraction$public_measurement_reads,
+      0L
+    )
   }
 })
 
@@ -72,7 +93,11 @@ test_that("fixture manifest freezes the offline appended review state", {
   expect_true(review$derived_fixture)
   expect_true("generated_data_file" %in% names(review))
   expect_null(review$generated_data_file)
-  expect_match(review$construction, "No source package is reopened", fixed = TRUE)
+  expect_match(
+    review$construction,
+    "No source package is reopened",
+    fixed = TRUE
+  )
   expect_identical(
     vapply(sources, function(source) source$fixture_id, character(1)),
     c("tum-medi-only", "iztech-light-subset")
@@ -93,7 +118,11 @@ test_that("fixture manifest freezes the offline appended review state", {
     )
   )
   expect_identical(
-    vapply(sources, function(source) length(source$package_dataset_ids), integer(1)),
+    vapply(
+      sources,
+      function(source) length(source$package_dataset_ids),
+      integer(1)
+    ),
     c(5L, 5L)
   )
   expect_identical(
@@ -112,22 +141,54 @@ test_that("fixture manifest freezes the offline appended review state", {
 
 test_that("fixtures retain exact five-participant variable and plan contracts", {
   all_ucr_variables <- c(
-    "Id", "file.name", "Datetime", "is.implicit", "EVENT", "TEMPERATURE",
-    "ORIENTATION", "PIM", "PIMn", "TAT", "TATn", "ZCM", "ZCMn", "LIGHT",
-    "IR.LIGHT", "CAP_SENS_1", "CAP_SENS_2", "F1", "F2", "F3", "F4", "F5",
-    "F6", "F7", "F8", "MEDI", "CLEAR", "STATE", "position"
+    "Id",
+    "file.name",
+    "Datetime",
+    "is.implicit",
+    "EVENT",
+    "TEMPERATURE",
+    "ORIENTATION",
+    "PIM",
+    "PIMn",
+    "TAT",
+    "TATn",
+    "ZCM",
+    "ZCMn",
+    "LIGHT",
+    "IR.LIGHT",
+    "CAP_SENS_1",
+    "CAP_SENS_2",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "MEDI",
+    "CLEAR",
+    "STATE",
+    "position"
   )
   expected <- list(
     "tum-medi-only" = list(
       datasets = sprintf("MELIDOS_TUM_S%03d", 1:5),
       groups = c(
-        "MELIDOS_TUM_S001:18", "MELIDOS_TUM_S002:17",
-        "MELIDOS_TUM_S003:18", "MELIDOS_TUM_S004:18",
+        "MELIDOS_TUM_S001:18",
+        "MELIDOS_TUM_S002:17",
+        "MELIDOS_TUM_S003:18",
+        "MELIDOS_TUM_S004:18",
         "MELIDOS_TUM_S005:18"
       ),
       requested = "MEDI",
       result = c(
-        "MEDI", "Id", "file_group_id", "participant_Id", "Datetime", "file.name"
+        "MEDI",
+        "Id",
+        "file_group_id",
+        "participant_Id",
+        "Datetime",
+        "file.name"
       ),
       rows = 160L,
       compatibility = paste0(
@@ -142,14 +203,22 @@ test_that("fixtures retain exact five-participant variable and plan contracts", 
     "iztech-light-subset" = list(
       datasets = sprintf("MELIDOS_IZTECH_S%03d", 1:5),
       groups = c(
-        "MELIDOS_IZTECH_S001:18", "MELIDOS_IZTECH_S002:18",
-        "MELIDOS_IZTECH_S003:18", "MELIDOS_IZTECH_S004:19",
-        "MELIDOS_IZTECH_S004:20", "MELIDOS_IZTECH_S005:18"
+        "MELIDOS_IZTECH_S001:18",
+        "MELIDOS_IZTECH_S002:18",
+        "MELIDOS_IZTECH_S003:18",
+        "MELIDOS_IZTECH_S004:19",
+        "MELIDOS_IZTECH_S004:20",
+        "MELIDOS_IZTECH_S005:18"
       ),
       requested = c("LIGHT", "MEDI"),
       result = c(
-        "LIGHT", "MEDI", "Id", "file_group_id", "participant_Id",
-        "Datetime", "file.name"
+        "LIGHT",
+        "MEDI",
+        "Id",
+        "file_group_id",
+        "participant_Id",
+        "Datetime",
+        "file.name"
       ),
       rows = 192L,
       compatibility = paste0(
@@ -201,6 +270,7 @@ test_that("offline fixtures retain exact bounded public values", {
   for (fixture_id in names(expected_states)) {
     fixture <- m7_fixture(fixture_id)
     expect_s3_class(fixture, "llw_glc_derived_fixture")
+    expect_identical(fixture$fixture_version, "2.1.0")
     expect_false(fixture$generation$synthetic_cells)
     expect_false(fixture$generation$privacy_filtering)
     expect_setequal(
@@ -252,6 +322,63 @@ test_that("offline fixtures retain exact bounded public values", {
   }
 })
 
+test_that("fixtures retain exported relationship traversal for offline use", {
+  expected_file_group_rows <- c(
+    "tum-medi-only" = 5L,
+    "iztech-light-subset" = 6L,
+    "ucr-all-light-variables" = 5L
+  )
+  expected_dataset_rows <- stats::setNames(
+    rep(5L, 3L),
+    names(expected_file_group_rows)
+  )
+
+  for (fixture_id in names(expected_file_group_rows)) {
+    fixture <- m7_fixture(fixture_id)
+    source <- fixture$metadata_snapshot$bundle$sources[[1L]]
+    relationships <- source$records$relationship_context
+    extraction <- fixture$generation$relationship_extraction
+
+    expect_s3_class(relationships, "llw_metadata_relationships")
+    expect_identical(relationships$relationship_version, "1.0.0")
+    expect_identical(relationships$anchor, "file_group_id")
+    expect_identical(relationships$dataset_anchor, "Id")
+    expect_identical(
+      nrow(relationships$file_groups),
+      unname(expected_file_group_rows[[fixture_id]])
+    )
+    expect_identical(
+      nrow(relationships$datasets),
+      unname(expected_dataset_rows[[fixture_id]])
+    )
+    expect_setequal(
+      as.character(relationships$file_groups$file_group_id),
+      fixture$selection$file_group_ids
+    )
+    expect_setequal(
+      as.character(relationships$datasets$Id),
+      fixture$selection$dataset_ids
+    )
+    expect_true(all(
+      c(
+        "dataset_internal_id",
+        "participant_internal_id",
+        "device_internal_id"
+      ) %in%
+        names(relationships$file_groups)
+    ))
+    expect_false(relationships$provenance$measurement_contents_read)
+    expect_true(relationships$provenance$existing_fixture_measurements_reused)
+    expect_identical(extraction$public_measurement_reads, 0L)
+    expect_true(extraction$existing_measurement_snapshot_reused)
+    expect_identical(
+      extraction$relationship_fingerprint,
+      relationships$fingerprint
+    )
+    expect_null(nonserializable_path(relationships))
+  }
+})
+
 test_that("fixture metadata is scoped to all represented relationships", {
   expected_variable_rows <- c(
     "tum-medi-only" = 20L,
@@ -283,20 +410,24 @@ test_that("fixture metadata is scoped to all represented relationships", {
 
     expect_identical(nrow(core$participants), 5L, info = fixture_id)
     expect_identical(
-      nrow(core$devices), unname(expected_device_rows[[fixture_id]]),
+      nrow(core$devices),
+      unname(expected_device_rows[[fixture_id]]),
       info = fixture_id
     )
     expect_identical(
-      file_row_count, unname(expected_file_rows[[fixture_id]]),
+      file_row_count,
+      unname(expected_file_rows[[fixture_id]]),
       info = fixture_id
     )
     expect_identical(nrow(inventory), 5L, info = fixture_id)
     expect_identical(
-      sum(inventory$file_count), unname(expected_file_rows[[fixture_id]]),
+      sum(inventory$file_count),
+      unname(expected_file_rows[[fixture_id]]),
       info = fixture_id
     )
     expect_identical(
-      sum(inventory$file_group_count), unname(expected_file_rows[[fixture_id]]),
+      sum(inventory$file_group_count),
+      unname(expected_file_rows[[fixture_id]]),
       info = fixture_id
     )
     expect_identical(
@@ -317,8 +448,16 @@ test_that("fixture metadata is scoped to all represented relationships", {
       fixture$selection$files
     )
 
-    age <- metadata_index_query_groups(bundle$index, "participant_age", limit = 100L)
-    sex <- metadata_index_query_groups(bundle$index, "participant_sex", limit = 100L)
+    age <- metadata_index_query_groups(
+      bundle$index,
+      "participant_age",
+      limit = 100L
+    )
+    sex <- metadata_index_query_groups(
+      bundle$index,
+      "participant_sex",
+      limit = 100L
+    )
     expect_identical(age$total, 1L, info = fixture_id)
     expect_identical(sex$total, 1L, info = fixture_id)
     expect_identical(age$rows$resource, "core_metadata", info = fixture_id)
@@ -358,7 +497,10 @@ test_that("participant metadata values are exact public package values", {
     retention <- entry$public_value_retention$retention
     values <- expected[[entry$fixture_id]]
 
-    expect_identical(as.character(participants$participant_internal_id), values$ids)
+    expect_identical(
+      as.character(participants$participant_internal_id),
+      values$ids
+    )
     expect_identical(as.numeric(participants$participant_age), values$ages)
     expect_identical(as.character(participants$participant_sex), values$sex)
     expect_false(entry$public_value_retention$filtering_applied)
@@ -397,7 +539,10 @@ test_that("IZTECH retains one participant measured by two devices", {
     vapply(s004, function(case) case$file_group_id, character(1)),
     c("MELIDOS_IZTECH_S004:19", "MELIDOS_IZTECH_S004:20")
   )
-  expect_identical(unname(table(fixture$data$participant_Id)[["IZTECH_S004"]]), 64L)
+  expect_identical(
+    unname(table(fixture$data$participant_Id)[["IZTECH_S004"]]),
+    64L
+  )
   expect_identical(device_group$total, 1L)
   expect_identical(device_group$rows$entry_count, 6L)
   expect_identical(device_group$rows$record_count, 6L)
@@ -415,15 +560,36 @@ test_that("IZTECH retains one participant measured by two devices", {
     )
   )
   s004_entries <- selected$entries[
-    selected$entries$record %in% c(
-      "MELIDOS_IZTECH_S004:19",
-      "MELIDOS_IZTECH_S004:20"
-    ),
+    selected$entries$record %in%
+      c(
+        "MELIDOS_IZTECH_S004:19",
+        "MELIDOS_IZTECH_S004:20"
+      ),
     ,
     drop = FALSE
   ]
   expect_identical(
     stats::setNames(s004_entries$value, s004_entries$record),
+    c(
+      "MELIDOS_IZTECH_S004:19" = "IZTECH_AL03",
+      "MELIDOS_IZTECH_S004:20" = "IZTECH_AL04"
+    )
+  )
+  relationships <- bundle$sources[[1L]]$records$relationship_context
+  s004_relationships <- relationships$file_groups[
+    relationships$file_groups$file_group_id %in%
+      c(
+        "MELIDOS_IZTECH_S004:19",
+        "MELIDOS_IZTECH_S004:20"
+      ),
+    ,
+    drop = FALSE
+  ]
+  expect_identical(
+    stats::setNames(
+      as.character(s004_relationships$device_internal_id),
+      as.character(s004_relationships$file_group_id)
+    ),
     c(
       "MELIDOS_IZTECH_S004:19" = "IZTECH_AL03",
       "MELIDOS_IZTECH_S004:20" = "IZTECH_AL04"
@@ -443,12 +609,15 @@ test_that("melanopic grouping never includes sibling variables", {
       "melanopic EDI",
       limit = 100L
     )
-    entries <- unlist(lapply(
-      result$rows$group_id,
-      function(group_id) {
-        metadata_index_group(bundle$index, group_id)$entries$value
-      }
-    ), use.names = FALSE)
+    entries <- unlist(
+      lapply(
+        result$rows$group_id,
+        function(group_id) {
+          metadata_index_group(bundle$index, group_id)$entries$value
+        }
+      ),
+      use.names = FALSE
+    )
 
     expect_gt(result$total, 0L)
     expect_true(all(nzchar(result$rows$group_context)), info = fixture_id)

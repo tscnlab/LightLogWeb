@@ -228,6 +228,315 @@ test_that("repeated metadata records collapse into one stable field group", {
   )
 })
 
+test_that("relationship contexts are versioned, scoped, and tamper evident", {
+  context <- new_metadata_relationship_context(
+    file_groups = data.frame(
+      file_group_id = c("D1:1", "D2:1"),
+      dataset_internal_id = c("D1", "D2"),
+      participant_internal_id = c("P1", "P2"),
+      stringsAsFactors = FALSE
+    ),
+    datasets = data.frame(
+      Id = c("D1", "D2"),
+      study_title = c("Study", "Study"),
+      stringsAsFactors = FALSE
+    ),
+    requested_fields = c("participant_internal_id", "study_title"),
+    provenance = list(
+      extractor = "glcdp::extract_metadata",
+      measurement_contents_read = FALSE
+    )
+  )
+  scoped <- metadata_relationship_subset(context, "D2:1", "D2")
+
+  expect_s3_class(context, "llw_metadata_relationships")
+  expect_identical(context$relationship_version, "1.0.0")
+  expect_identical(scoped$file_groups$file_group_id, "D2:1")
+  expect_identical(scoped$datasets$Id, "D2")
+  expect_false(scoped$provenance$measurement_contents_read)
+  expect_null(nonserializable_path(scoped))
+
+  source <- new_metadata_source_namespace(
+    namespace_id = "source-relationships",
+    label = "Relationship source",
+    source_type = "test",
+    records = list(
+      core_metadata = list(study = list(study_title = "Exact source title")),
+      relationship_context = context
+    )
+  )
+  bundle <- new_metadata_bundle(list(`source-relationships` = source))
+  expect_false(any(
+    bundle$index$entries$resource == "relationship_context"
+  ))
+  expect_identical(
+    metadata_index_query_groups(bundle$index, "Exact source title")$total,
+    1L
+  )
+  outer <- new_metadata_source_namespace(
+    namespace_id = "source-outer",
+    label = "Outer appended source",
+    source_type = "append_source",
+    records = list(metadata_bundle = bundle)
+  )
+  nested_record <- new_dataset_record(
+    data.frame(
+      Id = "D1",
+      Datetime = as.POSIXct("2026-01-01", tz = "UTC"),
+      MEDI = 1,
+      stringsAsFactors = FALSE
+    ),
+    "Nested relationships",
+    new_source_manifest("test", source_timezone = "UTC"),
+    analysis_settings = list(primary_variable = "MEDI"),
+    metadata_bundle = new_metadata_bundle(list(`source-outer` = outer))
+  )
+  nested_contexts <- metadata_relationships_for_record(nested_record)
+  expect_named(nested_contexts, "source-outer")
+  expect_identical(nested_contexts[[1L]]$fingerprint, context$fingerprint)
+
+  tampered <- context
+  tampered$file_groups$participant_internal_id[[1L]] <- "changed"
+  expect_error(
+    validate_metadata_relationship_context(tampered),
+    class = "llw_validation_error",
+    regexp = "fingerprint"
+  )
+})
+
+test_that("metadata focus requests resolve exact groups and record context", {
+  source <- new_metadata_source_namespace(
+    namespace_id = "source-focus",
+    label = "Focus source",
+    source_type = "test",
+    records = list(
+      participants = data.frame(
+        participant_internal_id = c("P01", "P02"),
+        participant_age = c(31, 44),
+        stringsAsFactors = FALSE
+      ),
+      variable_inventory = data.frame(
+        dataset_id = c("D1", "D1"),
+        file_group_id = c("D1:1", "D1:1"),
+        name = c("LIGHT", "MEDI"),
+        label = c("Photopic illuminance", "Melanopic EDI"),
+        stringsAsFactors = FALSE
+      )
+    )
+  )
+  bundle <- new_metadata_bundle(list(`source-focus` = source))
+  request <- new_metadata_focus_request(
+    dataset_id = "dataset-focus",
+    namespace_id = "source-focus",
+    field = "participant_internal_id",
+    path_contains = "/participants",
+    record_identity = "P02",
+    label = "Participant P02"
+  )
+  resolved <- metadata_resolve_focus_request(bundle, request)
+
+  expect_identical(resolved$state, "resolved")
+  expect_match(resolved$group_id, "^metadata_group_")
+  expect_match(resolved$node_id, "^metadata_node_")
+  expect_null(nonserializable_path(request))
+
+  variable_request <- new_metadata_focus_request(
+    dataset_id = "dataset-focus",
+    namespace_id = "source-focus",
+    field = "name",
+    path_contains = "/variable_inventory",
+    record_identity = "MEDI",
+    label = "Variable MEDI"
+  )
+  variable_resolution <- metadata_resolve_focus_request(
+    bundle,
+    variable_request
+  )
+  expect_identical(variable_resolution$state, "resolved")
+  expect_match(variable_resolution$node_id, "^metadata_node_")
+
+  missing_identity <- variable_request
+  missing_identity$record_identity <- "NOT_PRESENT"
+  missing_identity <- do.call(
+    new_metadata_focus_request,
+    missing_identity[c(
+      "dataset_id",
+      "namespace_id",
+      "field",
+      "path_contains",
+      "record_identity",
+      "group_id",
+      "label",
+      "request_id"
+    )]
+  )
+  expect_identical(
+    metadata_resolve_focus_request(bundle, missing_identity)$state,
+    "unavailable"
+  )
+
+  unavailable <- request
+  unavailable$field <- "not_a_field"
+  unavailable <- do.call(
+    new_metadata_focus_request,
+    unavailable[c(
+      "dataset_id",
+      "namespace_id",
+      "field",
+      "path_contains",
+      "record_identity",
+      "group_id",
+      "label",
+      "request_id"
+    )]
+  )
+  expect_identical(
+    metadata_resolve_focus_request(bundle, unavailable)$state,
+    "unavailable"
+  )
+})
+
+test_that("variable resolution preserves raw identity and overlay provenance", {
+  source <- new_metadata_source_namespace(
+    namespace_id = "source-variable",
+    label = "Variable source",
+    source_type = "test",
+    records = list(
+      variable_inventory = data.frame(
+        dataset_id = "D1",
+        file_group_id = "D1:1",
+        name = "MEDI",
+        label = "Source melanopic label",
+        unit = "lx",
+        calibration = "Source calibration",
+        stringsAsFactors = FALSE
+      )
+    )
+  )
+  base <- new_metadata_bundle(list(`source-variable` = source))
+  tables <- metadata_empty_overlay_tables()
+  tables$variables <- data.frame(
+    dataset_id = "D1",
+    file_group_id = "D1:1",
+    name = "MEDI",
+    label = "Overlay melanopic label",
+    unit = "melanopic lux",
+    stringsAsFactors = FALSE
+  )
+  bundle <- new_metadata_bundle(
+    base$sources,
+    new_metadata_overlay(base$source_fingerprint, tables, revision = 1L)
+  )
+  data <- data.frame(
+    Id = "D1",
+    Datetime = as.POSIXct("2026-01-01", tz = "UTC"),
+    MEDI = 10,
+    stringsAsFactors = FALSE
+  )
+  record <- new_dataset_record(
+    data,
+    "Resolver fixture",
+    new_source_manifest("test", source_timezone = "UTC"),
+    analysis_settings = list(primary_variable = "MEDI"),
+    metadata_bundle = bundle,
+    id = "dataset_resolver"
+  )
+  resolved <- metadata_resolve_variable(record, "MEDI")
+
+  expect_identical(resolved$raw_name, "MEDI")
+  expect_identical(resolved$display_label, "Overlay melanopic label")
+  expect_identical(resolved$unit, "melanopic lux")
+  expect_identical(resolved$provenance, "LightLogWeb overlay")
+  expect_identical(resolved$calibration, "Source calibration")
+  expect_identical(resolved$calibration_provenance, "Immutable source")
+  expect_s3_class(resolved$target, "llw_metadata_focus_request")
+
+  absent <- metadata_resolve_variable(record, "unknown")
+  expect_identical(absent$display_label, "unknown")
+  expect_identical(absent$unit, "unit not specified")
+  expect_identical(absent$provenance, "Not specified")
+})
+
+test_that("appended overlay resolution stays inside its exact source mapping", {
+  variable_source <- function(namespace_id, dataset_id, group_id, unit) {
+    new_metadata_source_namespace(
+      namespace_id = namespace_id,
+      label = namespace_id,
+      source_type = "test",
+      records = list(
+        variable_inventory = data.frame(
+          dataset_id = dataset_id,
+          file_group_id = group_id,
+          name = "MEDI",
+          label = paste(namespace_id, "source label"),
+          unit = unit,
+          stringsAsFactors = FALSE
+        )
+      )
+    )
+  }
+  sources <- list(
+    source_a = variable_source("source_a", "D1", "D1:1", "lx"),
+    source_b = variable_source("source_b", "D2", "D2:1", "melanopic lux")
+  )
+  base <- new_metadata_bundle(sources)
+  tables <- metadata_empty_overlay_tables()
+  tables$variables <- data.frame(
+    dataset_id = c("D1", "D2"),
+    file_group_id = c("D1:1", "D2:1"),
+    name = c("MEDI", "MEDI"),
+    label = c("Overlay A", "Overlay B"),
+    unit = c("unit A", "unit B"),
+    stringsAsFactors = FALSE
+  )
+  bundle <- new_metadata_bundle(
+    sources,
+    new_metadata_overlay(base$source_fingerprint, tables, revision = 1L)
+  )
+  record <- new_dataset_record(
+    data.frame(
+      Id = "P01",
+      Datetime = as.POSIXct("2026-01-01", tz = "UTC"),
+      a_MEDI = 1,
+      b_MEDI = 2,
+      stringsAsFactors = FALSE
+    ),
+    "Mapped overlays",
+    new_source_manifest("test", source_timezone = "UTC"),
+    analysis_settings = list(primary_variable = "a_MEDI"),
+    metadata_bundle = bundle,
+    provenance = list(
+      append_merge = list(
+        source_records = list(
+          list(
+            dataset_id = "source_a",
+            mapping = list(
+              measurement_target = "a_MEDI",
+              measurement_column = "MEDI"
+            )
+          ),
+          list(
+            dataset_id = "source_b",
+            mapping = list(
+              measurement_target = "b_MEDI",
+              measurement_column = "MEDI"
+            )
+          )
+        )
+      )
+    )
+  )
+
+  resolved_a <- metadata_resolve_variable(record, "a_MEDI")
+  resolved_b <- metadata_resolve_variable(record, "b_MEDI")
+  expect_identical(resolved_a$display_label, "Overlay A")
+  expect_identical(resolved_a$unit, "unit A")
+  expect_false(resolved_a$conflict)
+  expect_identical(resolved_b$display_label, "Overlay B")
+  expect_identical(resolved_b$unit, "unit B")
+  expect_false(resolved_b$conflict)
+})
+
 test_that("semantic metadata rows group peers without collecting siblings", {
   variable_rows <- function(dataset_id, descriptions) {
     data.frame(
@@ -305,8 +614,7 @@ test_that("metadata neighborhoods expose exact sibling properties", {
     )
   )
   value_group_id <- neighborhood$property_groups$group_id[
-    neighborhood$property_groups$field ==
-      "participant_characteristic_value"
+    neighborhood$property_groups$field == "participant_characteristic_value"
   ][[1L]]
   values <- metadata_index_group(bundle$index, value_group_id)$entries$value
   expect_identical(values, c("23", "18", "20", "30", "21"))
@@ -365,13 +673,14 @@ test_that("hierarchy keeps terms separate from concrete variable units", {
     medi_group
   )
   unit_group_id <- medi_neighborhood$property_groups$group_id[
-    medi_neighborhood$property_groups$field ==
-      "dataset_file_variables_units"
+    medi_neighborhood$property_groups$field == "dataset_file_variables_units"
   ][[1L]]
   units <- metadata_index_group(bundle$index, unit_group_id)$entries$value
 
-  expect_true("dataset_file_variables_units" %in%
-    medi_neighborhood$property_groups$field)
+  expect_true(
+    "dataset_file_variables_units" %in%
+      medi_neighborhood$property_groups$field
+  )
   expect_identical(unique(units), "lx")
   expect_false(unit_group_id %in% term_neighborhood$property_groups$group_id)
 })
@@ -419,10 +728,13 @@ test_that("hierarchy focus traverses retained parents and children", {
   ][[1L]]
   medi_context <- metadata_index_node_context(bundle$index, medi_node_id)
 
-  expect_identical(utils::tail(
-    medi_context$ancestors$node_id,
-    1L
-  ), medi_node_id)
+  expect_identical(
+    utils::tail(
+      medi_context$ancestors$node_id,
+      1L
+    ),
+    medi_node_id
+  )
   expect_true("dataset_file_variables_units" %in% medi_context$groups$field)
   expect_true(any(
     medi_context$entries$field == "dataset_file_variables_units" &
@@ -504,8 +816,7 @@ test_that("appended sources retain exact nested file-group identities", {
     medi_group
   )
   s004_19 <- which(
-    medi_neighborhood$item_nodes$record_identity ==
-      "MELIDOS_IZTECH_S004:19"
+    medi_neighborhood$item_nodes$record_identity == "MELIDOS_IZTECH_S004:19"
   )[[1L]]
   context <- metadata_index_node_context(
     bundle$index,
