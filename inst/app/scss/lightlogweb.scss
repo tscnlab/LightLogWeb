@@ -4627,6 +4627,41 @@
   margin-bottom: 0;
 }
 
+.llw-metadata-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--llw-space-6);
+  align-items: end;
+}
+
+.llw-metadata-filter-grid > * {
+  min-width: 0;
+}
+
+.llw-metadata-section-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--llw-space-2);
+  align-items: baseline;
+  font-size: 0.875rem;
+}
+
+.llw-metadata-section-feedback[hidden],
+.llw-metadata-section-slot[hidden] {
+  display: none;
+}
+
+.llw-metadata-section-retry {
+  padding: 0;
+  font-size: inherit;
+}
+
+@media (max-width: 575.98px) {
+  .llw-metadata-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .llw-app .llw-metadata-search-card,
 .llw-app .llw-metadata-search-card > .card-body {
   overflow: visible;
@@ -4887,7 +4922,7 @@
 .llw-metadata-navigation-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: var(--llw-space-2);
 }
@@ -5738,4 +5773,85 @@
   .llw-mode-control {
     display: none;
   }
+}
+.llw-overlay-controls,
+.llw-overlay-draft {
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  .llw-overlay-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-block: 0.75rem;
+  }
+
+  .shiny-input-container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .selectize-input > .item,
+  .selectize-dropdown .option {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .llw-overlay-current-values {
+    padding: var(--llw-space-3);
+    margin-block: var(--llw-space-3);
+    border: 1px solid var(--llw-border);
+    border-radius: var(--llw-radius-control);
+    background: var(--llw-bg-subtle);
+
+    h4 {
+      margin: 0 0 var(--llw-space-2);
+      font-size: 1rem;
+    }
+
+    p {
+      margin-block: var(--llw-space-1);
+    }
+
+    summary {
+      cursor: pointer;
+      margin-block: var(--llw-space-2);
+    }
+  }
+
+  .dataTables_wrapper {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  td,
+  th {
+    min-width: 8rem;
+    max-width: 24rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+.llw-overlay-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--llw-space-2);
+}
+
+.llw-overlay-close-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--llw-space-2);
+
+  p { flex-basis: 100%; margin: 0; }
 }

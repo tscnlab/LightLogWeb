@@ -25,8 +25,8 @@ metadata_empty_resources <- function() {
   )
 }
 
-metadata_overlay_table_contract <- function() {
-  list(
+metadata_overlay_table_contract <- function(version = "1.0.0") {
+  contract <- list(
     datasets = c("dataset_id", "title"),
     participants = c("participant_id", "label"),
     devices = c("device_id", "manufacturer", "model"),
@@ -46,10 +46,17 @@ metadata_overlay_table_contract <- function() {
       "unit"
     )
   )
+  if (identical(version, "2.0.0")) {
+    contract$participants <- c(contract$participants, "sex")
+    contract <- lapply(contract, function(columns) c("source_scope", columns))
+  } else if (!identical(version, "1.0.0")) {
+    abort_llw("Unsupported metadata overlay version.", type = "validation")
+  }
+  contract
 }
 
-metadata_overlay_type_contract <- function() {
-  list(
+metadata_overlay_type_contract <- function(version = "1.0.0") {
+  contract <- list(
     datasets = c(dataset_id = "character", title = "character"),
     participants = c(participant_id = "character", label = "character"),
     devices = c(
@@ -73,16 +80,28 @@ metadata_overlay_type_contract <- function() {
       unit = "character"
     )
   )
+  if (identical(version, "2.0.0")) {
+    contract$participants <- c(contract$participants, sex = "character")
+    contract <- lapply(
+      contract,
+      function(types) c(source_scope = "character", types)
+    )
+  }
+  contract
 }
 
-metadata_overlay_key_contract <- function() {
-  list(
+metadata_overlay_key_contract <- function(version = "1.0.0") {
+  contract <- list(
     datasets = "dataset_id",
     participants = "participant_id",
     devices = "device_id",
     sites = "dataset_id",
     variables = c("dataset_id", "file_group_id", "name")
   )
+  if (identical(version, "2.0.0")) {
+    contract <- lapply(contract, function(keys) c("source_scope", keys))
+  }
+  contract
 }
 
 metadata_empty_overlay_table <- function(columns) {
@@ -95,14 +114,14 @@ metadata_empty_overlay_table <- function(columns) {
   data.frame(values, stringsAsFactors = FALSE, check.names = FALSE)
 }
 
-metadata_empty_overlay_tables <- function() {
-  lapply(metadata_overlay_table_contract(), metadata_empty_overlay_table)
+metadata_empty_overlay_tables <- function(version = "1.0.0") {
+  lapply(metadata_overlay_table_contract(version), metadata_empty_overlay_table)
 }
 
-metadata_validate_overlay_table <- function(table, name) {
-  columns <- metadata_overlay_table_contract()[[name]]
-  types <- metadata_overlay_type_contract()[[name]]
-  keys <- metadata_overlay_key_contract()[[name]]
+metadata_validate_overlay_table <- function(table, name, version = "1.0.0") {
+  columns <- metadata_overlay_table_contract(version)[[name]]
+  types <- metadata_overlay_type_contract(version)[[name]]
+  keys <- metadata_overlay_key_contract(version)[[name]]
   if (!is.data.frame(table) || !identical(names(table), columns)) {
     abort_llw(
       paste0("Metadata overlay table `", name, "` is invalid."),
@@ -133,7 +152,11 @@ metadata_validate_overlay_table <- function(table, name) {
       )
     }
     if (identical(expected, "character")) {
-      table[[column]] <- trimws(enc2utf8(value))
+      table[[column]] <- if (identical(version, "2.0.0")) {
+        enc2utf8(value)
+      } else {
+        trimws(enc2utf8(value))
+      }
     } else {
       table[[column]] <- as.numeric(value)
     }
@@ -148,7 +171,12 @@ metadata_validate_overlay_table <- function(table, name) {
       )
     }
   }
-  key_values <- do.call(paste, c(table[keys], sep = "\r"))
+  key_values <- do.call(
+    paste0,
+    lapply(table[keys], function(value) {
+      paste0(nchar(value, type = "bytes"), ":", value)
+    })
+  )
   if (anyDuplicated(key_values)) {
     abort_llw(
       paste0("Metadata overlay table `", name, "` has duplicate identities."),
@@ -353,9 +381,11 @@ validate_metadata_source_namespace <- function(source) {
 
 new_metadata_overlay <- function(
   source_fingerprint,
-  tables = metadata_empty_overlay_tables(),
+  tables = NULL,
   revision = 0L,
-  unknown = list()
+  unknown = list(),
+  version = "1.0.0",
+  unresolved = list()
 ) {
   assert_scalar_string(source_fingerprint, "source_fingerprint")
   if (!grepl("^sha256:[0-9a-f]{64}$", source_fingerprint)) {
@@ -368,7 +398,9 @@ new_metadata_overlay <- function(
     !is.numeric(revision) ||
       length(revision) != 1L ||
       is.na(revision) ||
+      !is.finite(revision) ||
       revision < 0 ||
+      revision > .Machine$integer.max ||
       revision != floor(revision)
   ) {
     abort_llw(
@@ -376,7 +408,8 @@ new_metadata_overlay <- function(
       type = "validation"
     )
   }
-  contract <- metadata_overlay_table_contract()
+  contract <- metadata_overlay_table_contract(version)
+  if (is.null(tables)) tables <- metadata_empty_overlay_tables(version)
   if (!is.list(tables) || !identical(names(tables), names(contract))) {
     abort_llw(
       "Metadata overlay tables do not match the versioned contract.",
@@ -384,7 +417,7 @@ new_metadata_overlay <- function(
     )
   }
   tables <- lapply(names(contract), function(name) {
-    metadata_validate_overlay_table(tables[[name]], name)
+    metadata_validate_overlay_table(tables[[name]], name, version)
   })
   names(tables) <- names(contract)
   if (!is.list(unknown)) {
@@ -393,7 +426,7 @@ new_metadata_overlay <- function(
   overlay <- structure(
     list(
       overlay_schema = "llw-metadata-overlay",
-      overlay_version = metadata_contract_version(),
+      overlay_version = version,
       revision = as.integer(revision),
       source_fingerprint = source_fingerprint,
       tables = tables,
@@ -401,6 +434,20 @@ new_metadata_overlay <- function(
     ),
     class = c("llw_metadata_overlay", "list")
   )
+  if (identical(version, "2.0.0")) {
+    if (!is.list(unresolved)) {
+      abort_llw(
+        "Unresolved legacy overlay rows must be a list.",
+        type = "validation"
+      )
+    }
+    overlay$unresolved <- unresolved
+  } else if (length(unresolved) > 0L) {
+    abort_llw(
+      "Legacy overlays cannot carry unresolved rows.",
+      type = "validation"
+    )
+  }
   assert_serializable_value(overlay, "metadata overlay")
   overlay
 }
@@ -414,7 +461,8 @@ validate_metadata_overlay <- function(overlay, source_fingerprint) {
   }
   if (
     !identical(overlay$overlay_schema, "llw-metadata-overlay") ||
-      !identical(overlay$overlay_version, metadata_contract_version()) ||
+      (!identical(overlay$overlay_version, "1.0.0") &&
+        !identical(overlay$overlay_version, "2.0.0")) ||
       !identical(overlay$source_fingerprint, source_fingerprint)
   ) {
     abort_llw(
@@ -426,7 +474,9 @@ validate_metadata_overlay <- function(overlay, source_fingerprint) {
     source_fingerprint = overlay$source_fingerprint,
     tables = overlay$tables,
     revision = overlay$revision,
-    unknown = overlay$unknown
+    unknown = overlay$unknown,
+    version = overlay$overlay_version,
+    unresolved = overlay$unresolved %||% list()
   )
 }
 
@@ -831,7 +881,8 @@ metadata_index_add_sort_ranks <- function(
 }
 
 metadata_group_value_preview <- function(values, max_values = 3L) {
-  values[is.na(values) | !nzchar(values)] <- "not specified"
+  absent <- is.na(values) | !nzchar(values)
+  if (any(absent)) values[absent] <- "not specified"
   values <- unique(values)
   shown <- utils::head(values, max_values)
   shown <- vapply(
@@ -847,8 +898,8 @@ metadata_group_value_preview <- function(values, max_values = 3L) {
   if (remaining > 0L) paste0(preview, "; +", remaining, " more") else preview
 }
 
-metadata_index_groups <- function(entries) {
-  if (nrow(entries) == 0L) {
+metadata_index_groups <- function(entries, rows = seq_len(nrow(entries))) {
+  if (length(rows) == 0L) {
     groups <- data.frame(
       group_id = character(),
       namespace_id = character(),
@@ -887,18 +938,18 @@ metadata_index_groups <- function(entries) {
     ])
   }
 
-  group_ids <- unique(entries$group_id)
+  group_ids <- unique(entries$group_id[rows])
   positions <- split(
-    seq_len(nrow(entries)),
-    factor(entries$group_id, levels = group_ids),
+    rows,
+    factor(entries$group_id[rows], levels = group_ids),
     drop = TRUE
   )
   rows <- lapply(positions, function(position) {
-    first <- entries[position[[1L]], , drop = FALSE]
+    first <- lapply(entries, `[[`, position[[1L]])
     values <- entries$value[position]
     normalized_values <- values
-    normalized_values[is.na(normalized_values) | !nzchar(normalized_values)] <-
-      "not specified"
+    absent <- is.na(normalized_values) | !nzchar(normalized_values)
+    if (any(absent)) normalized_values[absent] <- "not specified"
     records <- entries$parent_node_id[position]
     records <- unique(records[!is.na(records) & nzchar(records)])
     if (length(records) == 0L) {
@@ -1196,6 +1247,9 @@ metadata_index_overlay <- function(overlay, buffers) {
   records <- overlay$tables
   if (metadata_value_has_content(overlay$unknown)) {
     records$unknown_fields <- overlay$unknown
+  }
+  if (metadata_value_has_content(overlay$unresolved %||% list())) {
+    records$unresolved_legacy <- overlay$unresolved
   }
   keep <- vapply(records, metadata_value_has_content, logical(1))
   records <- records[keep]
@@ -2378,6 +2432,22 @@ metadata_variable_candidate_rows <- function(record, variable) {
     }
     if (is.data.frame(overlay) && nrow(overlay) > 0L) {
       matches <- overlay$name == mapping$source_name
+      if ("source_scope" %in% names(overlay)) {
+        scopes <- unique(overlay$source_scope)
+        scope_roots <- vapply(
+          scopes,
+          function(scope) {
+            path <- tryCatch(
+              jsonlite::fromJSON(scope),
+              error = function(cnd) character()
+            )
+            if (is.character(path) && length(path) > 0L) path[[1L]] else ""
+          },
+          character(1)
+        )
+        matches <- matches &
+          overlay$source_scope %in% scopes[scope_roots == mapping$namespace_id]
+      }
       mapped_dataset_ids <- unique(c(
         metadata_nonempty_text(inventory_matches$dataset_id %||% character()),
         metadata_nonempty_text(mapping$session_source_dataset_id)

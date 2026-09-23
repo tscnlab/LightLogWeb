@@ -23,6 +23,8 @@ if (
 budgets <- list(
   interaction_design_target_p95_ms = 50,
   interaction_hard_gate_p95_ms = 100,
+  overlay_large_commit_p95_ms = 500,
+  overlay_large_single_remove_p95_ms = 150,
   retained_bundle_max_bytes = 32 * 1024^2,
   three_fixture_bundles_max_bytes = 64 * 1024^2,
   scaled_index_max_bytes = 64 * 1024^2,
@@ -31,6 +33,7 @@ budgets <- list(
   hierarchy_panel_render_max_alloc_bytes = 10 * 1024^2,
   hierarchy_dialog_render_max_alloc_bytes = 10 * 1024^2,
   focus_contents_render_max_alloc_bytes = 10 * 1024^2,
+  filter_choices_max_alloc_bytes = 10 * 1024^2,
   relationship_add_max_alloc_bytes = 64 * 1024^2,
   relationship_add_min_rows = 50000L,
   scaled_inventory_min_entries = 50000L
@@ -165,6 +168,397 @@ allocated_bytes <- function(operation, warmup = 5L) {
   sum(bytes, na.rm = TRUE)
 }
 
+benchmark_overlay_authoring <- function(records, scaled_index) {
+  measure <- function(
+    operation,
+    mutation = FALSE,
+    large_commit = FALSE,
+    large_single_remove = FALSE,
+    iterations = 60L
+  ) {
+    timing <- timing_evidence(operation, iterations = iterations, warmup = 10L)
+    bytes <- allocated_bytes(operation)
+    limit <- if (mutation) 64 * 1024^2 else 10 * 1024^2
+    timing_limit <- if (large_commit)
+      budgets$overlay_large_commit_p95_ms else if (large_single_remove)
+      budgets$overlay_large_single_remove_p95_ms else
+      budgets$interaction_hard_gate_p95_ms
+    timing$hard_gate_pass <- timing$p95_ms <= timing_limit
+    c(
+      timing,
+      list(
+        gate_class = if (large_commit)
+          "owner-approved large-inventory commit" else if (large_single_remove)
+          "owner-approved large-inventory single removal" else
+          "ordinary interaction",
+        hard_gate_p95_ms = timing_limit,
+        allocated_bytes = bytes,
+        allocation_limit = limit,
+        allocation_pass = bytes <= limit
+      )
+    )
+  }
+  one_case <- function(record, field = "sex") {
+    context <- metadata_overlay_context(record)
+    targets <- context$catalog[context$catalog$field == field, ]
+    if (nrow(targets) == 0L)
+      targets <- context$catalog[context$catalog$field == "unit", ]
+    if (identical(field, "unit")) {
+      targets <- targets[
+        !targets$variable_type %in% c("string", "boolean", "factor"),
+      ]
+      melanopic <- targets[
+        grepl("MEDI|melanopic", targets$name, ignore.case = TRUE),
+      ]
+      if (nrow(melanopic) > 0L) targets <- melanopic
+    }
+    id <- targets$target_id[[1L]]
+    batch <- metadata_overlay_preview(
+      record,
+      context,
+      id,
+      "Explicit benchmark assertion"
+    )
+    single <- metadata_overlay_preview(
+      record,
+      context,
+      id,
+      "Explicit benchmark assertion",
+      "single"
+    )
+    populated <- apply_metadata_overlay(record, context, batch)
+    update <- metadata_overlay_preview(
+      populated,
+      context,
+      id,
+      "Another assertion",
+      "single"
+    )
+    remove <- metadata_overlay_preview(
+      populated,
+      context,
+      id,
+      action = "remove",
+      scope = "single"
+    )
+    update_batch <- metadata_overlay_preview(
+      populated,
+      context,
+      id,
+      "Another assertion"
+    )
+    remove_batch <- metadata_overlay_preview(
+      populated,
+      context,
+      id,
+      action = "remove"
+    )
+    no_op <- metadata_overlay_preview(
+      populated,
+      context,
+      id,
+      "Explicit benchmark assertion"
+    )
+    updated_single <- apply_metadata_overlay(populated, context, update)
+    removed_single <- apply_metadata_overlay(populated, context, remove)
+    source_entries <- context$source_index$entries
+    source_row <- match(targets$source_path[[1L]], source_entries$path)
+    source_selection <- list(
+      group = if (!is.na(source_row))
+        metadata_index_group(
+          context$source_index,
+          source_entries$group_id[[source_row]]
+        ) else NULL
+    )
+    overlay_groups <- populated$metadata_bundle$index$groups
+    overlay_group <- overlay_groups$group_id[
+      overlay_groups$namespace_id == metadata_overlay_namespace_id() &
+        overlay_groups$resource == targets$table[[1L]] &
+        overlay_groups$field == targets$field[[1L]]
+    ][[1L]]
+    overlay_selection <- list(
+      group = metadata_index_group(
+        populated$metadata_bundle$index,
+        overlay_group
+      )
+    )
+    functions <- list(
+      contextual_effective_presentation = function()
+        metadata_overlay_presentation(
+          context,
+          populated$metadata_bundle$overlay
+        ),
+      contextual_missing_targets = function()
+        metadata_overlay_missing_targets(context),
+      contextual_source_selection = function()
+        metadata_overlay_explorer_selection(
+          context,
+          source_selection,
+          record$metadata_bundle$overlay
+        ),
+      contextual_overlay_selection = function()
+        metadata_overlay_explorer_selection(
+          context,
+          overlay_selection,
+          populated$metadata_bundle$overlay
+        ),
+      preview_single = function()
+        metadata_overlay_preview(record, context, id, "Draft", "single"),
+      preview_batch = function()
+        metadata_overlay_preview(record, context, id, "Draft"),
+      apply_single = function() apply_metadata_overlay(record, context, single),
+      apply_batch = function() apply_metadata_overlay(record, context, batch),
+      update_single_populated = function()
+        apply_metadata_overlay(populated, context, update),
+      update_batch_populated = function()
+        apply_metadata_overlay(populated, context, update_batch),
+      remove_single_populated = function()
+        apply_metadata_overlay(populated, context, remove),
+      remove_batch_populated = function()
+        apply_metadata_overlay(populated, context, remove_batch),
+      no_op_apply = function()
+        apply_metadata_overlay(populated, context, no_op),
+      undo_batch = function() undo_metadata_overlay(populated, context),
+      undo_single_update = function()
+        undo_metadata_overlay(updated_single, context),
+      undo_single_remove = function()
+        undo_metadata_overlay(removed_single, context)
+    )
+    operations <- lapply(names(functions), function(name) {
+      c(
+        list(operation = name),
+        measure(
+          functions[[name]],
+          mutation = !startsWith(name, "preview") &&
+            !startsWith(name, "contextual"),
+          large_commit = nrow(batch$targets) >= 5000L &&
+            name %in%
+              c(
+                "apply_batch",
+                "update_batch_populated",
+                "remove_batch_populated",
+                "undo_batch"
+              ),
+          large_single_remove = nrow(batch$targets) >= 5000L &&
+            identical(targets$table[[1L]], "variables") &&
+            identical(name, "remove_single_populated")
+        )
+      )
+    })
+    list(
+      dataset_id = record$id,
+      label = record$display_name,
+      edited_field = targets$field[[1L]],
+      exact_variable_name = if (identical(targets$table[[1L]], "variables"))
+        targets$name[[1L]] else NULL,
+      source_entries = nrow(context$source_index$entries),
+      target_count = nrow(batch$targets),
+      context_bytes = as.numeric(object.size(context)),
+      updated_bundle_bytes = as.numeric(object.size(populated$metadata_bundle)),
+      operations = operations
+    )
+  }
+  n <- 5000L
+  source <- new_metadata_source_namespace(
+    "overlay-stress",
+    "Deterministic synthetic overlay stress",
+    "test",
+    records = list(
+      core_metadata = list(
+        participants = data.frame(
+          participant_internal_id = paste0("P", seq_len(n)),
+          participant_sex = "Retained source value"
+        )
+      )
+    )
+  )
+  stress <- new_dataset_record(
+    data.frame(
+      Id = "P1",
+      Datetime = as.POSIXct("2026-01-01", tz = "UTC"),
+      MEDI = 1
+    ),
+    "5,000-field synthetic overlay inventory",
+    new_source_manifest("test", source_timezone = "UTC"),
+    metadata_bundle = new_metadata_bundle(list(`overlay-stress` = source)),
+    id = "dataset_overlaystress"
+  )
+  extra_records <- metadata_explorer_showcase_records()[1:2]
+  nested_source <- new_metadata_source_namespace(
+    "nested-overlay-review",
+    "Nested retained source",
+    "append_source",
+    records = list(metadata_bundle = records[[1L]]$metadata_bundle)
+  )
+  nested <- new_dataset_record(
+    dataset_raw_data(records[[1L]]),
+    "Nested source and unknown overlay benchmark",
+    new_source_manifest("test", source_timezone = "UTC"),
+    metadata_bundle = new_metadata_bundle(list(
+      `nested-overlay-review` = nested_source
+    )),
+    id = "dataset_overlaynested"
+  )
+  nested_overlay <- new_metadata_overlay(
+    nested$metadata_bundle$source_fingerprint,
+    unknown = list(
+      extension = list(
+        label = "Unknown retained field",
+        values = c("", NA_character_, "non-ASCII: ä")
+      )
+    )
+  )
+  nested$metadata_bundle <- new_metadata_bundle(
+    nested$metadata_bundle$sources,
+    nested_overlay
+  )
+  variable_source <- new_metadata_source_namespace(
+    "variable-stress",
+    "Deterministic synthetic variable stress",
+    "test",
+    records = list(
+      variable_inventory = data.frame(
+        dataset_id = paste0("D", seq_len(n)),
+        file_group_id = paste0("D", seq_len(n), ":1"),
+        name = "MEDI",
+        label = "Melanopic EDI",
+        unit = "lx",
+        type = "numeric"
+      )
+    )
+  )
+  variable_stress <- new_dataset_record(
+    data.frame(
+      Id = "D1",
+      Datetime = as.POSIXct("2026-01-01", tz = "UTC"),
+      MEDI = 1
+    ),
+    "5,000-variable-occurrence synthetic overlay inventory",
+    new_source_manifest("test", source_timezone = "UTC"),
+    metadata_bundle = new_metadata_bundle(list(
+      `variable-stress` = variable_source
+    )),
+    id = "dataset_overlayvariablestress"
+  )
+  cases <- c(
+    lapply(c(records, extra_records, list(nested, stress)), one_case),
+    lapply(
+      c(records[seq_len(4L)], list(variable_stress)),
+      one_case,
+      field = "unit"
+    )
+  )
+  context <- metadata_overlay_context(stress)
+  target <- context$catalog$target_id[context$catalog$field == "sex"][[1L]]
+  patch <- metadata_overlay_preview(
+    stress,
+    context,
+    target,
+    "Explicit stress assertion"
+  )
+  populated <- apply_metadata_overlay(stress, context, patch)
+  wide <- context
+  wide$source_index <- scaled_index
+  wide$source_index$source_fingerprint <- wide$source_fingerprint
+  indexed <- measure(
+    function()
+      metadata_overlay_patch_index(wide, populated$metadata_bundle$overlay),
+    mutation = TRUE,
+    large_commit = TRUE
+  )
+  single_patch <- metadata_overlay_preview(
+    stress,
+    context,
+    target,
+    "One explicit stress assertion",
+    scope = "single"
+  )
+  single_populated <- apply_metadata_overlay(stress, context, single_patch)
+  indexed_single <- measure(
+    function()
+      metadata_overlay_patch_index(
+        wide,
+        single_populated$metadata_bundle$overlay
+      ),
+    mutation = TRUE,
+    large_commit = TRUE
+  )
+  previous <- list(
+    overlay = populated$metadata_bundle$overlay,
+    index = metadata_overlay_patch_index(
+      wide,
+      populated$metadata_bundle$overlay
+    )
+  )
+  next_overlay <- previous$overlay
+  next_overlay$revision <- next_overlay$revision + 1L
+  next_overlay$tables$participants$sex[[1L]] <- "One updated assertion"
+  indexed_update <- measure(
+    function() metadata_overlay_patch_index(wide, next_overlay, previous),
+    mutation = TRUE
+  )
+  all_operations <- c(
+    unlist(lapply(cases, `[[`, "operations"), recursive = FALSE),
+    list(indexed, indexed_single, indexed_update)
+  )
+  list(
+    benchmarked_at = benchmarked_at,
+    budgets = list(
+      ordinary_p95_ms = budgets$interaction_hard_gate_p95_ms,
+      large_commit_p95_ms = budgets$overlay_large_commit_p95_ms,
+      large_single_remove_p95_ms = budgets$overlay_large_single_remove_p95_ms,
+      large_commit_owner_approval = "APPROVE M7 SLICE 3 LARGE-INVENTORY COMMIT BUDGET",
+      large_single_remove_owner_approval = "Owner approval, 2026-09-22: 150 ms for warm single removal in the 5,000-variable-occurrence inventory only",
+      allocation_bytes = 64 * 1024^2
+    ),
+    fixture_manifest_sha256 = digest::digest(
+      file = file.path(fixture_directory, "manifest.json"),
+      algo = "sha256"
+    ),
+    note = "Offline deterministic fixtures. Timings are local, not a concurrent-capacity guarantee. Wide index patch is an index-only test, not a dataset exceeding the 32 MiB bundle limit.",
+    cases = cases,
+    source_50000_overlay_5000_index_patch = indexed,
+    source_50000_overlay_1_index_patch = indexed_single,
+    source_50000_overlay_5000_single_update = indexed_update,
+    gates = list(
+      hard_timing_pass = all(vapply(
+        all_operations,
+        `[[`,
+        logical(1),
+        "hard_gate_pass"
+      )),
+      allocation_pass = all(vapply(
+        all_operations,
+        `[[`,
+        logical(1),
+        "allocation_pass"
+      ))
+    )
+  )
+}
+
+# Keep overlay probes independently runnable while owner feedback on the
+# isolated module is pending. Prior-slice evidence retains its own timestamp.
+if (identical(Sys.getenv("LLW_M7_OVERLAY_ONLY"), "true")) {
+  prior <- jsonlite::read_json(
+    "dev/milestone-7-metadata-benchmark.json",
+    simplifyVector = FALSE
+  )
+  prior$overlay_authoring <- benchmark_overlay_authoring(
+    review_records,
+    scaled_metadata_index(bundles[["ucr-all-light-variables"]]$index, 50000L)
+  )
+  jsonlite::write_json(
+    prior,
+    "dev/milestone-7-metadata-benchmark.json",
+    pretty = TRUE,
+    auto_unbox = TRUE,
+    digits = 8
+  )
+  print(prior$overlay_authoring)
+  quit(status = if (all(unlist(prior$overlay_authoring$gates))) 0L else 1L)
+}
+
 widest_metadata_node_id <- function(index) {
   child_counts <- sort(table(index$nodes$parent_node_id), decreasing = TRUE)
   names(child_counts)[[1L]]
@@ -180,9 +574,36 @@ render_focus_contents <- function(index, node_id, selected_group_id) {
   ))$html
 }
 
-benchmark_index <- function(index, iterations = 200L) {
+filter_choice_burst <- function(bundle, inventory) {
+  first_source <- names(bundle$sources)[[1L]]
+  generation <- 0
+  for (source in c(first_source, "all")) {
+    for (layer in c("all", "LightLogWeb overlay", "Immutable source", "all")) {
+      generation <- generation + 1
+      choices <- metadata_filter_choices(bundle, inventory, source, layer)
+      metadata_filter_visibility(choices)
+      reply <- metadata_section_reply(
+        list(
+          epoch = 1,
+          generation = generation,
+          namespace = metadata_filter_selection(source, choices$namespace),
+          layer = metadata_filter_selection(layer, choices$layer),
+          resource = "core_metadata"
+        ),
+        bundle,
+        inventory,
+        1
+      )
+      jsonlite::toJSON(reply, auto_unbox = TRUE)
+    }
+  }
+  invisible(choices)
+}
+
+benchmark_index <- function(index, filter_bundle, iterations = 200L) {
   first_namespace <- index$entries$namespace_id[[1L]]
   section_index <- metadata_section_index(index)
+  inventory <- metadata_filter_inventory(section_index)
   section_choices <- metadata_section_choices(
     section_index,
     namespace_id = first_namespace
@@ -196,6 +617,26 @@ benchmark_index <- function(index, iterations = 200L) {
   selected_group_id <- index$groups$group_id[[floor(nrow(index$groups) / 2L)]]
   widest_node_id <- widest_metadata_node_id(index)
   operations <- list(
+    filter_choice_update = function() {
+      metadata_filter_choices(filter_bundle, inventory, first_namespace)
+    },
+    filter_choice_burst = function() {
+      filter_choice_burst(filter_bundle, inventory)
+    },
+    section_guard_reply = function() {
+      metadata_section_reply(
+        list(
+          epoch = 1,
+          generation = 1,
+          namespace = "all",
+          layer = "all",
+          resource = "core_metadata"
+        ),
+        filter_bundle,
+        inventory,
+        1
+      )
+    },
     navigation = function() {
       metadata_section_choices(section_index, first_namespace)
     },
@@ -377,6 +818,13 @@ cases <- c(
   list(`tum-iztech-appended` = appended_review_bundle$index),
   list(`ucr-scaled-50000` = scaled_index)
 )
+scaled_filter_bundle <- bundles[["ucr-all-light-variables"]]
+scaled_filter_bundle$index <- scaled_index
+filter_bundles <- c(
+  bundles,
+  list(`tum-iztech-appended` = appended_review_bundle),
+  list(`ucr-scaled-50000` = scaled_filter_bundle)
+)
 iterations <- c(
   stats::setNames(rep(200L, length(bundles)), names(bundles)),
   `tum-iztech-appended` = 200L,
@@ -454,6 +902,13 @@ timings <- lapply(names(cases), function(case_id) {
   widest_contents_allocated_bytes <- allocated_bytes(function() {
     render_focus_contents(cases[[case_id]], widest_node_id, selected_group_id)
   })
+  filter_inventory <- metadata_filter_inventory(section_index)
+  filter_choices_allocated_bytes <- allocated_bytes(function() {
+    filter_choice_burst(
+      filter_bundles[[case_id]],
+      metadata_filter_inventory(section_index)
+    )
+  })
   list(
     case_id = case_id,
     entry_count = nrow(cases[[case_id]]$entries),
@@ -461,8 +916,13 @@ timings <- lapply(names(cases), function(case_id) {
     node_count = nrow(cases[[case_id]]$nodes),
     index_bytes = as.numeric(object.size(cases[[case_id]])),
     section_index_bytes = as.numeric(object.size(section_index)),
-    section_index_memory_pass = as.numeric(object.size(section_index)) <=
+    filter_inventory_bytes = as.numeric(object.size(filter_inventory)),
+    section_index_memory_pass = as.numeric(object.size(section_index)) +
+      as.numeric(object.size(filter_inventory)) <=
       budgets$section_index_max_bytes,
+    filter_choices_allocated_bytes = filter_choices_allocated_bytes,
+    filter_choices_allocation_pass = filter_choices_allocated_bytes <=
+      budgets$filter_choices_max_alloc_bytes,
     hierarchy_allocated_bytes = hierarchy_allocated_bytes,
     hierarchy_allocation_pass = hierarchy_allocated_bytes <=
       budgets$hierarchy_navigation_max_alloc_bytes,
@@ -485,7 +945,11 @@ timings <- lapply(names(cases), function(case_id) {
     widest_contents_allocated_bytes = widest_contents_allocated_bytes,
     widest_contents_allocation_pass = widest_contents_allocated_bytes <=
       budgets$focus_contents_render_max_alloc_bytes,
-    operations = benchmark_index(cases[[case_id]], iterations[[case_id]])
+    operations = benchmark_index(
+      cases[[case_id]],
+      filter_bundles[[case_id]],
+      iterations[[case_id]]
+    )
   )
 })
 
@@ -1377,13 +1841,15 @@ integration_operations <- c(
   list(relationship_add_50000)
 )
 all_interaction_operations <- c(all_operations, integration_operations)
+overlay_authoring <- benchmark_overlay_authoring(review_records, scaled_index)
 
 result <- list(
   report_schema = "llw-metadata-acceptance",
-  report_version = "2.7.0",
+  report_version = "2.10.0",
   benchmarked_at = benchmarked_at,
   baseline = "b704d24ee6eab066163bb88e7125faf19e09543d",
   budgets = budgets,
+  overlay_authoring = overlay_authoring,
   environment = list(
     r_version = R.version.string,
     platform = R.version$platform,
@@ -1416,7 +1882,8 @@ result <- list(
       logical(1),
       "hard_gate_pass"
     )) &&
-      review_route$selection$hard_gate_pass,
+      review_route$selection$hard_gate_pass &&
+      overlay_authoring$gates$hard_timing_pass,
     memory_gate_pass = all(vapply(
       bundle_memory,
       `[[`,
@@ -1426,6 +1893,12 @@ result <- list(
       memory$combined_bundle_pass &&
       memory$appended_review_bundle_pass &&
       memory$scaled_index_pass &&
+      all(vapply(
+        timings,
+        `[[`,
+        logical(1),
+        "filter_choices_allocation_pass"
+      )) &&
       all(vapply(
         timings,
         `[[`,
@@ -1463,7 +1936,8 @@ result <- list(
         "section_index_memory_pass"
       )) &&
       review_route$appended_bundle_bytes <= budgets$retained_bundle_max_bytes &&
-      relationship_add_50000$allocation_pass,
+      relationship_add_50000$allocation_pass &&
+      overlay_authoring$gates$allocation_pass,
     navigation_correction_pass = navigation_correction_contract$logical_section_pass &&
       navigation_correction_contract$focus_comparison_pass,
     repeated_crosslink_route_pass = isTRUE(
@@ -1552,7 +2026,7 @@ jsonlite::write_json(
 )
 
 if (!result$gates$hard_timing_gate_pass) {
-  stop("At least one metadata interaction exceeded the 100 ms p95 gate.")
+  stop("At least one metadata or overlay operation exceeded its p95 gate.")
 }
 if (!result$gates$memory_gate_pass) {
   stop("At least one metadata memory budget failed.")

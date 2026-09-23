@@ -34,6 +34,7 @@ Imports:
     glcdp (>= 1.0.0.9000),
     gt,
     htmltools,
+    jsonlite,
     LightLogR (>= 0.10.3),
     lubridate,
     mirai (>= 2.5.1),

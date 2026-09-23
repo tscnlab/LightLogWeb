@@ -335,6 +335,25 @@ metadata_group_location_text <- function(group) {
   )
 }
 
+# Add a current-value preview without modifying retained index/search facts.
+metadata_present_groups <- function(groups, presentation = NULL) {
+  if (is.null(presentation) || nrow(groups) == 0L) return(groups)
+  position <- match(groups$group_id, presentation$groups$group_id)
+  groups$has_override <- !is.na(position)
+  groups$value_preview[
+    groups$has_override
+  ] <- presentation$groups$value_preview[position[groups$has_override]]
+  groups
+}
+
+metadata_override_badge <- function(group) {
+  if (!isTRUE(group$has_override[[1L]])) return(NULL)
+  tags$span(
+    class = "llw-metadata-provenance llw-metadata-provenance--overlay",
+    "Includes overlay"
+  )
+}
+
 metadata_group_choice_ui <- function(group, show_source = FALSE) {
   provenance_class <- if (identical(group$layer[[1L]], "LightLogWeb overlay")) {
     "llw-metadata-provenance--overlay"
@@ -373,6 +392,7 @@ metadata_group_choice_ui <- function(group, show_source = FALSE) {
           "Source metadata"
         }
       ),
+      metadata_override_badge(group),
       if (isTRUE(show_source)) tags$span(group$source_label[[1L]])
     )
   )
@@ -473,7 +493,8 @@ metadata_property_choice_ui <- function(group) {
       tags$span(count)
     ),
     tags$code(group$field[[1L]]),
-    tags$span(class = "llw-metadata-property-option__preview", preview)
+    tags$span(class = "llw-metadata-property-option__preview", preview),
+    metadata_override_badge(group)
   )
 }
 
@@ -1086,7 +1107,7 @@ metadata_hierarchy_summary_ui <- function(group, context) {
   )
 }
 
-metadata_hierarchy_shell_ui <- function(ns) {
+metadata_hierarchy_shell_ui <- function(ns, field_actions = NULL) {
   card(
     id = ns("hierarchy_focus"),
     class = "llw-metadata-path-card llw-metadata-navigation-card",
@@ -1099,7 +1120,7 @@ metadata_hierarchy_shell_ui <- function(ns) {
         tags$button(
           id = ns("explorer_help_button"),
           type = "button",
-          class = "btn btn-outline-secondary llw-icon-button",
+          class = "btn btn-link llw-icon-button",
           `aria-label` = "How to use the metadata explorer",
           icon("circle-question")
         ),
@@ -1132,6 +1153,7 @@ metadata_hierarchy_shell_ui <- function(ns) {
           disabled = TRUE,
           class = "btn-outline-secondary"
         ),
+        field_actions,
         uiOutput(ns("item_count"), class = "llw-metadata-item-count")
       ),
       uiOutput(ns("item_properties"))
@@ -1192,16 +1214,23 @@ metadata_hierarchy_panel_ui <- function(
 metadata_navigation_dependency <- function() {
   htmltools::htmlDependency(
     name = "llw-metadata-navigation",
-    version = "1.0.0",
+    version = "1.2.5",
     src = c(file = lightlogweb_asset_dir()),
     script = "js/metadata-navigation.js",
     all_files = FALSE
   )
 }
-metadata_group_values_ui <- function(group) {
+metadata_group_values_ui <- function(group, presentation = NULL) {
   entries <- group$entries
   values <- entries$value
   values[is.na(values) | !nzchar(values)] <- "not specified"
+  source_values <- values
+  position <- match(entries$path, presentation$entries$path)
+  overridden <- !is.na(position)
+  values[overridden] <- presentation$entries$value[position[overridden]]
+  types <- entries$value_type
+  types[overridden] <- presentation$entries$value_type[position[overridden]]
+  has_overrides <- any(overridden)
   semantic_items <- entries$group_context
   semantic_items[is.na(semantic_items)] <- ""
   show_semantic_item <- any(nzchar(semantic_items))
@@ -1231,7 +1260,19 @@ metadata_group_values_ui <- function(group) {
       cells,
       list(
         tags$td(values[[index]]),
-        tags$td(entries$value_type[[index]])
+        if (has_overrides)
+          tags$td(
+            tags$span(
+              class = paste(
+                "llw-metadata-provenance",
+                if (overridden[[index]]) "llw-metadata-provenance--overlay" else
+                  "llw-metadata-provenance--source"
+              ),
+              if (overridden[[index]]) "Overlay" else "Source"
+            )
+          ),
+        if (has_overrides) tags$td(source_values[[index]]),
+        tags$td(types[[index]])
       )
     )
     do.call(tags$tr, cells)
@@ -1246,7 +1287,9 @@ metadata_group_values_ui <- function(group) {
   headings <- c(
     headings,
     list(
-      tags$th(scope = "col", "Value"),
+      tags$th(scope = "col", if (has_overrides) "Current value" else "Value"),
+      if (has_overrides) tags$th(scope = "col", "Value from"),
+      if (has_overrides) tags$th(scope = "col", "Original source value"),
       tags$th(scope = "col", "Type")
     )
   )
@@ -1257,10 +1300,9 @@ metadata_group_values_ui <- function(group) {
         class = "table table-hover table-sm align-middle mb-0",
         tags$caption(
           class = "visually-hidden",
-          paste(
-            "All retained record identities and values for the selected",
-            "metadata field"
-          )
+          if (has_overrides)
+            "Record identities, current values and retained source values for the selected metadata field" else
+            "Retained metadata identities and values for the selected metadata field"
         ),
         tags$thead(do.call(tags$tr, headings)),
         tags$tbody(rows)
@@ -1340,7 +1382,8 @@ metadata_display_source_fingerprint <- function(
 metadata_group_detail_ui <- function(
   group,
   bundle,
-  show_source = FALSE
+  show_source = FALSE,
+  presentation = NULL
 ) {
   if (is.null(group) || !inherits(group, "llw_metadata_group")) {
     return(llw_status_callout(
@@ -1391,7 +1434,16 @@ metadata_group_detail_ui <- function(
           "duplicate search results. No values are reconciled or inferred."
         )
       ),
-      metadata_group_values_ui(group)
+      if (!is_overlay && any(group$entries$path %in% presentation$entries$path))
+        tags$p(
+          class = "llw-secondary",
+          paste(
+            "Current values include explicitly committed overlay assertions at revision",
+            presentation$revision,
+            ". Original source values are retained unchanged alongside them."
+          )
+        ),
+      metadata_group_values_ui(group, presentation)
     ),
     tags$h4(class = "llw-metadata-field-description", "About this field"),
     tags$dl(
@@ -1399,7 +1451,7 @@ metadata_group_detail_ui <- function(
       tags$div(tags$dt("Field"), tags$dd(tags$code(row$field[[1L]]))),
       if (isTRUE(show_source))
         tags$div(
-          tags$dt("Source dataset"),
+          tags$dt(if (is_overlay) "Metadata layer" else "Source dataset"),
           tags$dd(row$source_label[[1L]])
         ),
       tags$div(
@@ -2075,7 +2127,11 @@ metadata_result_summary_message <- function(bundle, result) {
   paste(format(result$total, big.mark = ","), "matching fields.")
 }
 
-metadata_source_overlay_ui <- function(bundle) {
+metadata_source_overlay_ui <- function(
+  bundle,
+  editable = FALSE,
+  overlay_actions = NULL
+) {
   source_count <- length(bundle$sources)
   overlay_rows <- sum(vapply(
     bundle$overlay$tables,
@@ -2117,127 +2173,218 @@ metadata_source_overlay_ui <- function(bundle) {
       ),
       tags$p(
         class = "llw-secondary mb-0",
-        paste(
-          "The versioned overlay is separate from the source. Editing and",
-          "export are intentionally unavailable in this read-only slice."
-        )
-      )
+        if (editable)
+          "The versioned overlay is separate from the source. Edit selected field updates a supported selection. Add missing metadata offers approved fields without a selectable source field, when imported identities are available. Source facts stay unchanged." else
+          paste(
+            "The versioned overlay is separate from the source.",
+            "Editing is unavailable in this read-only view."
+          )
+      ),
+      overlay_actions
     )
   )
 }
 
-metadata_filter_grid_ui <- function(
+metadata_filter_selection <- function(value, choices) {
+  if (
+    is.character(value) &&
+      length(value) == 1L &&
+      !is.na(value) &&
+      value %in% unname(choices)
+  )
+    value else unname(choices[[1L]])
+}
+
+metadata_filter_choices <- function(
   bundle,
-  ns,
-  selected_namespace = "all",
-  selected_layer = "all",
-  section_choices = NULL,
-  selected_section = "all",
-  selected_sort = "path"
+  section_index = NULL,
+  namespace_id = "all",
+  layer = "all"
 ) {
-  if (!is.function(ns)) {
-    abort_llw("`ns` must be a namespace function.", type = "validation")
-  }
-  controls <- list()
-  if (!is.null(bundle)) {
-    bundle <- validate_metadata_bundle(bundle)
-  }
-  if (!is.null(bundle) && length(bundle$sources) > 1L) {
-    source_choices <- metadata_source_choices(bundle)
-    if (!selected_namespace %in% unname(source_choices)) {
-      selected_namespace <- "all"
-    }
-    controls <- c(
-      controls,
-      list(selectInput(
-        ns("namespace"),
-        "Source dataset",
-        choices = source_choices,
-        selected = selected_namespace,
-        selectize = FALSE,
-        width = "100%"
-      ))
-    )
-  }
-  if (!is.null(bundle)) {
-    layer_choices <- metadata_layer_choices(bundle)
-    if (length(layer_choices) > 1L) {
-      if (!selected_layer %in% unname(layer_choices)) {
-        selected_layer <- "all"
-      }
-      controls <- c(
-        controls,
-        list(selectInput(
-          ns("layer"),
-          "Metadata layer",
-          choices = layer_choices,
-          selected = selected_layer,
-          selectize = FALSE,
-          width = "100%"
-        ))
-      )
-    }
-  }
-  if (is.null(section_choices)) {
-    section_choices <- if (is.null(bundle)) {
-      c("All sections" = "all")
-    } else {
-      metadata_section_choices(
-        metadata_section_index(bundle$index),
-        namespace_id = selected_namespace,
-        layer = selected_layer
-      )
-    }
-  }
-  if (metadata_section_filter_visible(section_choices)) {
-    if (!selected_section %in% unname(section_choices)) {
-      selected_section <- "all"
-    }
-    controls <- c(
-      controls,
-      list(selectInput(
-        ns("resource"),
-        "Section",
-        choices = section_choices,
-        selected = selected_section,
-        selectize = FALSE,
-        width = "100%"
-      ))
-    )
-  }
+  source_choices <- c("All source datasets" = "all")
+  layer_choices <- c("All metadata" = "all")
+  section_choices <- c("All sections" = "all")
   sort_choices <- c(
     "Metadata location" = "path",
     "Field name" = "field",
     "Value" = "value"
   )
-  if (!is.null(bundle) && length(bundle$sources) > 1L) {
-    sort_choices <- c(sort_choices, "Source dataset" = "source")
+  if (!is.null(bundle)) {
+    if (length(bundle$sources) > 1L) {
+      source_choices <- metadata_source_choices(bundle)
+      sort_choices <- c(sort_choices, "Source dataset" = "source")
+    }
+    layer_choices <- metadata_layer_choices(bundle)
+    if (is.null(section_index)) {
+      section_index <- metadata_section_index(bundle$index)
+    }
+    section_choices <- metadata_section_choices(
+      section_index,
+      namespace_id = metadata_filter_selection(namespace_id, source_choices),
+      layer = metadata_filter_selection(layer, layer_choices)
+    )
   }
-  if (!selected_sort %in% unname(sort_choices)) selected_sort <- "path"
-  controls <- c(
-    controls,
-    list(selectInput(
+  list(
+    namespace = source_choices,
+    layer = layer_choices,
+    resource = section_choices,
+    sort_by = sort_choices
+  )
+}
+
+metadata_filter_visibility <- function(choices) {
+  list(
+    namespace = length(choices$namespace) > 1L,
+    layer = length(choices$layer) > 1L,
+    resource = metadata_section_filter_visible(choices$resource)
+  )
+}
+
+metadata_filter_inventory <- function(section_index) {
+  if (is.null(section_index)) return(NULL)
+  unique(section_index[,
+    c("namespace_id", "layer", "section_id", "section_label"),
+    drop = FALSE
+  ])
+}
+
+metadata_section_request_valid <- function(request) {
+  whole_number <- function(value) {
+    is.numeric(value) &&
+      length(value) == 1L &&
+      !is.na(value) &&
+      is.finite(value) &&
+      value >= 0 &&
+      value <= 2^53 - 1 &&
+      value == floor(value)
+  }
+  scalar_text <- function(value) {
+    is.character(value) &&
+      length(value) == 1L &&
+      !is.na(value) &&
+      nchar(value, type = "bytes") <= 4096L
+  }
+  is.list(request) &&
+    whole_number(request$epoch) &&
+    whole_number(request$generation) &&
+    request$generation > 0 &&
+    all(vapply(
+      request[c("namespace", "layer", "resource")],
+      scalar_text,
+      TRUE
+    )) &&
+    all(c("namespace", "layer", "resource") %in% names(request))
+}
+
+metadata_section_reply <- function(request, bundle, section_index, epoch) {
+  if (!metadata_section_request_valid(request) || request$epoch != epoch) {
+    return(NULL)
+  }
+  choices <- metadata_filter_choices(
+    bundle,
+    section_index,
+    request$namespace,
+    request$layer
+  )
+  if (
+    !request$namespace %in% unname(choices$namespace) ||
+      !request$layer %in% unname(choices$layer)
+  )
+    return(NULL)
+  visible <- metadata_section_filter_visible(choices$resource)
+  list(
+    kind = "choices",
+    epoch = epoch,
+    generation = request$generation,
+    namespace = request$namespace,
+    layer = request$layer,
+    choices = lapply(seq_along(choices$resource), function(i) {
+      list(
+        value = unname(choices$resource[[i]]),
+        label = names(choices$resource)[[i]]
+      )
+    }),
+    selected = if (visible) {
+      metadata_filter_selection(request$resource, choices$resource)
+    } else "all",
+    visible = visible
+  )
+}
+
+metadata_filter_grid_ui <- function(ns) {
+  if (!is.function(ns)) {
+    abort_llw("`ns` must be a namespace function.", type = "validation")
+  }
+  # Keep native inputs mounted. Recreating this row in response to its own
+  # selections can turn delayed input-binding echoes into a feedback loop.
+  choices <- metadata_filter_choices(NULL)
+  optional <- function(id, label) {
+    conditionalPanel(
+      paste0("output.filter_visibility && output.filter_visibility.", id),
+      ns = ns,
+      selectInput(
+        ns(id),
+        label,
+        choices = choices[[id]],
+        selected = "all",
+        selectize = FALSE,
+        width = "100%"
+      )
+    )
+  }
+  tags$div(
+    id = ns("filter_grid"),
+    class = "llw-metadata-filter-grid",
+    `data-section-request` = ns("section_request"),
+    `data-section-input` = ns("resource"),
+    `data-section-source` = ns("namespace"),
+    `data-section-layer` = ns("layer"),
+    optional("namespace", "Source dataset"),
+    optional("layer", "Metadata layer"),
+    tags$div(
+      class = "llw-metadata-section-slot",
+      tagAppendAttributes(
+        selectInput(
+          ns("resource"),
+          "Section",
+          choices = choices$resource,
+          selected = "all",
+          selectize = FALSE,
+          width = "100%"
+        ),
+        .cssSelector = "select",
+        disabled = "disabled",
+        `aria-busy` = "true",
+        `aria-describedby` = ns("section_status")
+      ),
+      tags$div(
+        class = "llw-metadata-section-feedback",
+        tags$span(
+          id = ns("section_status"),
+          class = "llw-metadata-section-status",
+          role = "status",
+          `aria-live` = "polite",
+          "Updating sections..."
+        ),
+        tags$button(
+          type = "button",
+          class = "btn btn-link llw-metadata-section-retry",
+          "Retry sections"
+        )
+      )
+    ),
+    selectInput(
       ns("sort_by"),
       "Sort results by",
-      choices = sort_choices,
-      selected = selected_sort,
+      choices = choices$sort_by,
+      selected = "path",
       selectize = FALSE,
       width = "100%"
-    ))
-  )
-  do.call(
-    layout_columns,
-    c(
-      list(
-        col_widths = rep(12 / length(controls), length(controls)),
-        fill = FALSE
-      ),
-      controls
     )
   )
 }
 
-metadata_explorer_ui <- function(id) {
+metadata_explorer_ui <- function(id, field_actions = NULL) {
   ns <- NS(id)
   tags$section(
     metadata_navigation_dependency(),
@@ -2266,7 +2413,7 @@ metadata_explorer_ui <- function(id) {
           )
         )
       ),
-      uiOutput(ns("filter_grid")),
+      metadata_filter_grid_ui(ns),
       checkboxInput(
         ns("descending"),
         "Reverse sort order",
@@ -2278,7 +2425,10 @@ metadata_explorer_ui <- function(id) {
         uiOutput(ns("result_list"))
       )
     ),
-    uiOutput(ns("hierarchy_shell")),
+    # Authoring controls stay mounted for focus return and remain available
+    # when the selected dataset has no retained metadata fields yet.
+    if (is.null(field_actions)) uiOutput(ns("hierarchy_shell")) else
+      metadata_hierarchy_shell_ui(ns, field_actions),
     uiOutput(ns("entry_detail")),
     tags$div(
       class = "llw-metadata-explorer__heading",
@@ -2295,13 +2445,24 @@ metadata_explorer_ui <- function(id) {
   )
 }
 
-metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
+metadata_explorer_server <- function(
+  id,
+  dataset,
+  focus_request = NULL,
+  editable = FALSE,
+  presentation = NULL,
+  overlay_actions = NULL
+) {
   if (!shiny::is.reactive(dataset)) {
     abort_llw("`dataset` must be a reactive input.", type = "validation")
   }
   if (is.null(focus_request)) focus_request <- reactive(NULL)
   if (!shiny::is.reactive(focus_request)) {
     abort_llw("`focus_request` must be a reactive input.", type = "validation")
+  }
+  if (is.null(presentation)) presentation <- reactive(NULL)
+  if (!shiny::is.reactive(presentation)) {
+    abort_llw("`presentation` must be a reactive input.", type = "validation")
   }
 
   moduleServer(id, function(input, output, session) {
@@ -2321,56 +2482,131 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
       value$index
     })
 
-    selected_namespace <- reactive({
-      value <- bundle()
-      if (is.null(value) || length(value$sources) <= 1L) return("all")
-      choices <- unname(metadata_source_choices(value))
-      selected <- input$namespace %||% "all"
-      if (selected %in% choices) selected else "all"
-    })
-
-    selected_layer <- reactive({
-      value <- bundle()
-      if (is.null(value)) return("all")
-      choices <- unname(metadata_layer_choices(value))
-      selected <- input$layer %||% "all"
-      if (selected %in% choices) selected else "all"
-    })
-
     section_index <- reactive({
       value <- index()
       if (is.null(value)) return(NULL)
       metadata_section_index(value)
     })
 
-    section_choices <- reactive({
-      value <- section_index()
-      if (is.null(value)) return(c("All sections" = "all"))
-      metadata_section_choices(
-        value,
-        namespace_id = selected_namespace(),
-        layer = selected_layer()
+    filter_inventory <- reactive(metadata_filter_inventory(section_index()))
+
+    filter_choices <- reactive({
+      metadata_filter_choices(
+        bundle(),
+        filter_inventory(),
+        namespace_id = input$namespace,
+        layer = input$layer
       )
     })
+
+    selected_namespace <- reactive({
+      metadata_filter_selection(input$namespace, filter_choices()$namespace)
+    })
+
+    selected_layer <- reactive({
+      metadata_filter_selection(input$layer, filter_choices()$layer)
+    })
+
+    section_choices <- reactive(filter_choices()$resource)
 
     selected_section <- reactive({
       choices <- section_choices()
       if (!metadata_section_filter_visible(choices)) return("all")
-      selected <- input$resource %||% "all"
-      if (selected %in% unname(choices)) selected else "all"
+      metadata_filter_selection(input$resource, choices)
     })
 
-    output$filter_grid <- renderUI({
-      metadata_filter_grid_ui(
-        bundle(),
-        session$ns,
-        selected_namespace = selected_namespace(),
-        selected_layer = selected_layer(),
-        section_choices = section_choices(),
-        selected_section = isolate(selected_section()),
-        selected_sort = isolate(input$sort_by %||% "path")
-      )
+    output$filter_visibility <- reactive({
+      metadata_filter_visibility(filter_choices())
     })
+    outputOptions(output, "filter_visibility", suspendWhenHidden = FALSE)
+
+    previous_filter_choices <- list()
+    previous_filter_identity <- NULL
+    previous_section_revision <- NULL
+    section_epoch <- reactiveVal(0)
+    latest_section_generation <- 0
+    refresh_section <- function(reset = FALSE, selected = NULL) {
+      epoch <- isolate(section_epoch()) + 1
+      section_epoch(epoch)
+      latest_section_generation <<- 0
+      session$sendCustomMessage(
+        "llw-metadata-section",
+        list(
+          kind = "context",
+          target = session$ns("filter_grid"),
+          epoch = epoch,
+          reset = reset,
+          selected = selected
+        )
+      )
+    }
+    observe({
+      choices <- filter_choices()
+      identity <- list(
+        id = record()$id,
+        source = bundle()$source_fingerprint
+      )
+      reset <- !identical(identity, previous_filter_identity)
+      previous_filter_identity <<- identity
+      for (id in setdiff(names(choices), "resource")) {
+        changed <- !identical(choices[[id]], previous_filter_choices[[id]])
+        reset_selection <- reset && !identical(id, "sort_by")
+        if (!changed && !reset_selection) next
+        selected <- if (reset_selection) "all" else
+          metadata_filter_selection(isolate(input[[id]]), choices[[id]])
+        updateSelectInput(
+          session,
+          id,
+          choices = if (changed) choices[[id]] else NULL,
+          selected = selected
+        )
+        previous_filter_choices[[id]] <<- choices[[id]]
+      }
+      revision <- bundle()$overlay$revision
+      if (reset || !identical(revision, previous_section_revision)) {
+        previous_section_revision <<- revision
+        refresh_section(reset = reset)
+      }
+    })
+
+    observeEvent(
+      input$section_request,
+      {
+        request <- input$section_request
+        if (!metadata_section_request_valid(request)) return()
+        epoch <- section_epoch()
+        if (request$epoch != epoch) {
+          session$sendCustomMessage(
+            "llw-metadata-section",
+            list(
+              kind = "context",
+              target = session$ns("filter_grid"),
+              epoch = epoch,
+              reset = FALSE
+            )
+          )
+          return()
+        }
+        if (request$generation <= latest_section_generation) return()
+        latest_section_generation <<- request$generation
+        reply <- metadata_section_reply(
+          request,
+          bundle(),
+          filter_inventory(),
+          epoch
+        )
+        if (is.null(reply)) {
+          reply <- list(
+            kind = "error",
+            epoch = epoch,
+            generation = request$generation
+          )
+        }
+        reply$target <- session$ns("filter_grid")
+        session$sendCustomMessage("llw-metadata-section", reply)
+      },
+      ignoreInit = FALSE
+    )
 
     observeEvent(
       input$clear_query,
@@ -2380,13 +2616,23 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
       ignoreInit = TRUE
     )
 
+    previous_record_source <- NULL
+    previous_overlay_revision <- NULL
     observeEvent(
       record(),
       {
+        current <- record()
+        identity <- list(
+          id = current$id,
+          source = current$metadata_bundle$source_fingerprint
+        )
+        overlay_revision <- current$metadata_bundle$overlay$revision
+        overlay_change <- identical(identity, previous_record_source) &&
+          !identical(overlay_revision, previous_overlay_revision)
+        previous_record_source <<- identity
+        previous_overlay_revision <<- overlay_revision
+        if (overlay_change) return(invisible(NULL))
         updateTextInput(session, "query", value = "")
-        updateSelectInput(session, "namespace", selected = "all")
-        updateSelectInput(session, "layer", selected = "all")
-        updateSelectInput(session, "resource", selected = "all")
         record_selection_revision(record_selection_revision() + 1L)
         group_input_revision(-1L)
         active_group_id(NULL)
@@ -2395,7 +2641,7 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
         requested_group_synced(FALSE)
         external_focus_status(NULL)
       },
-      ignoreInit = TRUE
+      ignoreInit = FALSE
     )
 
     query_result <- reactive({
@@ -2413,7 +2659,10 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
         namespace_id = selected_namespace(),
         section_id = selected_section(),
         layer = selected_layer(),
-        sort_by = input$sort_by %||% "path",
+        sort_by = metadata_filter_selection(
+          input$sort_by,
+          filter_choices()$sort_by
+        ),
         descending = isTRUE(input$descending),
         limit = 40L
       )
@@ -2441,7 +2690,11 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
     output$layer_summary <- renderUI({
       value <- bundle()
       if (is.null(value)) return(NULL)
-      metadata_source_overlay_ui(value)
+      metadata_source_overlay_ui(
+        value,
+        editable = editable,
+        overlay_actions = overlay_actions
+      )
     })
 
     active_group_id <- reactiveVal(NULL)
@@ -2501,7 +2754,7 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
         ""
       }
       metadata_result_list_ui(
-        result$rows,
+        metadata_present_groups(result$rows, presentation()),
         input_id = session$ns("group_id"),
         selected = current,
         show_source = length(value$sources) > 1L
@@ -2667,9 +2920,25 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
       invisible(TRUE)
     }
 
+    previous_search_selection <- NULL
     observeEvent(
       search_group_id(),
       {
+        selection_key <- list(
+          record_selection_revision(),
+          input$group_id,
+          input$query,
+          selected_namespace(),
+          selected_layer(),
+          selected_section()
+        )
+        if (
+          identical(selection_key, previous_search_selection) &&
+            isTRUE(isolate(active_group_id()) %in% index()$groups$group_id)
+        ) {
+          return(invisible(NULL))
+        }
+        previous_search_selection <<- selection_key
         requested <- requested_group_id()
         if (
           !is.null(requested) &&
@@ -2775,14 +3044,20 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
         updateSelectInput(
           session,
           "namespace",
-          selected = row$namespace_id[[1L]]
+          selected = metadata_filter_selection(
+            row$namespace_id[[1L]],
+            filter_choices()$namespace
+          )
         )
-        updateSelectInput(session, "layer", selected = row$layer[[1L]])
         updateSelectInput(
           session,
-          "resource",
-          selected = metadata_group_section_id(row)
+          "layer",
+          selected = metadata_filter_selection(
+            row$layer[[1L]],
+            filter_choices()$layer
+          )
         )
+        refresh_section(selected = metadata_group_section_id(row))
         session$onFlushed(
           function() {
             updateRadioButtons(
@@ -2972,6 +3247,13 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
     })
 
     output$hierarchy_content <- renderUI({
+      value <- index()
+      if (is.null(value) || nrow(value$groups) == 0L) {
+        return(tags$p(
+          class = "llw-secondary mb-0",
+          "No retained metadata fields to explore yet."
+        ))
+      }
       metadata_hierarchy_panel_ui(
         selected_group(),
         hierarchy_context(),
@@ -2993,8 +3275,14 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
     output$item_properties <- renderUI({
       group <- selected_group()
       if (is.null(group)) return(NULL)
+      neighborhood <- hierarchy_neighborhood()
+      if (!is.null(neighborhood))
+        neighborhood$property_groups <- metadata_present_groups(
+          neighborhood$property_groups,
+          presentation()
+        )
       metadata_item_properties_ui(
-        hierarchy_neighborhood(),
+        neighborhood,
         session$ns("neighborhood_group_id"),
         group$group$group_id[[1L]],
         children = hierarchy_navigation_nodes(),
@@ -3004,7 +3292,12 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
         show_areas = identical(focused_node_id(), "metadata_areas")
       )
     }) |>
-      shiny::bindEvent(index(), focused_node_id(), ignoreNULL = FALSE)
+      shiny::bindEvent(
+        index(),
+        focused_node_id(),
+        presentation(),
+        ignoreNULL = FALSE
+      )
 
     observe({
       selected <- active_group_id()
@@ -3037,7 +3330,8 @@ metadata_explorer_server <- function(id, dataset, focus_request = NULL) {
       metadata_group_detail_ui(
         selected_group(),
         value,
-        show_source = length(value$sources) > 1L
+        show_source = length(value$sources) > 1L,
+        presentation = presentation()
       )
     })
 

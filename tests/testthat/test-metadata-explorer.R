@@ -113,6 +113,15 @@ test_that("one metadata explorer contains path, parent action, help, and content
   expect_match(shell, "One level up", fixed = TRUE)
   expect_match(shell, "disabled", fixed = TRUE)
   expect_match(shell, "metadata-explorer_help_button", fixed = TRUE)
+  help_button <- regmatches(
+    shell,
+    regexpr('<button[^>]*id="metadata-explorer_help_button"[^>]*>', shell)
+  )
+  expect_match(
+    help_button,
+    'class="btn btn-link llw-icon-button"',
+    fixed = TRUE
+  )
   expect_match(shell, "How to use the metadata explorer", fixed = TRUE)
   expect_match(shell, "bslib-popover", fixed = TRUE)
   expect_match(shell, "llw-metadata-help-popup", fixed = TRUE)
@@ -443,7 +452,7 @@ test_that("visible exploration separates entering branches from choosing fields"
   )
 })
 
-test_that("filter grid contains only controls relevant to the record", {
+test_that("filter controls stay mounted with only relevant controls visible", {
   single <- m7_fixture("tum-medi-only")$metadata_snapshot$bundle
   one_section <- new_metadata_bundle_from_factual(
     factual_metadata = list(study_title = "One retained summary"),
@@ -455,24 +464,16 @@ test_that("filter grid contains only controls relevant to the record", {
     m7_fixture_directory(),
     include_absent = FALSE
   )[["dataset_m7appendedreview"]]$metadata_bundle
-  single_html <- htmltools::renderTags(metadata_filter_grid_ui(
-    single,
-    NS("metadata")
-  ))$html
-  appended_html <- htmltools::renderTags(metadata_filter_grid_ui(
-    appended,
-    NS("metadata")
-  ))$html
-  one_section_html <- htmltools::renderTags(metadata_filter_grid_ui(
-    one_section,
-    NS("metadata")
-  ))$html
-  grid_item_count <- function(html) {
-    length(regmatches(
-      html,
-      gregexpr("bslib-grid-item", html, fixed = TRUE)
-    )[[1L]])
-  }
+  grid_html <- htmltools::renderTags(metadata_filter_grid_ui(NS(
+    "metadata"
+  )))$html
+  single_visible <- metadata_filter_visibility(metadata_filter_choices(single))
+  appended_visible <- metadata_filter_visibility(metadata_filter_choices(
+    appended
+  ))
+  one_section_visible <- metadata_filter_visibility(metadata_filter_choices(
+    one_section
+  ))
   stylesheet <- system.file(
     "app",
     "scss",
@@ -482,19 +483,39 @@ test_that("filter grid contains only controls relevant to the record", {
   )
   scss <- paste(readLines(stylesheet, warn = FALSE), collapse = "\n")
 
-  expect_match(single_html, "Section", fixed = TRUE)
-  expect_match(single_html, "Sort results by", fixed = TRUE)
-  expect_false(grepl("Source dataset", single_html, fixed = TRUE))
-  expect_false(grepl("Metadata layer", single_html, fixed = TRUE))
-  expect_identical(grid_item_count(single_html), 2L)
-  expect_match(appended_html, "Source dataset", fixed = TRUE)
-  expect_match(appended_html, "Metadata layer", fixed = TRUE)
-  expect_match(appended_html, "Section", fixed = TRUE)
-  expect_match(appended_html, "Sort results by", fixed = TRUE)
-  expect_identical(grid_item_count(appended_html), 4L)
-  expect_false(grepl("Section", one_section_html, fixed = TRUE))
-  expect_match(one_section_html, "Sort results by", fixed = TRUE)
-  expect_identical(grid_item_count(one_section_html), 1L)
+  expect_identical(
+    single_visible,
+    list(namespace = FALSE, layer = FALSE, resource = TRUE)
+  )
+  expect_identical(
+    appended_visible,
+    list(namespace = TRUE, layer = TRUE, resource = TRUE)
+  )
+  expect_identical(
+    one_section_visible,
+    list(namespace = FALSE, layer = FALSE, resource = FALSE)
+  )
+  for (id in c("namespace", "layer", "resource", "sort_by")) {
+    expect_match(grid_html, paste0('id="metadata-', id, '"'), fixed = TRUE)
+  }
+  expect_match(grid_html, 'data-ns-prefix="metadata-"', fixed = TRUE)
+  expect_match(
+    grid_html,
+    'data-section-request="metadata-section_request"',
+    fixed = TRUE
+  )
+  expect_match(grid_html, "Updating sections...", fixed = TRUE)
+  expect_match(grid_html, "disabled=", fixed = TRUE)
+  expect_false(grepl("shiny-html-output", grid_html, fixed = TRUE))
+  # Shiny controls conditional visibility itself; an inline display:none would
+  # override its shown class and leave valid filters inaccessible.
+  expect_false(grepl("display: none", grid_html, fixed = TRUE))
+  expect_match(grid_html, "llw-metadata-filter-grid", fixed = TRUE)
+  expect_match(
+    scss,
+    "grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));",
+    fixed = TRUE
+  )
   expect_false(grepl("llw-metadata-optional-filter", scss, fixed = TRUE))
   expect_false(grepl("llw-metadata-sort-filter", scss, fixed = TRUE))
   expect_false(grepl("var(--llw-space-5)", scss, fixed = TRUE))
@@ -503,6 +524,561 @@ test_that("filter grid contains only controls relevant to the record", {
     "grid-template-columns: 1.1rem minmax(0, 1fr);",
     fixed = TRUE
   )
+})
+
+test_that("filter selection normalization rejects invalid browser values", {
+  choices <- c("All metadata" = "all", "Source metadata" = "Immutable source")
+  for (invalid in list(
+    NULL,
+    character(),
+    NA_character_,
+    c("all", "x"),
+    1,
+    "stale"
+  )) {
+    expect_identical(metadata_filter_selection(invalid, choices), "all")
+  }
+  expect_identical(
+    metadata_filter_selection("Immutable source", choices),
+    "Immutable source"
+  )
+  expect_identical(metadata_filter_choices(NULL)$sort_by[[1L]], "path")
+})
+
+test_that("section replies validate requests and retain only valid current choices", {
+  bundle <- m7_fixture("tum-medi-only")$metadata_snapshot$bundle
+  index <- metadata_section_index(bundle$index)
+  inventory <- metadata_filter_inventory(index)
+  expect_lt(nrow(inventory), nrow(index))
+  expect_identical(
+    metadata_filter_choices(bundle, inventory),
+    metadata_filter_choices(bundle, index)
+  )
+  request <- list(
+    epoch = 1,
+    generation = 3,
+    namespace = "all",
+    layer = "all",
+    resource = "core_metadata"
+  )
+  expect_true(metadata_section_request_valid(request))
+  reply <- metadata_section_reply(request, bundle, index, 1)
+  expect_identical(reply$selected, "core_metadata")
+  expect_true(reply$visible)
+  expect_identical(reply$generation, 3)
+  expect_identical(reply$epoch, 1)
+  expect_identical(reply, metadata_section_reply(request, bundle, inventory, 1))
+  expect_identical(
+    reply$choices[[1L]],
+    list(value = "all", label = "All sections")
+  )
+  expect_null(metadata_section_reply(request, bundle, index, 2))
+  for (key in c("epoch", "generation")) {
+    for (value in list(NULL, NA_real_, Inf, -1, 0.5, "1", c(1, 2), 2^53)) {
+      invalid <- request
+      invalid[[key]] <- value
+      expect_false(metadata_section_request_valid(invalid))
+      expect_null(metadata_section_reply(invalid, bundle, index, 1))
+    }
+  }
+  for (key in c("namespace", "layer", "resource")) {
+    for (value in list(
+      NULL,
+      NA_character_,
+      c("all", "all"),
+      1,
+      strrep("x", 4097)
+    )) {
+      invalid <- request
+      invalid[[key]] <- value
+      expect_false(metadata_section_request_valid(invalid))
+    }
+  }
+  request$resource <- "missing_section"
+  expect_identical(
+    metadata_section_reply(request, bundle, index, 1)$selected,
+    "all"
+  )
+  request$namespace <- "unknown_source"
+  expect_null(metadata_section_reply(request, bundle, index, 1))
+  request$namespace <- "all"
+  request$layer <- "unknown_layer"
+  expect_null(metadata_section_reply(request, bundle, index, 1))
+  request$layer <- "all"
+  empty <- metadata_section_reply(request, NULL, NULL, 1)
+  expect_false(empty$visible)
+  expect_identical(empty$selected, "all")
+})
+
+test_that("guarded section requests reject stale generations and reset epochs once", {
+  records <- metadata_explorer_fixture_records(m7_fixture_directory())
+  current <- reactiveVal(records[["dataset_m7appendedreview"]])
+  messages <- list()
+  native <- list()
+  mock <- shiny::MockShinySession$new()
+  mock$sendCustomMessage <- function(type, message) {
+    if (identical(type, "llw-metadata-section")) {
+      messages[[length(messages) + 1L]] <<- message
+    }
+  }
+  mock$sendInputMessage <- function(inputId, message) {
+    native[[length(native) + 1L]] <<- list(
+      id = sub("^.*-", "", inputId),
+      message = message
+    )
+  }
+  testServer(
+    metadata_explorer_server,
+    args = list(dataset = current),
+    session = mock,
+    {
+      session$setInputs(
+        namespace = "all",
+        layer = "all",
+        resource = "all",
+        query = "",
+        sort_by = "value",
+        descending = TRUE
+      )
+      expect_length(messages, 1L)
+      expect_identical(messages[[1L]]$kind, "context")
+      expect_true(messages[[1L]]$reset)
+      epoch <- messages[[1L]]$epoch
+      request <- list(
+        epoch = epoch,
+        generation = 1,
+        namespace = "all",
+        layer = "all",
+        resource = "core_metadata"
+      )
+      session$setInputs(section_request = request)
+      expect_identical(tail(messages, 1L)[[1L]]$selected, "core_metadata")
+      iztech <- names(bundle()$sources)[grepl(
+        "iztech",
+        names(bundle()$sources)
+      )]
+      for (source in c(iztech, "all", iztech)) {
+        request$generation <- request$generation + 1
+        request$namespace <- source
+        session$setInputs(namespace = source, section_request = request)
+        reply <- tail(messages, 1L)[[1L]]
+        expect_identical(reply$generation, request$generation)
+        expect_identical(reply$namespace, source)
+        expect_identical(reply$selected, "core_metadata")
+        expect_identical(reply$epoch, epoch)
+      }
+      before <- length(messages)
+      session$setInputs(section_request = request)
+      request$generation <- request$generation - 1
+      session$setInputs(section_request = request)
+      session$setInputs(resource = "core_metadata")
+      for (step in seq_len(3L)) session$flushReact()
+      expect_length(messages, before)
+      expect_identical(query_result()$total, 253L)
+      expect_false(any(vapply(
+        native,
+        function(x) identical(x$id, "resource"),
+        TRUE
+      )))
+      request$generation <- request$generation + 2
+      request$namespace <- "invalid_source"
+      session$setInputs(section_request = request)
+      expect_identical(tail(messages, 1L)[[1L]]$kind, "error")
+      request$generation <- request$generation + 1
+      request$namespace <- "all"
+      request$layer <- "LightLogWeb overlay"
+      session$setInputs(
+        namespace = "all",
+        layer = request$layer,
+        section_request = request
+      )
+      expect_false(tail(messages, 1L)[[1L]]$visible)
+      expect_identical(tail(messages, 1L)[[1L]]$selected, "all")
+      request$epoch <- 0
+      session$setInputs(section_request = request)
+      expect_identical(tail(messages, 1L)[[1L]]$kind, "context")
+      expect_identical(tail(messages, 1L)[[1L]]$epoch, epoch)
+      messages <<- list()
+      current(records[["dataset_m7absent"]])
+      session$flushReact()
+      expect_length(messages, 1L)
+      expect_true(messages[[1L]]$reset)
+      expect_gt(messages[[1L]]$epoch, epoch)
+      session$setInputs(namespace = "all", layer = "all", resource = "all")
+      session$flushReact()
+      expect_length(messages, 1L)
+      expect_identical(input$sort_by, "value")
+      expect_true(input$descending)
+      expect_false(any(vapply(
+        native,
+        function(x) identical(x$id, "resource"),
+        TRUE
+      )))
+    }
+  )
+})
+
+test_that("the browser section guard ignores delayed replies and protects ready choices", {
+  node <- Sys.getenv("LLW_NODE_BINARY", unset = Sys.which("node"))
+  skip_if(
+    !nzchar(node),
+    "Node is unavailable for the offline browser-protocol unit test"
+  )
+  script <- system.file(
+    "app",
+    "www",
+    "js",
+    "metadata-navigation.js",
+    package = "LightLogWeb",
+    mustWork = TRUE
+  )
+  harness <- tempfile(fileext = ".cjs")
+  on.exit(unlink(harness), add = TRUE)
+  # A minimal DOM/message harness executes the actual shipped handler. It is
+  # deterministic delivery-order coverage, not a substitute for real UI tests.
+  writeLines(
+    r"---(
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const handlers = {}, events = {}, requests = [], nodes = new Map(), grids = [];
+let assertions = 0;
+const equal = (a, b) => { assertions++; assert.deepEqual(a, b); };
+const element = () => ({ value: 'all', disabled: false, hidden: false,
+  setAttribute(k, v) { this[k] = v; },
+  focus() { document.activeElement = this; }, getClientRects() { return [{}]; },
+  replaceChildren(fragment) { this.options = fragment.children; },
+  dispatchEvent() { events['change.llwMetadataSections'].call(this); } });
+const makeGrid = id => {
+  const el = Object.fromEntries(['source', 'layer', 'select', 'slot', 'status', 'feedback', 'retry']
+    .map(k => [k, element()]));
+  const grid = { id, dataset: { sectionSource: id + '-source', sectionLayer: id + '-layer',
+    sectionInput: id + '-section', sectionRequest: id + '-request' },
+    matches: () => true, querySelectorAll: () => [el.source, el.layer, el.select],
+    querySelector: s => el[{'.llw-metadata-section-slot':'slot',
+      '.llw-metadata-section-status':'status', '.llw-metadata-section-feedback':'feedback',
+      '.llw-metadata-section-retry':'retry'}[s]] };
+  Object.values(el).forEach(x => { x.closest = () => grid; });
+  nodes.set(id, grid);
+  nodes.set(grid.dataset.sectionSource, el.source);
+  nodes.set(grid.dataset.sectionLayer, el.layer);
+  nodes.set(grid.dataset.sectionInput, el.select);
+  grids.push(grid);
+  return { grid, el };
+};
+const a = makeGrid('a'), b = makeGrid('b');
+const document = { getElementById: id => nodes.get(id),
+  querySelectorAll: () => grids, addEventListener: () => {},
+  createElement: () => ({}),
+  createDocumentFragment: () => ({children: [], appendChild(x) { this.children.push(x); }}) };
+const Shiny = { addCustomMessageHandler: (name, f) => { handlers[name] = f; },
+  setInputValue: (id, value) => requests.push({id, ...value}) };
+const window = {Shiny, jQuery: () => ({on: (name, ...args) => {events[name] = args.at(-1);}})};
+vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'),
+  {window, document, Shiny, Event: class {constructor(type) {this.type = type;}}});
+const message = handlers['llw-metadata-section'];
+const last = () => requests.at(-1);
+const change = (node, value) => {node.value = value; events['change.llwMetadataSections'].call(node);};
+const context = (target, epoch, reset = false, selected = null) =>
+  message({target, kind:'context', epoch, reset, selected});
+const reply = (r, selected = r.resource, visible = true) => ({
+  target: r.id.replace('-request', ''), kind:'choices', epoch:r.epoch,
+  generation:r.generation, namespace:r.namespace, layer:r.layer, selected, visible,
+  choices:[{value:'all',label:'All sections'}, {value:'core_metadata',label:'Core Metadata'},
+    {value:'dataset_inventory',label:'Dataset Inventory'}]});
+context('a', 1, true);
+equal(a.el.select.disabled, true);
+message(reply(last()));
+equal(a.el.select.disabled, false);
+change(a.el.select, 'core_metadata');
+change(a.el.source, 'iztech'); const oldB = {...last()};
+equal(a.el.select.disabled, true);
+equal(a.el.status.textContent, 'Updating sections...');
+change(a.el.source, 'all'); const newA = {...last()};
+equal(newA.generation > oldB.generation, true);
+message(reply(oldB, 'all'));
+equal(a.el.select.disabled, true);
+message(reply(newA));
+equal(a.el.select.value, 'core_metadata');
+equal(a.el.select.disabled, false);
+change(a.el.select, 'dataset_inventory');
+message(reply(newA, 'all'));
+equal(a.el.select.value, 'dataset_inventory');
+change(a.el.source, 'iztech'); const obsolete = {...last()};
+context('a', 2, true); const reset = {...last()};
+message(reply(obsolete));
+equal(a.el.select.disabled, true);
+message(reply(reset));
+equal(a.el.select.value, 'all');
+change(a.el.select, 'core_metadata');
+context('a', 2, true);
+equal(a.el.select.value, 'core_metadata');
+equal(last().generation, reset.generation);
+change(a.el.layer, 'overlay');
+message({...reply(last()), kind:'error'});
+equal(a.el.select.disabled, true);
+equal(a.el.status.textContent.includes('Retry'), true);
+events['click.llwMetadataSections'].call(a.el.retry);
+document.activeElement = a.el.retry;
+message(reply(last(), 'all', false));
+equal(a.el.slot.hidden, true);
+equal(a.el.select.disabled, true);
+equal(document.activeElement, a.el.source);
+change(a.el.layer, 'all'); message(reply(last()));
+change(a.el.select, 'core_metadata');
+context('a', 3); message(reply(last()));
+equal(a.el.select.value, 'core_metadata');
+context('b', 1, true); message(reply(last()));
+change(b.el.select, 'dataset_inventory');
+context('a', 4, false, 'core_metadata'); message(reply(last()));
+equal(b.el.select.value, 'dataset_inventory');
+equal(a.el.select.value, 'core_metadata');
+events['shiny:disconnected.llwMetadataSections']();
+equal(a.el.select.disabled, true);
+equal(a.el.retry.disabled, true);
+events['shiny:connected.llwMetadataSections']();
+equal(a.el.retry.disabled, false);
+context('a', 4); const reconnect = {...last()};
+message(reply(reconnect));
+equal(a.el.select.value, 'core_metadata');
+equal(a.el.select.disabled, false);
+change(a.el.source, 'all');
+const escaped = reply(last()); escaped.choices[1].label = '<img onerror=alert(1)>';
+message(escaped);
+equal(a.el.select.options[1].textContent, '<img onerror=alert(1)>');
+equal(a.el.select.options[1].innerHTML, undefined);
+equal(a.el.feedback.hidden, true);
+console.log('Section protocol assertions passed: ' + assertions);
+)---",
+    harness
+  )
+  result <- system2(
+    node,
+    c(shQuote(harness), shQuote(script)),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  expect_null(attr(result, "status"), info = paste(result, collapse = "\n"))
+  expect_match(
+    paste(result, collapse = "\n"),
+    "Section protocol assertions passed:",
+    fixed = TRUE
+  )
+})
+
+test_that("rapid filters and delayed input echoes do not rewrite their own controls", {
+  fixture_record <- metadata_explorer_fixture_records(
+    m7_fixture_directory(),
+    include_absent = FALSE
+  )[["dataset_m7appendedreview"]]
+  messages <- list()
+  mock_session <- shiny::MockShinySession$new()
+  mock_session$sendInputMessage <- function(inputId, message) {
+    messages[[length(messages) + 1L]] <<- list(
+      id = sub("^.*-", "", inputId),
+      value = message
+    )
+  }
+  input_messages <- function(ids) Filter(function(x) x$id %in% ids, messages)
+  testServer(
+    metadata_explorer_server,
+    args = list(dataset = reactive(fixture_record)),
+    session = mock_session,
+    {
+      session$setInputs(
+        namespace = "all",
+        layer = "all",
+        resource = "core_metadata",
+        query = "MEDI",
+        sort_by = "value",
+        descending = TRUE,
+        clear_query = 0L
+      )
+      initial_total <- query_result()$total
+      messages <<- list()
+      for (layer in c(
+        "LightLogWeb overlay",
+        "all",
+        "LightLogWeb overlay",
+        "all",
+        "LightLogWeb overlay"
+      )) {
+        session$setInputs(layer = layer)
+        expect_identical(selected_layer(), layer)
+        expect_length(input_messages(c("namespace", "layer", "sort_by")), 0L)
+        section_messages <- input_messages("resource")
+        if (length(section_messages)) {
+          session$setInputs(
+            resource = tail(section_messages, 1L)[[1L]]$value$value
+          )
+        }
+        before_echo <- length(messages)
+        session$setInputs(layer = layer)
+        session$flushReact()
+        expect_length(messages, before_echo)
+      }
+      expect_identical(selected_section(), "all")
+      expect_identical(input$sort_by, "value")
+      expect_true(input$descending)
+      expect_lt(query_result()$total, initial_total)
+
+      messages <<- list()
+      session$setInputs(clear_query = 1L)
+      expect_length(input_messages("query"), 1L)
+      expect_identical(input_messages("query")[[1L]]$value$value, "")
+      expect_length(
+        input_messages(c("namespace", "layer", "resource", "sort_by")),
+        0L
+      )
+      session$setInputs(query = "")
+      expect_identical(selected_layer(), "LightLogWeb overlay")
+      expect_identical(query_result()$total, 2L)
+      stable_messages <- length(messages)
+      for (step in seq_len(8L)) session$flushReact()
+      expect_length(messages, stable_messages)
+
+      session$setInputs(
+        layer = "all",
+        resource = "core_metadata",
+        query = "MEDI"
+      )
+      messages <<- list()
+      session$setInputs(clear_query = 2L)
+      session$setInputs(query = "")
+      expect_identical(selected_section(), "core_metadata")
+      expect_length(
+        input_messages(c("namespace", "layer", "resource", "sort_by")),
+        0L
+      )
+    }
+  )
+})
+
+test_that("filter updates retain Apply Undo context and reset once for a new dataset", {
+  records <- metadata_explorer_fixture_records(m7_fixture_directory())
+  fixture_record <- records[["dataset_m7appendedreview"]]
+  context <- metadata_overlay_context(fixture_record)
+  candidates <- context$catalog
+  target <- candidates$target_id[
+    candidates$field == "unit" &
+      candidates$name == "MEDI" &
+      candidates$file_group_id == "MELIDOS_IZTECH_S004:19"
+  ]
+  expect_length(target, 1L)
+  applied <- apply_metadata_overlay(
+    fixture_record,
+    context,
+    metadata_overlay_preview(
+      fixture_record,
+      context,
+      target,
+      "klx",
+      scope = "single"
+    )
+  )
+  undone <- undo_metadata_overlay(applied, context)
+  current <- reactiveVal(fixture_record)
+  messages <- list()
+  mock_session <- shiny::MockShinySession$new()
+  mock_session$sendInputMessage <- function(inputId, message) {
+    messages[[length(messages) + 1L]] <<- list(
+      id = sub("^.*-", "", inputId),
+      value = message
+    )
+  }
+  input_messages <- function(ids) Filter(function(x) x$id %in% ids, messages)
+  testServer(
+    metadata_explorer_server,
+    args = list(dataset = current),
+    session = mock_session,
+    {
+      iztech <- names(bundle()$sources)[grepl(
+        "iztech",
+        names(bundle()$sources)
+      )]
+      tum <- names(bundle()$sources)[grepl("tum", names(bundle()$sources))]
+      session$setInputs(
+        namespace = iztech,
+        layer = "all",
+        resource = "core_metadata",
+        query = "dataset_file_variables_units",
+        sort_by = "value"
+      )
+      medi <- query_result()$rows$group_id[
+        query_result()$rows$group_context == "MEDI"
+      ]
+      expect_length(medi, 1L)
+      session$setInputs(group_id = medi)
+      messages <<- list()
+      current(applied)
+      session$flushReact()
+      expect_identical(selected_namespace(), iztech)
+      expect_identical(selected_group()$group$group_id, medi)
+      expect_length(
+        input_messages(c("namespace", "layer", "resource", "sort_by", "query")),
+        0L
+      )
+      session$setInputs(namespace = tum)
+      messages <<- list()
+      current(undone)
+      session$flushReact()
+      expect_identical(selected_namespace(), tum)
+      expect_length(
+        input_messages(c("namespace", "layer", "resource", "sort_by", "query")),
+        0L
+      )
+      session$setInputs(namespace = iztech)
+      session$setInputs(
+        namespace = "all",
+        layer = "LightLogWeb overlay",
+        query = ""
+      )
+      expect_identical(selected_namespace(), "all")
+      expect_identical(selected_layer(), "LightLogWeb overlay")
+      expect_identical(query_result()$total, 3L)
+      messages <<- list()
+      session$setInputs(resource = "all")
+      for (step in seq_len(8L)) session$flushReact()
+      expect_length(
+        input_messages(c("namespace", "layer", "resource", "sort_by", "query")),
+        0L
+      )
+
+      current(records[["dataset_m7absent"]])
+      session$flushReact()
+      resets <- input_messages(c("namespace", "layer", "resource", "query"))
+      reset_counts <- table(vapply(resets, `[[`, "", "id"))
+      expect_identical(
+        names(reset_counts),
+        c("layer", "namespace", "query")
+      )
+      expect_true(all(reset_counts == 1L))
+      expect_identical(selected_namespace(), "all")
+      expect_identical(selected_layer(), "all")
+      expect_null(selected_group())
+      messages <<- list()
+      session$setInputs(
+        namespace = "all",
+        layer = "all",
+        resource = "all",
+        query = ""
+      )
+      for (step in seq_len(8L)) session$flushReact()
+      expect_length(
+        input_messages(c("namespace", "layer", "resource", "sort_by", "query")),
+        0L
+      )
+      expect_identical(
+        current()$metadata_bundle$sources,
+        records[["dataset_m7absent"]]$metadata_bundle$sources
+      )
+    }
+  )
+  expect_identical(
+    undone$metadata_bundle$sources,
+    fixture_record$metadata_bundle$sources
+  )
+  expect_identical(undone$raw_payload, fixture_record$raw_payload)
 })
 
 test_that("section filters use meaningful logical areas before the result cap", {
@@ -1034,6 +1610,74 @@ test_that("navigation requests focus but filters and in-place field choices do n
   )
 })
 
+test_that("full-path dialogs keep native dismissal separate from validated navigation", {
+  fixture_record <- m7_fixture_record("ucr-all-light-variables")
+  messages <- list()
+  modals <- list()
+  mock_session <- shiny::MockShinySession$new()
+  mock_session$sendCustomMessage <- function(type, message) {
+    if (identical(type, "llw-metadata-focus")) {
+      messages[[length(messages) + 1L]] <<- message
+    }
+  }
+  mock_session$sendModal <- function(type, message) {
+    modals[[length(modals) + 1L]] <<- list(type = type, message = message)
+  }
+  testServer(
+    metadata_explorer_server,
+    args = list(dataset = reactive(fixture_record)),
+    session = mock_session,
+    {
+      session$setInputs(query = "Melanopic equivalent daylight illuminance")
+      rows <- query_result()$rows
+      id <- rows$group_id[
+        rows$field == "dataset_file_variables_labels" &
+          rows$group_context == "MEDI"
+      ][[1L]]
+      session$setInputs(group_id = id)
+      selected_focus <- focused_node_id()
+      count <- length(messages)
+      session$setInputs(hierarchy_full_path = 1L)
+      expect_length(messages, count)
+      expect_identical(focused_node_id(), selected_focus)
+      expect_identical(tail(modals, 1L)[[1L]]$type, "show")
+      html <- tail(modals, 1L)[[1L]]$message$html
+      expect_match(html, "llw-metadata-navigation-dialog", fixed = TRUE)
+      expect_match(
+        html,
+        session$ns("hierarchy_dialog_path_node_id"),
+        fixed = TRUE
+      )
+      expect_match(html, 'data-bs-dismiss="modal">Close</button>', fixed = TRUE)
+      expect_match(html, 'type="button"', fixed = TRUE)
+      session$setInputs(hierarchy_dialog_path_node_id = "stale-node")
+      expect_length(messages, count)
+      expect_identical(focused_node_id(), selected_focus)
+      expect_length(modals, 1L)
+      root <- hierarchy_roots()$node_id[[1L]]
+      session$setInputs(hierarchy_dialog_path_node_id = root)
+      session$flushReact()
+      expect_identical(tail(modals, 1L)[[1L]]$type, "remove")
+      expect_identical(focused_node_id(), root)
+      expect_identical(active_group_id(), id)
+      expect_length(messages, count + 1L)
+      expect_identical(
+        tail(messages, 1L)[[1L]]$target,
+        session$ns("hierarchy_focus")
+      )
+      expect_identical(tail(messages, 1L)[[1L]]$group_id, id)
+      session$setInputs(hierarchy_full_path = 2L)
+      expect_identical(tail(modals, 1L)[[1L]]$type, "show")
+      expect_identical(focused_node_id(), root)
+      expect_length(messages, count + 1L)
+      expect_identical(
+        fixture_record$metadata_bundle$sources,
+        dataset()$metadata_bundle$sources
+      )
+    }
+  )
+})
+
 test_that("field selection updates values without rebuilding the scrolled list", {
   for (fixture in c(
     "tum-medi-only",
@@ -1094,6 +1738,51 @@ test_that("field selection updates values without rebuilding the scrolled list",
       }
     )
   }
+})
+
+test_that("overlay Apply and Undo retain source selection, search and hierarchy focus", {
+  record <- m7_fixture_record("iztech-light-subset")
+  current <- shiny::reactiveVal(record)
+  context <- metadata_overlay_context(record)
+  shiny::testServer(metadata_explorer_server, args = list(dataset = current), {
+    session$flushReact()
+    session$setInputs(query = "MEDI", sort_by = "path")
+    id <- query_result()$rows$group_id[[1L]]
+    session$setInputs(group_id = id)
+    # Select a sibling in the hierarchy so preserving just the search result
+    # would wrongly replace the user's current field after a commit.
+    properties <- hierarchy_neighborhood()$property_groups
+    other <- properties$group_id[properties$group_id != id][[1L]]
+    session$setInputs(neighborhood_group_id = other)
+    before <- session$getReturned()$status()
+    target <- context$catalog$target_id[context$catalog$field == "sex"][[1L]]
+    changed <- apply_metadata_overlay(
+      current(),
+      context,
+      metadata_overlay_preview(current(), context, target, "Test assertion")
+    )
+    current(changed)
+    session$flushReact()
+    expect_identical(input$query, "MEDI")
+    expect_identical(
+      session$getReturned()$status()$selected_group_id,
+      before$selected_group_id
+    )
+    expect_identical(
+      session$getReturned()$status()$focused_node_id,
+      before$focused_node_id
+    )
+    current(undo_metadata_overlay(changed, context))
+    session$flushReact()
+    expect_identical(
+      session$getReturned()$status()$selected_group_id,
+      before$selected_group_id
+    )
+    expect_identical(
+      session$getReturned()$status()$focused_node_id,
+      before$focused_node_id
+    )
+  })
 })
 
 test_that("dataset changes clear selected metadata and hierarchy context", {
@@ -2011,6 +2700,85 @@ test_that("hierarchy focus immediately replaces the item comparison context", {
       session$flushReact()
       expect_identical(selected_group()$group$field, "unit")
       expect_identical(hierarchy_context()$node$label, "melanopic_edi")
+    }
+  )
+})
+
+test_that("current overlay values refresh visible details without changing source selection", {
+  original <- m7_fixture_record("tum-medi-only")
+  context <- metadata_overlay_context(original)
+  entries <- context$source_index$entries
+  group_id <- entries$group_id[
+    entries$field == "dataset_file_variables_labels" &
+      entries$group_context == "MEDI"
+  ][[1L]]
+  current <- shiny::reactiveVal(original)
+  view <- shiny::reactive(metadata_overlay_presentation(
+    context,
+    current()$metadata_bundle$overlay
+  ))
+  shiny::testServer(
+    metadata_explorer_server,
+    args = list(dataset = current, editable = TRUE, presentation = view),
+    {
+      session$flushReact()
+      session$setInputs(
+        query = "dataset_file_variables_labels",
+        group_id = group_id
+      )
+      before <- selected_group()
+      focus <- hierarchy_context()$node$node_id
+      targets <- context$catalog[
+        context$catalog$table == "variables" &
+          context$catalog$field == "label" &
+          context$catalog$name == "MEDI",
+      ]
+      changed <- apply_metadata_overlay(
+        current(),
+        context,
+        metadata_overlay_preview(
+          current(),
+          context,
+          targets$target_id[[1L]],
+          "Current owner label",
+          scope = "single"
+        )
+      )
+      current(changed)
+      session$flushReact()
+      expect_identical(selected_group()$entries$value, before$entries$value)
+      expect_identical(selected_group()$group$group_id, before$group$group_id)
+      expect_identical(hierarchy_context()$node$node_id, focus)
+      expect_identical(input$query, "dataset_file_variables_labels")
+      expect_match(
+        output$entry_detail$html,
+        "Current owner label",
+        fixed = TRUE
+      )
+      expect_match(
+        output$entry_detail$html,
+        "Original source value",
+        fixed = TRUE
+      )
+      expect_match(
+        output$item_properties$html,
+        "Includes overlay",
+        fixed = TRUE
+      )
+      expect_match(output$result_list$html, "Includes overlay", fixed = TRUE)
+      current(undo_metadata_overlay(current(), context))
+      session$flushReact()
+      expect_false(grepl(
+        "Current owner label",
+        output$entry_detail$html,
+        fixed = TRUE
+      ))
+      expect_false(grepl(
+        "Includes overlay",
+        output$item_properties$html,
+        fixed = TRUE
+      ))
+      expect_identical(selected_group()$group$group_id, before$group$group_id)
     }
   )
 })

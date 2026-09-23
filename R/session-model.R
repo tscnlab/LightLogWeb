@@ -1058,7 +1058,10 @@ new_session_store <- function(profile) {
   selected_dataset_id <- shiny::reactive(model_value()$selected_dataset_id)
   selected_dataset <- shiny::reactive({
     current <- model_value()
-    session_dataset(current, current$selected_dataset_id)
+    # All writes enter through validated dispatch or the bounded metadata-only
+    # methods below. Reading this private store must not decode every dataset.
+    if (is.null(current$selected_dataset_id)) NULL else
+      current$datasets[[current$selected_dataset_id]]
   })
 
   dispatch <- function(event) {
@@ -1068,15 +1071,48 @@ new_session_store <- function(profile) {
     invisible(next_model)
   }
 
+  select_dataset <- function(dataset_id) {
+    assert_scalar_string(dataset_id, "dataset_id")
+    current <- shiny::isolate(model_value())
+    if (!dataset_id %in% names(current$datasets)) {
+      abort_llw("Select an available library dataset.", type = "validation")
+    }
+    if (!identical(current$selected_dataset_id, dataset_id)) {
+      current$selected_dataset_id <- dataset_id
+      model_value(current)
+    }
+    invisible(current$datasets[[dataset_id]])
+  }
+
+  apply_overlay <- function(context, preview = NULL, undo = FALSE) {
+    current <- shiny::isolate(model_value())
+    if (!identical(context$dataset_id, current$selected_dataset_id)) {
+      abort_llw(
+        "The selected dataset changed. Return to the draft dataset or discard it.",
+        type = "validation"
+      )
+    }
+    record <- current$datasets[[current$selected_dataset_id]]
+    updated <- if (isTRUE(undo)) undo_metadata_overlay(record, context) else
+      apply_metadata_overlay(record, context, preview)
+    if (!identical(record, updated)) {
+      current$datasets[[updated$id]] <- updated
+      model_value(current)
+    }
+    updated
+  }
+
   list(
     model = model,
     datasets = datasets,
     selected_dataset_id = selected_dataset_id,
     selected_dataset = selected_dataset,
     revision = function(dataset_id) {
-      record <- session_dataset(shiny::isolate(model_value()), dataset_id)
+      record <- shiny::isolate(model_value())$datasets[[dataset_id]]
       if (is.null(record)) NULL else record$revision
     },
-    dispatch = dispatch
+    dispatch = dispatch,
+    select_dataset = select_dataset,
+    apply_overlay = apply_overlay
   )
 }

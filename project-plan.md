@@ -829,7 +829,259 @@ Milestone 7 is divided into three independently reviewable vertical slices:
    metadata-driven labels/units in the library, dashboard, and tables. This
    slice also completes the factual-metadata versus analysis-settings moves.
 3. Typed overlay authoring, precedence and invalidation behavior, inline
-   validation, and LightLogWeb JSON/flattened CSV overlay export.
+   validation, and protected undo in the LightLogWeb overlay summary.
+
+The owner approved Slice 3 on 2026-09-21, adding batch editing as the default.
+Its scope is the current library dataset, including appended sources, never
+other library entries. All matching items and Single item only remain explicit
+choices. Variable batches match exact source names across retained file-group
+occurrences; participant batches count each exact source-qualified participant
+once even when linked to several files or devices. Every proposed target and
+old/new value is inspectable before one atomic Apply. Search or pagination in
+that preview cannot restrict the transaction. No-op, stale, invalid and
+ambiguous assignments cannot silently change valid committed state.
+
+The overlay-specific version-2 contract adds source-qualified identities and
+participant sex without changing immutable source snapshots or the existing
+bundle contract. Version-1 assignments upgrade only when their target is
+unambiguous; unresolved and unknown content stays preserved. Participant sex
+is free text under the retained schema, separate from gender. Unit and source
+timezone edits are annotations, never measurement conversion or timestamp
+reinterpretation. Drafts stay bound to their original library record and
+revision. Apply/remove/undo reuse the existing session history and a narrow
+metadata-only record update, with no post-initialization measurement decoding.
+
+On 2026-09-23 the owner removed standalone overlay JSON/CSV export from the
+Milestone 7 scope and code base. Remove its controls, download handlers,
+serialization helpers and export-only tests/performance probes, not just its
+visible buttons. The separate Edit LightLogWeb metadata card is removed;
+Undo latest metadata edit and its result/error feedback belong inside the
+existing LightLogWeb overlay summary. Source-versus-overlay separation and
+Milestone 6 record/session recovery remain intact. This does not remove project
+serialization, fixture manifests, or Milestone 13 outputs. No new dependency,
+installation or repin is authorized.
+
+The owner's subsequent toolbar refinement places Edit selected field and Add
+missing metadata beside One level up inside the Metadata explorer. Remove the
+separate selection-status paragraph and action row. Edit stays selection-bound;
+Add missing metadata remains library-dataset-wide, including appended sources.
+The toolbar stays available for metadata-absent datasets and mounted during
+updates so modal dismissal can return focus. These presentation changes go
+directly to the owner, with no separate external review.
+
+For Add missing metadata and the standalone editor, the additional source-name
+selector appears only for Variable label or Variable unit and is labelled
+Source variable. Other fields proceed directly to Edit scope. Apply to still
+selects all matching items or one exact target; cohort identities and validation
+are unchanged. Contextual editing continues to preselect the explorer field.
+
+On 2026-09-23 the owner accepted the accumulated Slice 3 production-module
+showcase and authorized wrap-up and commit. This includes the consolidation,
+export removal, toolbar and source-variable selector refinements, with no new
+external review as requested. The accepted scope is the module and its runnable
+showcase, not full-app integration or completion of the whole milestone.
+Final verification is recorded in `dev/milestone-7-overlay-authoring.md`:
+1,418 focused and 4,863 full-suite assertions pass; package check is Status OK.
+Report 2.10.0 at `2026-09-23T12:13:57Z` passes all hard timing, memory and
+identity gates. Ordinary maximum p95 is 76.6/100 ms, approved stress removal
+68/150 ms, and initial/bulk index work 190.95/500 ms. The 50 ms design target is
+not uniformly met; mutation allocation retains limited headroom below 64 MiB.
+Full-app wiring, later slices, push and deployment still require an owner gate.
+
+Slice 3 is currently a production-module showcase, not a full-app integrated
+build. The ordinary 100 ms p95 hard gate and 64 MiB
+commit/index-patch allocation limit remain unchanged. The owner subsequently
+approved a separate 500 ms p95 limit for explicit large-inventory commits,
+initial index attachment and bulk transactions, with immediate busy feedback,
+duplicate blocking and atomic recovery. Warm single-item updates and all
+ordinary navigation/preview retain the 100 ms limit. The existing local browser
+helper may also return focus without scrolling when the overlay dialog closes.
+That focus correction now passes real-browser Apply/Discard checks. On
+2026-09-22 the owner accepted the standalone editor refinement and a narrowly
+extended 150 ms p95 gate for warm single removal in the 5,000-variable-occurrence
+inventory. This exception does not relax navigation, selection, preview, other
+warm single edits, memory or zero-reopen/deserialization gates. The earlier
+100 ms failure remains historical evidence. The full 2026-09-22 matrix passes
+its explicitly recorded operation-specific timing and memory limits.
+
+The same owner request adds contextual editing to the metadata explorer.
+Edit selected field resolves the current source-qualified field and fixes it
+in the modal; the first form choice is Edit scope, followed by Apply to,
+current values and Change. The contextual form has no field or matching-field
+selector. All matching items still means the current library dataset, including
+appended sources. Single item only starts with the focused exact item and
+offers the other exact targets in that cohort. The existing typed allowlist is
+unchanged. IDs, relationships, calibration, ambiguous mappings and unmodeled
+fields are read-only with an explanation. Core variable labels/units can alias
+the corresponding inventory assertion only when exact source scope, file-group
+identity, raw variable name and retained value agree. No source record is
+overwritten or revalidated. Current effective values are shown separately.
+Overlay-only Apply/Undo retains the search, selected field and hierarchy focus;
+switching records or refreshing source context still clears stale selections.
+
+This extension is first exercised in a combined explorer/editor showcase.
+Independent review and owner acceptance precede full application wiring.
+The exact file boundary,
+implementation evidence and open gates are recorded in
+`dev/milestone-7-overlay-authoring.md`.
+
+On 2026-09-22 the owner approved the R48-R54 correction contract following
+independent rejection of the prior contextual candidate. It adds consistent
+placeholder-unit validation, layer-accurate guidance, a missing-annotation
+route bounded by existing identities, stable keyboard modal return, effective
+values beside immutable originals, and clean/dirty Escape dismissal. The
+source-qualified presentation is separate from source index facts. The exact
+typed authoring allowlist, budgets and file boundary remain unchanged. Saved
+JSON/CSV browser-artifact verification (R52) is explicitly deferred to the
+owner final check, not recorded as passed. A new frozen revision and independent
+acceptance are required before owner final check; full-app integration and
+commit remain separately gated.
+
+The R48-R54 correction candidate passed 1,191 focused assertions, 4,636 full-suite
+assertions and `R CMD check --no-manual` (Status OK). The final offline matrix
+at `2026-09-22T10:34:53Z` passes unchanged hard timing and memory gates; effective
+presentation reaches 74.65 ms p95 in the stress inventory, above the 50 ms design
+target but below 100 ms. The exact revised packet is
+`/private/tmp/llw-m7-r48-r54-review-njSxcT`. Independent acceptance is pending;
+this verification does not approve full-app integration or commit.
+
+The independent review of that candidate required revision: R48-R51 and R53
+closed within the report's stated coverage, R52 remained owner-deferred (not
+passed), and R54 still lost keyboard focus after Review. The owner approved
+`APPROVE M7 SLICE 3 R54 REVIEW-FOCUS CORRECTION`. The narrow seven-file boundary
+adds an after-flush focus request for successful, repeated, unchanged and invalid
+reviews, with the existing browser helper recovering only lost focus after the
+native busy button resets. Escape also finds the visible owned editor when
+focus has fallen to the page. Dropdown-first Escape, Keep/Discard, independent
+full-path ownership, explicit Apply and all existing budgets remain unchanged.
+Typed metadata, fixture, transaction and export contracts are untouched. A new
+frozen packet and independent acceptance are required before owner final check;
+full-app integration, commit and push remain separately gated.
+
+The R54 review-focus candidate passes 1,219 focused assertions, 4,664 full-suite
+assertions and `R CMD check --no-manual` (Status OK). Targeted pointer and native
+keyboard checks cover success, repeated/unchanged Review, validation feedback,
+Keep/Discard, dropdown-first Escape, missing annotations and full-path ownership
+at 1024, 390 and 320 px. The refreshed offline matrix at
+`2026-09-22T11:32:39Z` passes unchanged hard timing and memory gates. Stress
+effective presentation reaches 73 ms p95, above the 50 ms design target but below
+100 ms; mutation allocation remains within 64 MiB with limited headroom.
+The frozen packet is `/private/tmp/llw-m7-r54-review-17QJZ3`. Independent
+acceptance and the explicit R52 owner saved-file check remain outstanding.
+
+The independent R54 candidate review closed R54 but required revision for R55:
+keyboard full-path Close returned focus to an off-screen opener after a scroll
+jump. The owner approved `APPROVE M7 SLICE 3 R55 FULL-PATH CLOSE CORRECTION`.
+The seven-file correction boundary is recorded in the overlay authoring note.
+A native fade trial failed and was reverted. The existing helper now preserves
+the invoking viewport on Close/Escape/backdrop dismissal, while path selection
+retains intentional destination navigation. It yields to new user navigation,
+keeps R54 and native controls unchanged, and adds no server work, dependency,
+source or overlay edits. All budgets and subsequent acceptance/owner/integration/
+commit gates remain in force; R52 remains owner-deferred, not passed.
+
+The R55 candidate passes 1,239 focused assertions, 4,684 full-suite assertions
+and `R CMD check --no-manual` (Status OK). Targeted native keyboard and pointer
+checks cover dismissal, intentional ancestor navigation, new user gestures and
+protected R54 focus/Escape behavior across 1440, 1200, 1024, 768, 390 and 320 px.
+The fresh offline matrix at `2026-09-22T12:42:47Z` passes all unchanged hard
+timing and memory gates. Ordinary p95 reaches 77.65 ms, above the 50 ms design
+target but below 100 ms; the approved stress single removal is 65.65 ms against
+150 ms. Mutation allocation remains below 64 MiB with limited headroom.
+The exact frozen packet is `/private/tmp/llw-m7-r55-review-X2yYmu`. Independent
+acceptance is pending; no full-app integration, commit or push is authorized.
+
+The independent R55 review closes R55 and protects R54, but finds medium R56:
+sustained filter alternation after the appended single-unit Apply/source-switch/
+Undo/full-path Close sequence. The owner approved
+`APPROVE M7 SLICE 3 R56 FILTER-STABILITY CORRECTION CONTRACT` on 2026-09-22.
+The exact seven-file boundary is recorded in the overlay authoring note. Native
+source/layer/section/sort controls now stay mounted; choices update only when
+changed, without rebuilding or echoing the source/layer inputs. Native
+conditional panels preserve relevance and a scoped responsive grid preserves
+layout. Clear changes only the query; invalid sections normalize once and new
+source identities reset once. Same-source Apply/Undo retains valid context.
+No JavaScript, overlay/source schema, fixture, dependency or integration change.
+
+R56 passes 1,294 focused and 4,739 full-suite assertions with no failures.
+Package check is Status OK (4,658 installed assertions). Existing recovery
+warnings and environment/optional-fixture skips are recorded, not hidden.
+The original browser sequence settles without oscillation for 115.631 seconds;
+a fresh repeat stays stable for 72.423 seconds. Query-only clear, empty-state
+recovery, valid filters, R54/R55 keyboard paths and six responsive widths are
+checked. An over-batched immediate-post-dismissal Clear that did not take effect
+is recorded and excluded from successful route evidence. All timing/memory
+budgets remain fixed; filter-choice preparation and an eight-choice burst are
+added to the offline matrix. Independent review and owner final check still
+precede full-app integration or commit. R52 saved-file verification remains
+owner-deferred, not passed.
+
+The refreshed R56 matrix at `2026-09-22T14:01:48Z` passes every hard timing and
+memory gate. Filter-choice preparation reaches 9.65 ms p95 and the eight-choice
+burst 30 ms on 50,000 entries, allocating at most 7,327,552 bytes against 10 MiB.
+The broader ordinary maximum is 74.3 ms, so the 50 ms design target is still not
+uniformly met; all unchanged hard gates pass. Approved stress single removal is
+64/150 ms, initial/bulk work 238/500 ms and CSV 80.65/1000 ms. Mutation allocation
+stays below 64 MiB with limited headroom. Package reopen/deserialization counts
+are zero. Exact packet: `/private/tmp/llw-m7-r56-review-wIRlAo`. Independent
+acceptance is pending and authorizes owner final check only.
+
+The independent R56 report closes the sustained-refresh symptom but opens
+medium R57: a valid rapid Source-to-Section selection could be visibly accepted
+then overwritten by a delayed native Section update. The owner approved the
+R57 dependent-selection contract, then the separate
+`APPROVE M7 SLICE 3 R57 GUARDED SECTION UPDATE JAVASCRIPT` gate after a read-only
+native-first A-to-B-to-A counterexample. The model is not a browser reproduction.
+The exact eight-file correction boundary and protocol are recorded in
+`dev/milestone-7-overlay-authoring.md`; a one-line asset-version test extension
+outside that boundary was subsequently approved by the owner on 2026-09-23.
+The ninth file changes only that assertion from 1.2.4 to 1.2.5.
+
+Section remains a native mounted selector. A namespaced per-module generation
+immediately makes it unavailable with truthful pending feedback on parent
+changes, and only the current epoch/generation reply can populate it once.
+Ready selections cannot be overwritten by old or duplicate responses. Dataset
+identity resets once; Apply/Undo retains valid context, invalid sections fall
+back once, and Clear remains query-only. A scoped retry/reconnect path and
+native keyboard semantics preserve recovery. R validates requests against a
+small cached choice inventory, without reopening packages or deserializing
+records. Source namespaces, overlay semantics, R54/R55 handlers, fixtures,
+dependencies and full-app integration remain unchanged.
+
+R57 programmer verification is complete, not independent acceptance. Programmer
+browser checks cover the original route, parent reversals, protected R56/R54/R55,
+complete/partial/widest/absent/appended states and six responsive tiers. The
+original Apply/Undo/filter burst stays stable for 74.596 seconds without input.
+Deterministic tests additionally exercise delayed and duplicate replies,
+multiple modules and reconnect; no real-browser reconnect claim is made. The
+fresh benchmark includes guarded reply serialization and charges the small
+choice inventory to the existing section-index memory budget. All established
+budgets remain unchanged. The matrix at `2026-09-23T07:58:07Z`, report 2.9.0,
+passes all hard timing/memory/identity gates: guarded replies 1 ms p95,
+eight-request bursts 11-13 ms, and maximum burst allocation 3,543,352 bytes.
+The broader ordinary maximum is 83.3 ms, above the 50 ms design target but below
+100 ms. Stress removal is 70.65/150 ms, initial/bulk 208.65/500 ms and CSV
+81/1000 ms. The existing limited mutation-memory headroom remains documented.
+After the owner-approved one-line version assertion update, final focused
+verification has 1,391 passes, the full suite 4,836, and package check is Status
+OK with 4,755 installed-test passes. Existing recovery warnings, unavailable
+mirai/optional-fixture skips and unavailable repository-index lookups are
+recorded. A 31-file comparison confirms exactly the approved nine-file correction
+and unchanged fixture hashes, HEAD and glcdp pin. Checked runtime/test sources
+match the candidate. Exact packet: `/private/tmp/llw-m7-r57-review-MG8nrU`.
+Independent acceptance still precedes owner final check.
+R52 remains owner-deferred, not passed; no later slice, integration, commit or
+push is authorized by this correction.
+
+Owner refinement, 2026-09-23: R57 was subsequently accepted by the independent
+reviewer for owner final check only. During that check the owner requested a
+borderless explorer help icon, removal of the separate editor summary card,
+relocation of Undo to LightLogWeb overlay, and deletion of standalone overlay
+export. These refinements receive local regression/browser checks without a
+separate external review, as requested. R52 is now superseded by feature removal,
+not passed by a saved-file test. The prior benchmark and frozen reviewer packet
+remain historical evidence, not verification of this later refinement. Full-app
+integration, commit and push still require their owner gates.
 
 The owner-approved Slice 1B extends only the read-only explorer foundation.
 Selecting a result exposes every sibling property belonging to the same exact
@@ -1127,11 +1379,12 @@ treat the bounded snapshots as current evidence.
    that actually depend on changed metadata.
 10. Validate overlay coordinates, IANA timezones, units, references, and
    participant IDs inline without changing the immutable source layer.
-11. Export the overlay as LightLogWeb JSON or flattened CSV. Keep generation
-    of an edited standards-compliant GLC package disabled with a capability
-    message until glcdp provides a public write-and-validate API. Schema 3.0.2
-    being final does not authorize LightLogWeb to recreate schema serialization
-    or treat the metadata builder's soft validation as authoritative.
+11. Preserve the overlay through the existing record/session recovery contract.
+    Standalone overlay JSON/CSV export was removed by the owner on 2026-09-23.
+    Generation of an edited standards-compliant GLC package remains out of scope
+    until glcdp provides a public write-and-validate API. Schema 3.0.2 being final
+    does not authorize LightLogWeb to recreate schema serialization or treat the
+    metadata builder's soft validation as authoritative.
 
 Acceptance gate: complete, partial, and absent optional metadata all permit
 valid analysis; source metadata and overlays remain distinguishable; unknown
