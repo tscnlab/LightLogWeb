@@ -33,6 +33,7 @@ budgets <- list(
   hierarchy_panel_render_max_alloc_bytes = 10 * 1024^2,
   hierarchy_dialog_render_max_alloc_bytes = 10 * 1024^2,
   focus_contents_render_max_alloc_bytes = 10 * 1024^2,
+  table_view_restore_max_alloc_bytes = 10 * 1024^2,
   filter_choices_max_alloc_bytes = 10 * 1024^2,
   relationship_add_max_alloc_bytes = 64 * 1024^2,
   relationship_add_min_rows = 50000L,
@@ -166,6 +167,429 @@ allocated_bytes <- function(operation, warmup = 5L) {
   lines <- readLines(profile, warn = FALSE)
   bytes <- suppressWarnings(as.numeric(sub(" .*", "", lines)))
   sum(bytes, na.rm = TRUE)
+}
+
+# The production store transaction followed by the production presentation
+# consumers. Numeric caches are initialized once. Preparation and cleanup are
+# outside each sample, so monotonically increasing revisions do not accumulate
+# history or repeatedly time cold measurement work. Browser timing is separate.
+benchmark_final_integration <- function(records) {
+  source <- new_metadata_source_namespace(
+    "integration-wide",
+    "Synthetic 5,000 variable occurrences",
+    "test",
+    records = list(
+      variable_inventory = data.frame(
+        dataset_id = paste0("D", seq_len(5000L)),
+        file_group_id = paste0("D", seq_len(5000L), ":1"),
+        name = "MEDI",
+        label = "Melanopic EDI",
+        unit = "lx",
+        type = "numeric"
+      )
+    )
+  )
+  wide <- new_dataset_record(
+    data.frame(
+      Id = "D1",
+      Datetime = as.POSIXct("2026-01-01", tz = "UTC"),
+      MEDI = 1
+    ),
+    "Synthetic wide integration inventory",
+    new_source_manifest("test", source_timezone = "UTC"),
+    analysis_settings = list(primary_variable = "MEDI"),
+    metadata_bundle = new_metadata_bundle(list(`integration-wide` = source)),
+    id = "dataset_integrationwide"
+  )
+  large <- records[[1L]]
+  original <- unserialize(large$raw_payload)
+  rows <- rep(seq_len(nrow(original)), length.out = 250000L)
+  data <- original[rows, , drop = FALSE]
+  # Deliberately synthetic time series with the frozen metadata identities.
+  # It is a row-scaling probe, not another public-data import or scientific result.
+  for (id in unique(data$Id)) {
+    positions <- which(data$Id == id)
+    data$Datetime[positions] <- original$Datetime[[1L]] +
+      seq.int(0, length(positions) - 1L) * 60
+  }
+  large$raw_payload <- serialize_dataset_data(data)
+  large$raw_checksum <- sha256_raw(large$raw_payload)
+  large$prepared_payload <- large$raw_payload
+  large$display_name <- "Synthetic 250,000-row integration probe"
+  large$id <- "dataset_integrationlargerows"
+  large <- validate_dataset_record(large)
+  cases <- c(
+    records,
+    list(
+      small_example = sample_dataset_record(),
+      wide = wide,
+      synthetic_250000_rows = large
+    )
+  )
+
+  one_case <- function(record) {
+    context <- metadata_overlay_context(record)
+    targets <- context$catalog
+    eligible <- which(
+      targets$table == "variables" &
+        targets$field == "unit" &
+        targets$name == "MEDI"
+    )
+    stopifnot(length(eligible) > 0L)
+    target <- targets$target_id[[eligible[[1L]]]]
+    target_count <- nrow(metadata_overlay_target_scope(context, target, "all"))
+    domain <- shiny::MockShinySession$new()
+    on.exit(domain$close(), add = TRUE)
+    store <- shiny::withReactiveDomain(domain, new_session_store("local"))
+    store$dispatch(new_session_event("add", value = record))
+    cache <- new_dashboard_snapshot_cache(
+      max_bytes = 384 * 1024^2,
+      max_entries = 3L,
+      record_bytes = store$record_bytes
+    )
+    initial <- cache$get(record)
+    focus <- dashboard_focus_view(initial$value)
+    table_views <- lapply(c("raw_data", "prepared_data"), function(stage) {
+      data <- initial$value[[stage]]
+      list(
+        restore = new_dashboard_table_view_state(),
+        columns = names(data),
+        rows = nrow(data),
+        state = list(
+          time = 1000,
+          columns = vector("list", ncol(data)),
+          search = list(search = "S003"),
+          order = list(list(0L, "desc")),
+          length = 10L,
+          start = 10L
+        )
+      )
+    })
+    for (view in table_views) {
+      view$restore(NULL, initial$signature, view$columns, view$rows)
+    }
+    table_tick <- 1000
+    restore_table_views <- function() {
+      table_tick <<- table_tick + 1
+      for (view in table_views) {
+        state <- view$state
+        state$time <- table_tick
+        options <- view$restore(
+          state,
+          initial$signature,
+          view$columns,
+          view$rows,
+          min(32L, view$rows)
+        )
+        stopifnot(identical(options$search$search, "S003"))
+      }
+      invisible(NULL)
+    }
+    table_view_timing <- timing_evidence(restore_table_views)
+    table_view_bytes <- allocated_bytes(restore_table_views)
+    inventory_cache <- new_append_ui_cache(
+      max_entries = 12L,
+      max_bytes = 1024^2
+    )
+    contract_cache <- new_append_ui_cache(
+      max_entries = 24L,
+      max_bytes = 2 * 1024^2
+    )
+    inventory_cache$get(
+      dataset_inventory_signature(record),
+      function() dataset_record_inventory(record)
+    )
+    contract_cache$get(
+      append_ui_record_signature(record),
+      function() append_ui_record_contract(record)
+    )
+    refresh <- function(updated) {
+      snapshot <- cache$get(updated)
+      current_focus <- dashboard_refresh_focus_view(focus, snapshot$value)
+      restore_table_views()
+      inventory <- inventory_cache$get(
+        dataset_inventory_signature(updated),
+        function() {
+          stop("A metadata-only update rebuilt the library inventory")
+        }
+      )
+      inventory <- dataset_inventory_presentation(inventory, updated)
+      contract_cache$get(append_ui_record_signature(updated), function() {
+        stop("A metadata-only update rebuilt the append source contract")
+      })
+      presentation <- metadata_overlay_presentation(
+        context,
+        updated$metadata_bundle$overlay
+      )
+      stopifnot(
+        snapshot$cache_hit,
+        identical(snapshot$value$quality, initial$value$quality),
+        identical(snapshot$value$coverage, initial$value$coverage),
+        identical(current_focus$data, focus$data),
+        identical(updated$raw_payload, record$raw_payload),
+        identical(updated$prepared_payload, record$prepared_payload),
+        identical(updated$analysis_settings, record$analysis_settings),
+        identical(
+          updated$metadata_bundle$sources,
+          record$metadata_bundle$sources
+        )
+      )
+      invisible(updated)
+    }
+    current <- function() shiny::isolate(store$selected_dataset())
+    apply <- function(preview) refresh(store$apply_overlay(context, preview))
+    undo <- function() refresh(store$apply_overlay(context, undo = TRUE))
+    draft <- function(action = "set", scope = "all") {
+      metadata_overlay_preview(
+        current(),
+        context,
+        target,
+        if (action == "set") "integration-test-unit" else NULL,
+        scope = scope,
+        action = action
+      )
+    }
+    measure <- function(name, prepare, operation, cleanup, gate) {
+      for (i in seq_len(5L)) {
+        prepared <- prepare()
+        operation(prepared)
+        cleanup()
+      }
+      samples <- numeric(40L)
+      for (i in seq_along(samples)) {
+        prepared <- prepare()
+        started <- proc.time()[["elapsed"]]
+        operation(prepared)
+        samples[[i]] <- (proc.time()[["elapsed"]] - started) * 1000
+        cleanup()
+      }
+      prepared <- prepare()
+      bytes <- allocated_bytes(function() operation(prepared), warmup = 0L)
+      cleanup()
+      p95 <- unname(stats::quantile(samples, 0.95, type = 8))
+      list(
+        operation = name,
+        iterations = length(samples),
+        p50_ms = unname(stats::quantile(samples, .5, type = 8)),
+        p95_ms = p95,
+        max_ms = max(samples),
+        hard_gate_p95_ms = gate,
+        hard_gate_pass = p95 <= gate,
+        design_target_pass = p95 <= 50,
+        allocated_bytes = bytes,
+        allocation_limit = 64 * 1024^2,
+        allocation_pass = bytes <= 64 * 1024^2
+      )
+    }
+    batch_gate <- if (target_count >= 5000L) 500 else 100
+    operations <- list(measure(
+      "apply_batch_and_refresh",
+      draft,
+      apply,
+      undo,
+      batch_gate
+    ))
+    apply(draft())
+    operations[[2L]] <- measure(
+      "remove_single_and_refresh",
+      function() draft("remove", "single"),
+      apply,
+      undo,
+      if (target_count >= 5000L) 150 else 100
+    )
+    undo()
+    operations[[3L]] <- measure(
+      "undo_batch_and_refresh",
+      function() {
+        apply(draft())
+        NULL
+      },
+      function(unused) undo(),
+      function() NULL,
+      batch_gate
+    )
+    quick_draft <- function()
+      metadata_overlay_focus_preview(
+        current(),
+        context,
+        focus$focus_variable,
+        "Quick integration label",
+        "quick-test-unit"
+      )
+    operations[[4L]] <- measure(
+      "quick_two_field_save_and_refresh",
+      quick_draft,
+      apply,
+      undo,
+      batch_gate
+    )
+    operations[[5L]] <- measure(
+      "quick_two_field_undo_and_refresh",
+      function() {
+        apply(quick_draft())
+        NULL
+      },
+      function(unused) undo(),
+      function() NULL,
+      batch_gate
+    )
+    quick_open <- function()
+      metadata_overlay_focus_state(current(), context, focus$focus_variable)
+    quick_open_timing <- timing_evidence(quick_open)
+    quick_open_bytes <- allocated_bytes(quick_open)
+    stopifnot(quick_open_bytes <= 10 * 1024^2)
+
+    # Instrumentation is separate from timing and allocation samples.
+    .GlobalEnv$.llw_integration_payloads <- list(
+      record$raw_payload,
+      record$prepared_payload
+    )
+    .GlobalEnv$.llw_integration_decodes <- 0L
+    trace(
+      "unserialize",
+      where = baseenv(),
+      print = FALSE,
+      tracer = quote({
+        if (
+          is.raw(connection) &&
+            any(vapply(
+              .GlobalEnv$.llw_integration_payloads,
+              function(value) identical(value, connection),
+              logical(1)
+            ))
+        ) {
+          .GlobalEnv$.llw_integration_decodes <- .GlobalEnv$.llw_integration_decodes +
+            1L
+        }
+      })
+    )
+    cleanup_trace <- function() {
+      untrace("unserialize", where = baseenv())
+      rm(
+        list = c(".llw_integration_payloads", ".llw_integration_decodes"),
+        envir = .GlobalEnv
+      )
+    }
+    on.exit(cleanup_trace(), add = TRUE)
+    bound_checks <- list()
+    check_bound <- function(updated) {
+      actual <- as.numeric(object.size(updated$metadata_bundle))
+      bound <- metadata_overlay_bundle_bytes(context, updated$metadata_bundle)
+      bound_checks[[length(bound_checks) + 1L]] <<- list(
+        revision = updated$revision,
+        bundle_bytes = actual,
+        bundle_upper_bound = bound,
+        pass = bound >= actual &&
+          bound <= 32 * 1024^2 &&
+          store$record_bytes(updated) >= as.numeric(object.size(updated))
+      )
+      invisible(updated)
+    }
+    check_bound(apply(draft()))
+    check_bound(apply(draft("remove", "single")))
+    check_bound(undo())
+    check_bound(undo())
+    quick_open()
+    check_bound(apply(quick_draft()))
+    check_bound(undo())
+    decodes <- .GlobalEnv$.llw_integration_decodes
+    stats <- cache$stats()
+    actual_cache_bytes <- as.numeric(object.size(cache$get(current())$value))
+    list(
+      case_id = record$id,
+      label = record$display_name,
+      measurement_rows = nrow(initial$value$raw_data),
+      source_entries = nrow(context$source_index$entries),
+      target_count = target_count,
+      quick_variable = focus$focus_variable,
+      quick_target_count = sum(quick_open()$targets$field == "unit"),
+      table_view_timing = table_view_timing,
+      table_view_allocated_bytes = table_view_bytes,
+      quick_open_timing = quick_open_timing,
+      quick_open_allocated_bytes = quick_open_bytes,
+      operations = operations,
+      measurement_payload_decodes = decodes,
+      invariants_pass = decodes == 0L,
+      size_bounds = bound_checks,
+      size_bounds_pass = all(vapply(bound_checks, `[[`, logical(1), "pass")),
+      context_size_cache_bytes = as.numeric(object.size(as.list(
+        context$size_cache
+      ))),
+      cache = stats,
+      cache_bounds_pass = stats$bytes <= stats$max_bytes &&
+        stats$bytes >= actual_cache_bytes &&
+        stats$entries == 1L &&
+        stats$builds == 1L,
+      actual_cache_bytes = actual_cache_bytes,
+      inventory_builds = inventory_cache$stats()$builds,
+      append_contract_builds = contract_cache$stats()$builds
+    )
+  }
+  results <- lapply(cases, one_case)
+  operations <- unlist(lapply(results, `[[`, "operations"), recursive = FALSE)
+  list(
+    baseline = "9568feaf9ee646526d24ae7b5714de92940d6a45",
+    benchmarked_at = benchmarked_at,
+    scope = "Production store Apply/Remove/Undo and atomic Dashboard Label/Unit Save/Undo, plus explorer, library, dashboard, both native table-view restorations and append-contract presentation consumers; R-side timing, not a browser latency claim.",
+    cases = results,
+    gates = list(
+      quick_open_timing_pass = all(vapply(
+        results,
+        function(x) x$quick_open_timing$p95_ms <= 100,
+        logical(1)
+      )),
+      quick_open_allocation_pass = all(vapply(
+        results,
+        function(x) x$quick_open_allocated_bytes <= 10 * 1024^2,
+        logical(1)
+      )),
+      hard_timing_pass = all(vapply(
+        operations,
+        `[[`,
+        logical(1),
+        "hard_gate_pass"
+      )),
+      allocation_pass = all(vapply(
+        operations,
+        `[[`,
+        logical(1),
+        "allocation_pass"
+      )),
+      invariants_pass = all(vapply(
+        results,
+        `[[`,
+        logical(1),
+        "invariants_pass"
+      )),
+      size_bounds_pass = all(vapply(
+        results,
+        `[[`,
+        logical(1),
+        "size_bounds_pass"
+      )),
+      cache_bounds_pass = all(vapply(
+        results,
+        `[[`,
+        logical(1),
+        "cache_bounds_pass"
+      ))
+    )
+  )
+}
+
+if (identical(Sys.getenv("LLW_M7_INTEGRATION_ONLY"), "true")) {
+  integration <- benchmark_final_integration(review_records)
+  path <- Sys.getenv("LLW_M7_INTEGRATION_OUTPUT")
+  stopifnot(nzchar(path))
+  jsonlite::write_json(
+    integration,
+    path,
+    pretty = TRUE,
+    auto_unbox = TRUE,
+    digits = 8
+  )
+  print(integration)
+  quit(status = if (all(unlist(integration$gates))) 0L else 1L)
 }
 
 benchmark_overlay_authoring <- function(records, scaled_index) {
@@ -353,7 +777,8 @@ benchmark_overlay_authoring <- function(records, scaled_index) {
         targets$name[[1L]] else NULL,
       source_entries = nrow(context$source_index$entries),
       target_count = nrow(batch$targets),
-      context_bytes = as.numeric(object.size(context)),
+      context_bytes = as.numeric(object.size(context)) +
+        as.numeric(object.size(as.list(context$size_cache))),
       updated_bundle_bytes = as.numeric(object.size(populated$metadata_bundle)),
       operations = operations
     )
@@ -1842,14 +2267,16 @@ integration_operations <- c(
 )
 all_interaction_operations <- c(all_operations, integration_operations)
 overlay_authoring <- benchmark_overlay_authoring(review_records, scaled_index)
+final_integration <- benchmark_final_integration(review_records)
 
 result <- list(
   report_schema = "llw-metadata-acceptance",
-  report_version = "2.10.0",
+  report_version = "2.13.0",
   benchmarked_at = benchmarked_at,
   baseline = "b704d24ee6eab066163bb88e7125faf19e09543d",
   budgets = budgets,
   overlay_authoring = overlay_authoring,
+  final_integration = final_integration,
   environment = list(
     r_version = R.version.string,
     platform = R.version$platform,
@@ -1875,7 +2302,16 @@ result <- list(
       logical(1),
       "design_target_pass"
     )) &&
-      review_route$selection$design_target_pass,
+      review_route$selection$design_target_pass &&
+      all(vapply(
+        final_integration$cases,
+        function(case) {
+          case$table_view_timing$design_target_pass &&
+            case$quick_open_timing$design_target_pass &&
+            all(vapply(case$operations, `[[`, logical(1), "design_target_pass"))
+        },
+        logical(1)
+      )),
     hard_timing_gate_pass = all(vapply(
       all_interaction_operations,
       `[[`,
@@ -1883,7 +2319,16 @@ result <- list(
       "hard_gate_pass"
     )) &&
       review_route$selection$hard_gate_pass &&
-      overlay_authoring$gates$hard_timing_pass,
+      overlay_authoring$gates$hard_timing_pass &&
+      final_integration$gates$hard_timing_pass &&
+      final_integration$gates$quick_open_timing_pass &&
+      all(vapply(
+        final_integration$cases,
+        function(case) {
+          case$table_view_timing$hard_gate_pass
+        },
+        logical(1)
+      )),
     memory_gate_pass = all(vapply(
       bundle_memory,
       `[[`,
@@ -1937,7 +2382,20 @@ result <- list(
       )) &&
       review_route$appended_bundle_bytes <= budgets$retained_bundle_max_bytes &&
       relationship_add_50000$allocation_pass &&
-      overlay_authoring$gates$allocation_pass,
+      overlay_authoring$gates$allocation_pass &&
+      final_integration$gates$allocation_pass &&
+      final_integration$gates$quick_open_allocation_pass &&
+      all(vapply(
+        final_integration$cases,
+        function(case) {
+          case$table_view_allocated_bytes <=
+            budgets$table_view_restore_max_alloc_bytes
+        },
+        logical(1)
+      )),
+    final_integration_invariants_pass = final_integration$gates$invariants_pass &&
+      final_integration$gates$size_bounds_pass &&
+      final_integration$gates$cache_bounds_pass,
     navigation_correction_pass = navigation_correction_contract$logical_section_pass &&
       navigation_correction_contract$focus_comparison_pass,
     repeated_crosslink_route_pass = isTRUE(
@@ -2027,6 +2485,11 @@ jsonlite::write_json(
 
 if (!result$gates$hard_timing_gate_pass) {
   stop("At least one metadata or overlay operation exceeded its p95 gate.")
+}
+if (!result$gates$final_integration_invariants_pass) {
+  stop(
+    "An integrated metadata edit decoded measurements or invalidated a numeric cache."
+  )
 }
 if (!result$gates$memory_gate_pass) {
   stop("At least one metadata memory budget failed.")

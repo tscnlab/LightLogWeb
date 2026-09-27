@@ -1193,12 +1193,57 @@ datasetDashboardUI <- function(id) {
       ),
       class = "llw-dashboard-tabs"
     ),
-    uiOutput(ns("metadata_context"))
+    tags$section(
+      class = "llw-dashboard-metadata-context d-grid gap-3",
+      `aria-label` = "Metadata context and crosslinks",
+      uiOutput(ns("metadata_context")),
+      tags$div(
+        class = "llw-dashboard-metadata-context__primary-actions",
+        actionButton(
+          ns("open_source_metadata"),
+          "Source metadata",
+          icon = icon("database"),
+          class = "btn-outline-secondary btn-sm",
+          disabled = TRUE
+        ),
+        actionButton(
+          ns("open_dataset_metadata"),
+          "Dataset metadata",
+          icon = icon("table-list"),
+          class = "btn-outline-secondary btn-sm",
+          disabled = TRUE
+        ),
+        actionButton(
+          ns("open_variable_metadata"),
+          "Focus variable metadata",
+          icon = icon("bullseye"),
+          class = "btn-outline-secondary btn-sm",
+          disabled = TRUE
+        ),
+        actionButton(
+          ns("adjust_variable_metadata"),
+          "Create",
+          icon = icon("bullseye"),
+          class = "llw-overlay-edit btn-outline-secondary btn-sm",
+          disabled = TRUE,
+          title = "Set the focus variable label and unit in the LightLogWeb overlay"
+        )
+      ),
+      uiOutput(ns("metadata_entities"))
+    )
   )
 }
 
-new_dashboard_event <- function(type, focus_request = NULL) {
-  type <- match.arg(type, c("open_import", "open_metadata"))
+new_dashboard_event <- function(
+  type,
+  focus_request = NULL,
+  dataset_id = NULL,
+  variable = NULL
+) {
+  type <- match.arg(
+    type,
+    c("open_import", "open_metadata", "edit_focus_metadata")
+  )
   if (identical(type, "open_metadata")) {
     focus_request <- validate_metadata_focus_request(focus_request)
   } else if (!is.null(focus_request)) {
@@ -1207,11 +1252,22 @@ new_dashboard_event <- function(type, focus_request = NULL) {
       type = "validation"
     )
   }
+  if (identical(type, "edit_focus_metadata")) {
+    assert_scalar_string(dataset_id, "dataset_id")
+    assert_scalar_string(variable, "variable")
+  } else if (!is.null(dataset_id) || !is.null(variable)) {
+    abort_llw(
+      "Only a focus-metadata edit accepts a dataset and variable.",
+      type = "validation"
+    )
+  }
   event <- structure(
     list(
       id = new_stable_id("dashboard_event"),
       type = type,
-      focus_request = focus_request
+      focus_request = focus_request,
+      dataset_id = dataset_id,
+      variable = variable
     ),
     class = c("llw_dashboard_event", "list")
   )
@@ -1426,7 +1482,8 @@ dashboard_record_signature <- function(record) {
 new_dashboard_snapshot_cache <- function(
   max_bytes = 192 * 1024^2,
   max_entries = 2L,
-  builder = dashboard_dataset_snapshot
+  builder = dashboard_dataset_snapshot,
+  record_bytes = function(record) as.numeric(utils::object.size(record))
 ) {
   if (
     !is.numeric(max_bytes) ||
@@ -1455,6 +1512,7 @@ new_dashboard_snapshot_cache <- function(
 
   values <- new.env(parent = emptyenv())
   bytes <- new.env(parent = emptyenv())
+  fixed_bytes <- new.env(parent = emptyenv())
   touched <- new.env(parent = emptyenv())
   clock <- 0L
   build_count <- 0L
@@ -1471,11 +1529,29 @@ new_dashboard_snapshot_cache <- function(
     assign(key, clock, envir = touched)
   }
   remove_key <- function(key) {
-    for (where in list(values, bytes, touched)) {
+    for (where in list(values, bytes, fixed_bytes, touched)) {
       if (exists(key, envir = where, inherits = FALSE)) {
         rm(list = key, envir = where)
       }
     }
+  }
+  presentation_fields <- c(
+    "record",
+    "primary_label",
+    "primary_unit",
+    "variable_metadata_provenance",
+    "focus_variable_choices",
+    "variable_inventory",
+    "recipe",
+    "variable_metadata"
+  )
+  presentation_bytes <- function(value) {
+    parts <- value[intersect(
+      names(value),
+      presentation_fields
+    )]
+    parts["record"] <- list(NULL)
+    as.numeric(utils::object.size(parts)) + record_bytes(value$record)
   }
   prune <- function(protect = character()) {
     repeat {
@@ -1491,6 +1567,29 @@ new_dashboard_snapshot_cache <- function(
     invisible(NULL)
   }
   get_value <- function(record) {
+    for (key in keys()) {
+      value <- get(key, envir = values, inherits = FALSE)
+      if (
+        inherits(value, "llw_dashboard_snapshot") &&
+          dataset_record_same_data(value$record, record)
+      ) {
+        if (!identical(value$record, record)) {
+          value <- dashboard_refresh_snapshot(value, record)
+          # Separate-list sizing is conservative (shared attributes are counted
+          # twice). The unchanged measurement tables are sized only at startup,
+          # not traversed again for each metadata-only revision.
+          size <- get(key, envir = fixed_bytes) + presentation_bytes(value)
+          if (size <= as.numeric(max_bytes)) {
+            assign(key, value, envir = values)
+            assign(key, size, envir = bytes)
+            prune(protect = key)
+          } else remove_key(key)
+        }
+        hit_count <<- hit_count + 1L
+        if (key %in% keys()) touch(key)
+        return(list(value = value, signature = key, cache_hit = TRUE))
+      }
+    }
     key <- dashboard_record_signature(record)
     if (exists(key, envir = values, inherits = FALSE)) {
       hit_count <<- hit_count + 1L
@@ -1503,10 +1602,20 @@ new_dashboard_snapshot_cache <- function(
     }
     build_count <<- build_count + 1L
     value <- builder(record)
-    size <- as.numeric(utils::object.size(value))
+    fixed <- if (inherits(value, "llw_dashboard_snapshot")) {
+      as.numeric(utils::object.size(value[setdiff(
+        names(value),
+        presentation_fields
+      )])) +
+        as.numeric(utils::object.size(attributes(value)))
+    } else 0
+    size <- if (inherits(value, "llw_dashboard_snapshot")) {
+      fixed + presentation_bytes(value)
+    } else as.numeric(utils::object.size(value))
     if (size <= as.numeric(max_bytes)) {
       assign(key, value, envir = values)
       assign(key, size, envir = bytes)
+      assign(key, fixed, envir = fixed_bytes)
       touch(key)
       prune(protect = key)
     }
@@ -1540,7 +1649,8 @@ datasetDashboardServer <- function(
   color_mode = reactive("light"),
   snapshot_cache_max_bytes = 192 * 1024^2,
   snapshot_cache_max_entries = 2L,
-  snapshot_builder = dashboard_dataset_snapshot
+  snapshot_builder = dashboard_dataset_snapshot,
+  record_bytes = function(record) as.numeric(utils::object.size(record))
 ) {
   reactive_inputs <- list(
     dataset = dataset,
@@ -1580,7 +1690,8 @@ datasetDashboardServer <- function(
     snapshot_cache <- new_dashboard_snapshot_cache(
       max_bytes = snapshot_cache_max_bytes,
       max_entries = snapshot_cache_max_entries,
-      builder = snapshot_builder
+      builder = snapshot_builder,
+      record_bytes = record_bytes
     )
     active_snapshot_result <- reactiveVal(NULL)
     active_snapshot_signature <- reactiveVal(NULL)
@@ -1658,13 +1769,10 @@ datasetDashboardServer <- function(
       if (is.list(current_state) && isTRUE(current_state$active)) {
         return()
       }
-      signature <- tryCatch(
-        dashboard_record_signature(record),
-        error = identity
-      )
+      active <- isolate(active_snapshot_result())
       if (
-        !inherits(signature, "error") &&
-          identical(signature, isolate(active_snapshot_signature()))
+        inherits(active, "llw_dashboard_snapshot") &&
+          identical(record, active$record)
       ) {
         dashboard_switch_state(list(
           active = FALSE,
@@ -1805,8 +1913,10 @@ datasetDashboardServer <- function(
       invisible(TRUE)
     }
 
+    input_snapshot_signature <- NULL
     observe({
       value <- snapshot()
+      signature <- active_snapshot_signature()
       current_focus <- isolate(input$focus_variable)
       selected_focus <- if (
         is.character(current_focus) &&
@@ -1828,18 +1938,27 @@ datasetDashboardServer <- function(
         session,
         "participants",
         choices = value$participants,
-        selected = utils::head(
-          value$participants,
-          dashboard_view_defaults(limits)$participants_per_page
-        ),
+        selected = if (identical(signature, input_snapshot_signature)) {
+          intersect(
+            isolate(input$participants) %||% character(),
+            value$participants
+          )
+        } else
+          utils::head(
+            value$participants,
+            dashboard_view_defaults(limits)$participants_per_page
+          ),
         server = TRUE
       )
+      input_snapshot_signature <<- signature
     })
 
     snapshot_signature <- reactive({
       req(active_snapshot_signature())
       active_snapshot_signature()
     })
+    data_snapshot <- reactive(snapshot()) |>
+      bindEvent(snapshot_signature())
 
     observeEvent(
       snapshot_signature(),
@@ -1850,7 +1969,7 @@ datasetDashboardServer <- function(
     )
 
     selected_focus_variable <- reactive({
-      value <- snapshot()
+      value <- data_snapshot()
       requested <- input$focus_variable
       if (
         is.character(requested) &&
@@ -1866,7 +1985,7 @@ datasetDashboardServer <- function(
     })
 
     focus_view_for <- function(data_stage) {
-      value <- snapshot()
+      value <- data_snapshot()
       focus <- selected_focus_variable()
       key <- paste(snapshot_signature(), data_stage, focus, sep = "::")
       if (!exists(key, envir = focus_cache, inherits = FALSE)) {
@@ -1893,20 +2012,33 @@ datasetDashboardServer <- function(
         rm(list = stale, envir = focus_cache)
         rm(list = stale, envir = focus_cache_touched)
       }
-      get(key, envir = focus_cache, inherits = FALSE)
+      cached <- get(key, envir = focus_cache, inherits = FALSE)
+      if (!identical(cached$snapshot$record, value$record)) {
+        cached <- dashboard_refresh_focus_view(cached, value)
+        assign(key, cached, envir = focus_cache)
+      }
+      cached
     }
 
-    preprocessed_focus_view <- reactive(focus_view_for("preprocessed"))
+    preprocessed_data_view <- reactive(focus_view_for("preprocessed"))
 
-    explore_focus_view <- reactive({
+    explore_data_view <- reactive({
       stage <- input$data_stage %||% "preprocessed"
       if (!stage %in% c("preprocessed", "source")) stage <- "preprocessed"
       focus_view_for(stage)
     })
+    preprocessed_focus_view <- reactive(dashboard_refresh_focus_view(
+      preprocessed_data_view(),
+      snapshot()
+    ))
+    explore_focus_view <- reactive(dashboard_refresh_focus_view(
+      explore_data_view(),
+      snapshot()
+    ))
 
     selected_participants <- reactive({
       dashboard_requested_participants(
-        snapshot(),
+        data_snapshot(),
         participants = input$participants %||% character(),
         show_all = input$show_all_participants %||% FALSE,
         fallback_count = participants_per_page(),
@@ -2033,85 +2165,95 @@ datasetDashboardServer <- function(
 
     output$metadata_context <- renderUI({
       focus <- preprocessed_focus_view()
-      requests <- metadata_requests()
-      button <- function(id, label, icon_name, request) {
-        actionButton(
-          session$ns(id),
-          label,
-          icon = icon(icon_name),
-          class = "btn-outline-secondary btn-sm",
-          disabled = is.null(request),
-          title = if (is.null(request)) {
-            "No exact retained metadata target is available in this context."
-          } else {
-            paste("Open", request$label, "in the Metadata tab")
-          }
-        )
-      }
-      tags$section(
-        class = "llw-dashboard-metadata-context",
-        `aria-label` = "Metadata context and crosslinks",
+      tags$div(
+        class = "llw-dashboard-metadata-context__summary",
         tags$div(
-          class = "llw-dashboard-metadata-context__summary",
-          tags$div(
-            tags$p(class = "llw-eyebrow mb-1", "Metadata context"),
-            tags$p(
-              class = "mb-0",
-              tags$strong(focus$focus_label),
-              if (!identical(focus$focus_label, focus$focus_variable)) {
-                paste0(" [", focus$focus_variable, "]")
-              },
-              paste0(" \u00b7 ", focus$focus_unit)
-            ),
-            tags$p(
-              class = "llw-secondary small mb-0",
-              paste0(
-                "Label and unit provenance: ",
-                focus$metadata_provenance,
-                ". Source metadata stay immutable; settings do not alter it."
-              )
-            )
+          tags$p(class = "llw-eyebrow mb-1", "Metadata context"),
+          tags$p(
+            class = "mb-0",
+            tags$strong(focus$focus_label),
+            if (!identical(focus$focus_label, focus$focus_variable)) {
+              paste0(" [", focus$focus_variable, "]")
+            },
+            paste0(" \u00b7 ", focus$focus_unit)
           ),
-          tags$div(
-            class = "llw-dashboard-metadata-context__actions",
-            tags$div(
-              class = "llw-dashboard-metadata-context__primary-actions",
-              button(
-                "open_source_metadata",
-                "Source metadata",
-                "database",
-                requests$study %||% requests$dataset
-              ),
-              button(
-                "open_dataset_metadata",
-                "Dataset metadata",
-                "table-list",
-                requests$dataset
-              ),
-              button(
-                "open_variable_metadata",
-                "Focus variable metadata",
-                "bullseye",
-                requests$variable
-              )
-            ),
-            tags$div(
-              class = "llw-dashboard-metadata-context__entity-groups",
-              dashboard_metadata_entity_group_ui(
-                requests$participants,
-                "participant",
-                session$ns
-              ),
-              dashboard_metadata_entity_group_ui(
-                requests$devices,
-                "device",
-                session$ns
-              )
+          tags$p(
+            class = "llw-secondary small mb-0",
+            paste0(
+              "Label and unit provenance: ",
+              focus$metadata_provenance,
+              ". Source metadata stay immutable; settings do not alter it."
             )
           )
         )
       )
     })
+
+    output$metadata_entities <- renderUI({
+      requests <- metadata_requests()
+      tags$div(
+        class = "llw-dashboard-metadata-context__entity-groups",
+        dashboard_metadata_entity_group_ui(
+          requests$participants,
+          "participant",
+          session$ns
+        ),
+        dashboard_metadata_entity_group_ui(
+          requests$devices,
+          "device",
+          session$ns
+        )
+      )
+    })
+    # These buttons are static DOM nodes. Metadata refreshes update their state
+    # without destroying the opener used by the existing modal focus return.
+    observe({
+      if (is.null(dataset())) {
+        for (id in c(
+          "open_source_metadata",
+          "open_dataset_metadata",
+          "open_variable_metadata",
+          "adjust_variable_metadata"
+        ))
+          updateActionButton(session, id, disabled = TRUE)
+        return(invisible(NULL))
+      }
+      requests <- metadata_requests()
+      for (name in c("source", "dataset", "variable")) {
+        request <- if (name == "source")
+          requests$study %||% requests$dataset else requests[[name]]
+        updateActionButton(
+          session,
+          paste0("open_", name, "_metadata"),
+          disabled = is.null(request)
+        )
+      }
+      focus <- preprocessed_focus_view()
+      metadata <- snapshot()[["variable_metadata"]][[focus$focus_variable]] %||%
+        dashboard_variable_metadata(snapshot()$record, focus$focus_variable)
+      present <- any(
+        c(metadata$label_provenance, metadata$unit_provenance) !=
+          "Not specified"
+      )
+      updateActionButton(
+        session,
+        "adjust_variable_metadata",
+        label = if (present) "Adjust" else "Create",
+        disabled = FALSE
+      )
+    })
+    observeEvent(
+      input$adjust_variable_metadata,
+      {
+        focus <- preprocessed_focus_view()
+        event_value(new_dashboard_event(
+          "edit_focus_metadata",
+          dataset_id = snapshot()$record$id,
+          variable = focus$focus_variable
+        ))
+      },
+      ignoreInit = TRUE
+    )
 
     emit_metadata_request <- function(request) {
       if (is.null(request)) {
@@ -2207,8 +2349,8 @@ datasetDashboardServer <- function(
 
     view_recommendation <- reactive({
       dashboard_view_recommendation(
-        snapshot(),
-        focus_view = explore_focus_view(),
+        data_snapshot(),
+        focus_view = explore_data_view(),
         participants = selected_participants(),
         show_all = FALSE,
         limits = limits
@@ -2332,7 +2474,7 @@ datasetDashboardServer <- function(
     })
 
     output$date_window_ui <- renderUI({
-      value <- snapshot()
+      value <- data_snapshot()
       participant_ids <- selected_participants()
       scope_revision()
       if (time_basis() %in% c("participant", "elapsed")) {
@@ -2601,7 +2743,7 @@ datasetDashboardServer <- function(
     )
 
     base_selection <- reactive({
-      value <- snapshot()
+      value <- data_snapshot()
       dashboard_plot_selection(
         value,
         participants = input$participants %||% character(),
@@ -2616,13 +2758,13 @@ datasetDashboardServer <- function(
         view_mode = view_mode(),
         time_page = 1L,
         days_per_page = days_per_page(),
-        focus_view = explore_focus_view()
+        focus_view = explore_data_view()
       )
     })
 
     page_navigator_data <- reactive({
       dashboard_page_navigator(
-        explore_focus_view(),
+        explore_data_view(),
         base_selection()
       )
     })
@@ -3087,7 +3229,7 @@ datasetDashboardServer <- function(
     )
 
     selection <- reactive({
-      value <- snapshot()
+      value <- data_snapshot()
       pages <- current_page_state()
       dashboard_plot_selection(
         value,
@@ -3103,17 +3245,24 @@ datasetDashboardServer <- function(
         view_mode = view_mode(),
         time_page = pages[["time"]],
         days_per_page = days_per_page(),
-        focus_view = explore_focus_view()
+        focus_view = explore_data_view()
       )
     })
 
-    preview <- reactive({
+    data_preview <- reactive({
       dashboard_plot_preview(
-        snapshot(),
+        data_snapshot(),
         selection(),
         limits = limits,
-        focus_view = explore_focus_view()
+        focus_view = explore_data_view()
       )
+    })
+    preview <- reactive({
+      value <- data_preview()
+      focus <- explore_focus_view()
+      value$focus_label <- focus$focus_label
+      value$focus_unit <- focus$focus_unit
+      value
     })
 
     resolved_color_mode <- reactive({
@@ -4529,6 +4678,28 @@ datasetDashboardServer <- function(
       )
     })
 
+    table_view_states <- list(
+      source = new_dashboard_table_view_state(),
+      preprocessed = new_dashboard_table_view_state()
+    )
+    table_view_options <- function(stage, data) {
+      table_id <- if (identical(stage, "source")) "raw_table" else
+        "prepared_table"
+      identity <- list(
+        signature = snapshot_signature(),
+        schema_revision = table_schema_revision()
+      )
+      # DT's native state input is populated even with stateSave = FALSE in
+      # the installed binding. Isolate it to avoid search/draw feedback loops.
+      isolate(table_view_states[[stage]](
+        input[[paste0(table_id, "_state")]],
+        identity,
+        attr(data, "llw_raw_column_names", exact = TRUE) %||% names(data),
+        nrow(data),
+        filtered_rows = length(input[[paste0(table_id, "_rows_all")]])
+      ))
+    }
+
     output$prepared_table <- DT::renderDataTable(
       dashboard_datatable(
         preprocessed_table_data(),
@@ -4537,7 +4708,11 @@ datasetDashboardServer <- function(
           snapshot()$display_timezone
         ),
         column_visibility = FALSE,
-        display_timezone = snapshot()$display_timezone
+        display_timezone = snapshot()$display_timezone,
+        view_options = table_view_options(
+          "preprocessed",
+          preprocessed_table_data()
+        )
       ),
       server = table_contract$server
     )
@@ -4550,7 +4725,8 @@ datasetDashboardServer <- function(
           snapshot()$display_timezone
         ),
         column_visibility = FALSE,
-        display_timezone = snapshot()$display_timezone
+        display_timezone = snapshot()$display_timezone,
+        view_options = table_view_options("source", source_table_data())
       ),
       server = table_contract$server
     )

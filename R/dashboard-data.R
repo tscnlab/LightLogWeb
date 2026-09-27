@@ -673,6 +673,71 @@ dashboard_variable_inventory <- function(data, record, primary_variable) {
   result
 }
 
+dashboard_refresh_variable_inventory <- function(
+  inventory,
+  record,
+  resolved = NULL
+) {
+  metadata <- lapply(inventory$Variable, function(variable) {
+    resolved[[variable]] %||% dashboard_variable_metadata(record, variable)
+  })
+  inventory[["Display label"]] <- vapply(metadata, `[[`, character(1), "label")
+  inventory$Unit <- vapply(metadata, `[[`, character(1), "unit")
+  inventory$Provenance <- vapply(metadata, `[[`, character(1), "provenance")
+  inventory
+}
+
+dashboard_refresh_snapshot <- function(snapshot, record) {
+  stopifnot(dataset_record_same_data(snapshot$record, record))
+  variables <- unique(c(
+    snapshot$variable_inventory$Variable,
+    snapshot$focus_variables,
+    names(snapshot$raw_data)
+  ))
+  resolved <- stats::setNames(
+    lapply(variables, function(variable) {
+      value <- dashboard_variable_metadata(record, variable)
+      value$candidates <- NULL
+      value
+    }),
+    variables
+  )
+  metadata <- resolved[[snapshot$primary_variable]]
+  snapshot$record <- record
+  snapshot$variable_metadata <- resolved
+  snapshot$primary_label <- metadata$label
+  snapshot$primary_unit <- metadata$unit
+  snapshot$variable_metadata_provenance <- metadata$provenance
+  snapshot$focus_variable_choices <- metadata_variable_choice_labels(
+    record,
+    snapshot$focus_variables,
+    resolved = resolved
+  )
+  snapshot$variable_inventory <- dashboard_refresh_variable_inventory(
+    snapshot$variable_inventory,
+    record,
+    resolved
+  )
+  snapshot$recipe$dataset_revision <- record$revision
+  snapshot
+}
+
+dashboard_refresh_focus_view <- function(view, snapshot) {
+  metadata <- snapshot[["variable_metadata"]][[view$focus_variable]] %||%
+    dashboard_variable_metadata(snapshot$record, view$focus_variable)
+  view$snapshot <- snapshot
+  view$focus_label <- metadata$label
+  view$focus_unit <- metadata$unit
+  view$metadata_provenance <- metadata$provenance
+  view$metadata_target <- metadata$target
+  view$variable_inventory <- dashboard_refresh_variable_inventory(
+    view$variable_inventory,
+    snapshot$record,
+    snapshot[["variable_metadata"]]
+  )
+  view
+}
+
 dashboard_numeric_focus_variables <- function(data, eligibility = NULL) {
   dashboard_assert_canonical_data(data, "data")
   numeric <- names(data)[vapply(
@@ -1569,7 +1634,13 @@ dashboard_dataset_snapshot <- function(record) {
     )
   }
   timezone <- dashboard_display_timezone(record, prepared_data)
-  quality_info <- dashboard_quality_summary(record, raw_data, timezone)
+  # Import quality describes the source clock, independently of the chosen
+  # display/analysis zone. Changing that setting never reinterprets source time.
+  quality_info <- dashboard_quality_summary(
+    record,
+    raw_data,
+    lubridate::tz(raw_data$Datetime)
+  )
   raw_local_dates <- as.Date(
     lubridate::with_tz(raw_data$Datetime, tzone = timezone),
     tz = timezone
@@ -2985,6 +3056,7 @@ dashboard_timeline_segments <- function(data, quality) {
       type = "validation"
     )
   }
+  if (nrow(data) == 0L) return(character())
   ids <- as.character(data$Id)
   segment_number <- integer(nrow(data))
   for (participant_id in unique(ids)) {
@@ -4312,7 +4384,163 @@ dashboard_scale_notice <- function(preview, scale, symlog_threshold = 1) {
   )
 }
 
-dashboard_table_options <- function(data, column_visibility = TRUE) {
+# Restore only the view parameters exposed by the dashboard. Browser state is
+# untrusted; neither arbitrary DT options nor regex/column searches are replayed.
+dashboard_restore_table_view <- function(
+  state,
+  previous_columns,
+  columns,
+  row_count,
+  filtered_rows = NULL
+) {
+  integer_scalar <- function(value, lower, upper) {
+    is.numeric(value) &&
+      length(value) == 1L &&
+      !is.na(value) &&
+      is.finite(value) &&
+      value >= lower &&
+      value <= upper &&
+      value == floor(value)
+  }
+  if (
+    !is.list(state) ||
+      !is.list(state$columns) ||
+      length(state$columns) != length(previous_columns) ||
+      !is.list(state$search) ||
+      !is.character(state$search$search) ||
+      length(state$search$search) != 1L ||
+      is.na(state$search$search) ||
+      nchar(state$search$search, type = "bytes") > 4096L ||
+      !integer_scalar(state$length, 1L, 100L) ||
+      !integer_scalar(state$start, 0L, .Machine$integer.max) ||
+      !integer_scalar(row_count, 0L, .Machine$integer.max) ||
+      !is.list(state$order) ||
+      length(state$order) > min(32L, length(previous_columns))
+  ) {
+    return(list())
+  }
+  order <- list()
+  for (item in state$order) {
+    # JSON arrays reach Shiny as lists, not homogeneous R vectors.
+    if (
+      !is.list(item) ||
+        length(item) != 2L ||
+        !integer_scalar(item[[1L]], 0L, length(previous_columns) - 1L) ||
+        !is.character(item[[2L]]) ||
+        length(item[[2L]]) != 1L ||
+        is.na(item[[2L]]) ||
+        !item[[2L]] %in% c("asc", "desc")
+    ) {
+      next
+    }
+    position <- match(previous_columns[[item[[1L]] + 1L]], columns)
+    if (!is.na(position)) {
+      order[[length(order) + 1L]] <- list(position - 1L, item[[2L]])
+    }
+  }
+  same_columns <- identical(previous_columns, columns)
+  count <- if (same_columns && integer_scalar(filtered_rows, 0L, row_count)) {
+    filtered_rows
+  } else {
+    row_count
+  }
+  # A changed searchable column set can change the result count. Start on the
+  # first page without scanning any rows; retain compatible search/sort choices.
+  start <- if (same_columns) {
+    floor(state$start / state$length) * state$length
+  } else {
+    0L
+  }
+  last_page <- floor(max(0, count - 1L) / state$length) * state$length
+  list(
+    search = list(
+      search = state$search$search,
+      regex = FALSE,
+      smart = TRUE,
+      caseInsensitive = TRUE
+    ),
+    order = order,
+    pageLength = as.integer(state$length),
+    displayStart = as.integer(min(start, last_page))
+  )
+}
+
+new_dashboard_table_view_state <- function() {
+  # One bounded descriptor per table, private to its Shiny session. No rows,
+  # metadata, history, or browser storage. Reads happen only during a redraw.
+  previous_identity <- NULL
+  previous_columns <- character()
+  input_time <- NULL
+  pending_state <- NULL
+  pending_count <- NULL
+  function(state, identity, columns, row_count, filtered_rows = NULL) {
+    time <- if (is.list(state)) state$time else NULL
+    valid_time <- is.numeric(time) &&
+      length(time) == 1L &&
+      !is.na(time) &&
+      is.finite(time) &&
+      time >= 0 &&
+      time <= 2^53
+    same_data <- !is.null(previous_identity) &&
+      identical(previous_identity, identity)
+    if (!same_data) {
+      # Until a fresh native draw arrives, ignore the old widget's input. DT's
+      # client timestamp is only an ordering fence, not trusted server time.
+      pending_state <<- NULL
+      pending_count <<- NULL
+      if (valid_time) input_time <<- max(time, input_time %||% 0)
+    } else if (valid_time && (is.null(input_time) || time > input_time)) {
+      restored <- dashboard_restore_table_view(
+        state,
+        previous_columns,
+        previous_columns,
+        row_count,
+        filtered_rows
+      )
+      pending_state <<- if (length(restored)) {
+        list(
+          columns = vector("list", length(previous_columns)),
+          search = restored$search,
+          order = restored$order,
+          length = restored$pageLength,
+          start = restored$displayStart
+        )
+      } else {
+        NULL
+      }
+      pending_count <<- filtered_rows
+      input_time <<- time
+    }
+    options <- dashboard_restore_table_view(
+      pending_state,
+      previous_columns,
+      columns,
+      row_count,
+      pending_count
+    )
+    if (length(options)) {
+      # A second redraw can precede the browser's acknowledgement of the first.
+      # Retain the already validated, raw-name-mapped options in that interval.
+      pending_state <<- list(
+        columns = vector("list", length(columns)),
+        search = options$search,
+        order = options$order,
+        length = options$pageLength,
+        start = options$displayStart
+      )
+      if (!identical(previous_columns, columns)) pending_count <<- NULL
+    }
+    previous_identity <<- identity
+    previous_columns <<- columns
+    options
+  }
+}
+
+dashboard_table_options <- function(
+  data,
+  column_visibility = TRUE,
+  view_options = list()
+) {
   contract <- dashboard_table_contract()
   column_visibility <- isTRUE(column_visibility)
   numeric_columns <- unname(
@@ -4390,7 +4618,7 @@ dashboard_table_options <- function(data, column_visibility = TRUE) {
     )
   }
 
-  list(
+  options <- list(
     dom = if (column_visibility) "Bftip" else "ftip",
     buttons = if (column_visibility) {
       list(list(extend = "colvis", text = "Choose columns"))
@@ -4415,6 +4643,13 @@ dashboard_table_options <- function(data, column_visibility = TRUE) {
       zeroRecords = "No rows match the current search."
     )
   )
+  for (name in intersect(
+    names(view_options),
+    c("search", "order", "pageLength", "displayStart")
+  )) {
+    options[[name]] <- view_options[[name]]
+  }
+  options
 }
 
 dashboard_metadata_display_table <- function(data, record) {
@@ -4451,7 +4686,8 @@ dashboard_datatable <- function(
   caption,
   column_visibility = TRUE,
   display_timezone = "UTC",
-  selection = "none"
+  selection = "none",
+  view_options = list()
 ) {
   if (!is.data.frame(data)) {
     abort_llw("`data` must be a data frame.", type = "validation")
@@ -4483,7 +4719,8 @@ dashboard_datatable <- function(
     ),
     options = dashboard_table_options(
       data,
-      column_visibility = column_visibility
+      column_visibility = column_visibility,
+      view_options = view_options
     ),
     class = "stripe hover row-border compact"
   )

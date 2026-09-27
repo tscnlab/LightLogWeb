@@ -502,14 +502,13 @@ metadata_overlay_missing_targets <- function(context) {
 # source entries nor their search/group identities are rewritten.
 metadata_overlay_presentation <- function(context, overlay) {
   overlay <- metadata_overlay_upgrade(overlay, context$catalog)
-  current <- metadata_overlay_values(overlay, context$catalog)
-  changed <- which(current$overridden)
+  current <- metadata_overlay_values(overlay, context$catalog, context)
   mapping <- context$navigation_targets
-  targets <- match(mapping$target_id, context$catalog$target_id[changed])
-  positions <- match(mapping$path, context$source_index$entries$path)
-  keep <- !is.na(targets) & !is.na(positions)
+  targets <- context$navigation_catalog_rows
+  positions <- context$navigation_entry_rows
+  keep <- !is.na(targets) & !is.na(positions) & current$overridden[targets]
   positions <- positions[keep]
-  values <- current$values[changed[targets[keep]]]
+  values <- current$values[targets[keep]]
   entries <- dplyr::tibble(
     path = mapping$path[keep],
     value = vapply(values, metadata_scalar_text, character(1)),
@@ -526,7 +525,13 @@ metadata_overlay_presentation <- function(context, overlay) {
     affected,
     match(source_entries$group_id[affected], group_ids)
   )
-  replacement <- match(source_entries$path, entries$path)
+  replacement <- if (
+    isTRUE(context$source_paths_unique) && !anyDuplicated(positions)
+  ) {
+    rows <- rep(NA_integer_, nrow(source_entries))
+    rows[positions] <- seq_along(positions)
+    rows
+  } else match(source_entries$path, entries$path)
   for (i in seq_along(group_ids)) {
     rows <- by_group[[as.character(i)]]
     matched <- replacement[rows]
@@ -573,9 +578,11 @@ metadata_overlay_context <- function(record) {
       vapply(
         variables,
         function(name) {
-          value <- factual$variables[[name]][[field]] %||%
-            if (field == "unit")
-              record$source_manifest$details$units[[name]] else NULL
+          value <- metadata_nonempty_text(
+            factual$variables[[name]][[field]] %||% character()
+          )
+          if (length(value) == 0L && field == "unit")
+            value <- record$source_manifest$details$units[[name]]
           if (is.character(value) && length(value) == 1L) value else
             NA_character_
         },
@@ -608,15 +615,30 @@ metadata_overlay_context <- function(record) {
     catalog$source_label <- paste(source$label, "(imported identities)")
   }
   source_index <- metadata_overlay_source_index(bundle$index)
+  navigation_targets <- metadata_overlay_navigation_targets(
+    source_index,
+    catalog
+  )
+  size_cache <- new.env(parent = emptyenv())
+  size_cache$bytes <- as.numeric(utils::object.size(bundle))
+  size_cache$bundle <- if (size_cache$bytes <= 32 * 1024^2) bundle else NULL
+  bundle_parts <- bundle
+  bundle_parts[c("index", "overlay")] <- list(NULL, NULL)
   structure(
     list(
       dataset_id = record$id,
       source_fingerprint = bundle$source_fingerprint,
       catalog = catalog,
-      navigation_targets = metadata_overlay_navigation_targets(
-        source_index,
-        catalog
+      navigation_targets = navigation_targets,
+      navigation_entry_rows = match(
+        navigation_targets$path,
+        source_index$entries$path
       ),
+      navigation_catalog_rows = match(
+        navigation_targets$target_id,
+        catalog$target_id
+      ),
+      source_paths_unique = !anyDuplicated(source_index$entries$path),
       row_targets = Map(
         function(keys, name) {
           positions <- which(catalog$table == name)
@@ -626,6 +648,8 @@ metadata_overlay_context <- function(record) {
             keys = keys,
             values = values[keep],
             rows = catalog[positions[keep], keys],
+            catalog_rows = positions,
+            catalog_matches = match(values, values[keep]),
             ids = catalog$target_id[positions][keep]
           )
         },
@@ -633,6 +657,23 @@ metadata_overlay_context <- function(record) {
         names(metadata_overlay_key_contract(metadata_overlay_version()))
       ),
       source_index = source_index,
+      source_index_bytes = as.numeric(utils::object.size(source_index)),
+      source_column_bytes = Map(
+        function(columns, part) {
+          vapply(
+            source_index[[part]][columns],
+            function(value) {
+              as.numeric(utils::object.size(value))
+            },
+            numeric(1)
+          )
+        },
+        metadata_overlay_shared_columns(),
+        names(metadata_overlay_shared_columns())
+      ),
+      bundle_parts = bundle_parts,
+      bundle_parts_bytes = as.numeric(utils::object.size(bundle_parts)),
+      size_cache = size_cache,
       overlay_paths_disjoint = !any(startsWith(
         tolower(enc2utf8(source_index$entries$path)),
         paste0(metadata_overlay_namespace_id(), "/")
@@ -681,26 +722,45 @@ metadata_overlay_assert_context <- function(record, context) {
   invisible(TRUE)
 }
 
-metadata_overlay_values <- function(overlay, targets) {
+metadata_overlay_values <- function(overlay, targets, context = NULL) {
   result <- targets$source_value
   overridden <- rep(FALSE, nrow(targets))
   for (table in unique(targets$table)) {
     positions <- which(targets$table == table)
     values <- overlay$tables[[table]]
+    if (nrow(values) == 0L) next
     keys <- metadata_overlay_key_contract(overlay$overlay_version)[[table]]
-    matches <- match(
-      metadata_overlay_row_key(targets[positions, ], keys),
-      metadata_overlay_row_key(values, keys)
-    )
-    for (i in which(!is.na(matches))) {
-      position <- positions[[i]]
-      field <- targets$field[[position]]
-      if (!field %in% names(values)) next
-      value <- values[[field]][[matches[[i]]]]
-      if (!is.na(value)) {
-        result[[position]] <- value
-        overridden[[position]] <- TRUE
-      }
+    cached <- context$row_targets[[table]]
+    matches <- if (
+      !is.null(cached) &&
+        identical(targets, context$catalog) &&
+        identical(keys, cached$keys) &&
+        identical(positions, cached$catalog_rows)
+    ) {
+      # Join unique, source-qualified rows once, then reuse the catalog's
+      # field-to-row mapping. Do not reconstruct keys for each field occurrence.
+      match(
+        cached$catalog_matches,
+        metadata_overlay_match_rows(
+          values,
+          cached$rows,
+          keys,
+          cached$values
+        )
+      )
+    } else
+      metadata_overlay_match_rows(
+        targets[positions, keys, drop = FALSE],
+        values,
+        keys
+      )
+    for (field in intersect(unique(targets$field[positions]), names(values))) {
+      selected <- which(targets$field[positions] == field & !is.na(matches))
+      value <- values[[field]][matches[selected]]
+      present <- !is.na(value)
+      destination <- positions[selected[present]]
+      result[destination] <- as.list(value[present])
+      overridden[destination] <- TRUE
     }
   }
   list(values = result, overridden = overridden)
@@ -830,7 +890,7 @@ metadata_overlay_validate_value <- function(
         )
     ) {
       abort_llw(
-        "Use a UCUM code or precise custom unit, not a placeholder. To stop overriding the source, choose Remove override.",
+        "Use a UCUM code or precise custom unit, not a placeholder.",
         type = "validation"
       )
     }
@@ -951,36 +1011,237 @@ metadata_overlay_preview <- function(
   )
 }
 
-metadata_overlay_patch_tables <- function(overlay, preview) {
+# Exact retained column mappings determine the batch, never display labels or
+# dashboard participant/date filters. The caller reuses its initialized context.
+metadata_overlay_focus_targets <- function(record, context, variable) {
+  metadata_overlay_assert_context(record, context)
+  assert_scalar_string(variable, "variable")
+  append_sources <- record$provenance$append_merge$source_records %||% list()
+  if (length(append_sources) > 0L) {
+    explicit <- vapply(
+      append_sources,
+      function(source) {
+        mapping <- source$mapping %||% list()
+        variable %in% c(mapping$measurement_target, mapping$optional_targets)
+      },
+      logical(1)
+    )
+    if (!any(explicit))
+      abort_llw(
+        "No retained append mapping contributes to this focus variable. Select a mapped Dashboard variable; no source-name equivalence was inferred.",
+        type = "validation"
+      )
+  } else if (
+    any(vapply(
+      record$metadata_bundle$sources,
+      function(source) {
+        identical(source$source_type, "append_source")
+      },
+      logical(1)
+    ))
+  ) {
+    abort_llw(
+      "This appended record has no retained column mappings for a quick edit. Inspect its exact source identities in the Metadata tab; no sources were changed.",
+      type = "validation"
+    )
+  }
+  mappings <- metadata_variable_source_mappings(record, variable)
+  catalog <- context$catalog
+  scopes <- unique(catalog$source_scope)
+  roots <- vapply(
+    scopes,
+    function(scope) {
+      jsonlite::fromJSON(scope)[[1L]]
+    },
+    character(1)
+  )
+  root <- roots[match(catalog$source_scope, scopes)]
+  keep <- rep(FALSE, nrow(catalog))
+  for (mapping in mappings) {
+    matches <- root == mapping$namespace_id &
+      catalog$name == mapping$source_name &
+      catalog$table == "variables"
+    if (!any(matches)) {
+      abort_llw(
+        "A retained source has no exact editable variable identity. No sources were omitted or changed. Discard this draft and inspect the retained identities in the Metadata tab before editing.",
+        type = "validation"
+      )
+    }
+    keep <- keep | matches
+  }
+  keep <- keep &
+    catalog$table == "variables" &
+    catalog$field %in% c("label", "unit")
+  targets <- if (all(keep)) catalog else catalog[keep, ]
+  if (
+    nrow(targets) == 0L ||
+      any(targets$variable_type %in% c("string", "boolean", "factor"))
+  ) {
+    abort_llw(
+      "No unambiguous numeric focus-variable identities are retained. Select a numeric focus variable, or inspect its metadata in the Metadata tab.",
+      type = "validation"
+    )
+  }
+  targets
+}
+
+metadata_overlay_focus_state <- function(record, context, variable) {
+  targets <- metadata_overlay_focus_targets(record, context, variable)
+  overlay <- metadata_overlay_upgrade(
+    record$metadata_bundle$overlay,
+    context$catalog
+  )
+  current <- metadata_overlay_values(overlay, targets, context)
+  fields <- stats::setNames(
+    lapply(c("label", "unit"), function(field) {
+      positions <- which(targets$field == field)
+      values <- unlist(current$values[positions], use.names = FALSE)
+      present <- !is.na(values) & nzchar(values)
+      distinct <- unique(values[present])
+      incomplete <- any(present) && any(!present)
+      list(
+        value = if (length(distinct) == 1L && !incomplete) distinct[[1L]] else
+          "",
+        mixed = length(distinct) > 1L,
+        incomplete = incomplete,
+        present = sum(present),
+        missing = sum(!present)
+      )
+    }),
+    c("label", "unit")
+  )
+  list(targets = targets, fields = fields, overlay = overlay, current = current)
+}
+
+# One verified patch and one history entry for both properties. An empty mixed
+# input means preserve; clearing an unambiguous input means remove its override.
+metadata_overlay_focus_preview <- function(
+  record,
+  context,
+  variable,
+  label,
+  unit
+) {
+  state <- metadata_overlay_focus_state(record, context, variable)
+  targets <- state$targets
+  inputs <- list(label = label, unit = unit)
+  old <- state$current
+  proposed <- old$values
+  changed <- remove <- rep(FALSE, nrow(targets))
+  for (field in names(inputs)) {
+    value <- inputs[[field]]
+    if (!is.character(value) || length(value) != 1L || is.na(value))
+      abort_llw(
+        "Enter one label and one unit, or leave a field empty.",
+        type = "validation"
+      )
+    initial <- state$fields[[field]]$value
+    if (identical(value, initial)) next
+    positions <- which(targets$field == field)
+    # Validation needs three typed columns, not a copy of all identity/path
+    # columns for every property in a wide inventory.
+    selected <- list(
+      field = field,
+      value_type = "character",
+      variable_type = unique(targets$variable_type[positions])
+    )
+    action <- if (nzchar(trimws(value))) "set" else "remove"
+    value <- metadata_overlay_validate_value(selected, value, action)
+    if (
+      length(state$overlay$unresolved) > 0L &&
+        any(lengths(metadata_overlay_legacy_conflicts(
+          state$overlay,
+          targets[positions, ]
+        )))
+    ) {
+      abort_llw(
+        "An older overlay has no unique source. Discard this draft and resolve that assignment in the full Metadata editor first.",
+        type = "validation"
+      )
+    }
+    remove[positions] <- action == "remove"
+    proposed[positions] <- if (action == "remove")
+      targets$source_value[positions] else rep(list(value), length(positions))
+    changed[positions] <- if (action == "remove") old$overridden[positions] else
+      vapply(
+        positions,
+        function(i) !identical(old$values[[i]], proposed[[i]]),
+        logical(1)
+      )
+  }
+  structure(
+    list(
+      dataset_id = record$id,
+      source_fingerprint = context$source_fingerprint,
+      base_revision = record$revision,
+      overlay_revision = state$overlay$revision,
+      variable = variable,
+      inputs = inputs,
+      action = "focus",
+      targets = targets,
+      proposed = proposed,
+      changed = changed,
+      remove = remove
+    ),
+    class = c("llw_focus_overlay_preview", "llw_overlay_preview")
+  )
+}
+
+metadata_overlay_patch_tables <- function(overlay, preview, context = NULL) {
   tables <- overlay$tables
   targets <- if (all(preview$changed)) preview$targets else
     preview$targets[preview$changed, ]
-  proposed <- preview$proposed[preview$changed]
+  proposed <- if (all(preview$changed)) preview$proposed else
+    preview$proposed[preview$changed]
+  removed <- if (all(preview$changed)) preview$remove else
+    preview$remove[preview$changed]
   for (name in unique(targets$table)) {
     positions <- which(targets$table == name)
     target <- if (length(positions) == nrow(targets)) targets else
       targets[positions, ]
     value <- tables[[name]]
     keys <- metadata_overlay_key_contract(metadata_overlay_version())[[name]]
-    target_keys <- metadata_overlay_row_key(target, keys)
+    cached <- context$row_targets[[name]]
+    target_keys <- if (is.null(cached))
+      metadata_overlay_row_key(target, keys) else {
+      catalog_positions <- match(
+        target$target_id,
+        context$catalog$target_id[cached$catalog_rows]
+      )
+      cached$values[cached$catalog_matches[catalog_positions]]
+    }
     current_keys <- metadata_overlay_row_key(value, keys)
     missing <- which(!target_keys %in% current_keys & !duplicated(target_keys))
     if (length(missing) > 0L) {
-      additions <- value[rep(NA_integer_, length(missing)), , drop = FALSE]
+      additions <- lapply(value, function(column) {
+        rep(
+          if (is.numeric(column)) NA_real_ else NA_character_,
+          length(missing)
+        )
+      })
+      additions <- structure(
+        additions,
+        class = "data.frame",
+        row.names = .set_row_names(length(missing))
+      )
       for (key in keys) additions[[key]] <- target[[key]][missing]
-      value <- rbind(value, additions)
+      value <- if (nrow(value) == 0L) additions else rbind(value, additions)
     }
-    matches <- match(target_keys, metadata_overlay_row_key(value, keys))
-    for (field in unique(target$field)) {
+    matches <- match(target_keys, c(current_keys, target_keys[missing]))
+    for (field in setdiff(names(value), keys)) {
       selected <- which(target$field == field)
+      if (length(selected) == 0L) next
       replacement <- if (preview$action == "remove") {
         if (is.numeric(value[[field]])) NA_real_ else NA_character_
       } else unlist(proposed[positions[selected]], use.names = FALSE)
+      if (identical(preview$action, "focus") && any(removed)) {
+        replacement[removed[positions[selected]]] <- NA_character_
+      }
       value[[field]][matches[selected]] <- replacement
     }
     fields <- setdiff(names(value), keys)
     keep <- Reduce(`|`, lapply(value[fields], function(column) !is.na(column)))
-    value <- value[keep, , drop = FALSE]
+    if (!all(keep)) value <- value[keep, , drop = FALSE]
     rownames(value) <- NULL
     tables[[name]] <- metadata_validate_overlay_table(
       value,
@@ -1002,20 +1263,52 @@ metadata_overlay_index_rows <- function(rows, positions) {
   )
 }
 
-metadata_overlay_bind_index <- function(parts) {
+metadata_overlay_bind_index <- function(parts, omit = character()) {
   populated <- vapply(parts, nrow, integer(1)) > 0L
   if (!any(populated)) return(parts[[1L]])
   parts <- parts[populated]
-  if (length(parts) == 1L) return(parts[[1L]])
-  result <- lapply(names(parts[[1L]]), function(column) {
+  if (length(parts) == 1L && length(omit) == 0L) return(parts[[1L]])
+  columns <- setdiff(names(parts[[1L]]), omit)
+  result <- lapply(columns, function(column) {
     unlist(lapply(parts, `[[`, column), use.names = FALSE)
   })
-  names(result) <- names(parts[[1L]])
+  names(result) <- columns
   structure(
     result,
     class = "data.frame",
     row.names = .set_row_names(sum(vapply(parts, nrow, integer(1))))
   )
+}
+
+metadata_overlay_shared_columns <- function() {
+  list(nodes = "record_identity", entries = c("record", "value", "search_text"))
+}
+
+metadata_overlay_index_bound <- function(context, extra, index) {
+  # R counts shared strings within a vector, not across vectors. Separate source
+  # and overlay sizes therefore overcount shared identity/value text after their
+  # columns are joined. Re-measure just these four columns and replace their
+  # separate contributions. All other separate-object overhead stays as a safe
+  # overestimate; this does not rely on R's internal allocation layout.
+  shared <- metadata_overlay_shared_columns()
+  # Preserve list/table shells and attributes, but size the replaced columns
+  # only once, from the joined index. This local shell never leaves this helper.
+  remaining <- extra
+  adjustment <- 0
+  for (part in names(shared)) {
+    shell <- unclass(extra[[part]])
+    shell[shared[[part]]] <- rep(list(NULL), length(shared[[part]]))
+    attributes(shell) <- attributes(extra[[part]])
+    remaining[[part]] <- shell
+    for (column in shared[[part]]) {
+      adjustment <- adjustment -
+        context$source_column_bytes[[part]][[column]] +
+        as.numeric(utils::object.size(index[[part]][[column]]))
+    }
+  }
+  context$source_index_bytes +
+    as.numeric(utils::object.size(remaining)) +
+    adjustment
 }
 
 metadata_overlay_typed_index <- function(context, overlay) {
@@ -1196,7 +1489,8 @@ metadata_overlay_typed_index <- function(context, overlay) {
 
 metadata_overlay_rank_entries <- function(
   entries,
-  columns = c("path", "field", "value", "source_label")
+  columns = c("path", "field", "value", "source_label"),
+  known_values = NULL
 ) {
   if (length(columns) == 0L) return(entries)
   # Every ordering uses the same exact identity tie-break. Rank it once, rather
@@ -1210,7 +1504,7 @@ metadata_overlay_rank_entries <- function(
       normalized <- tolower(enc2utf8(values))
       if (anyNA(normalized)) normalized[is.na(normalized)] <- ""
     } else {
-      unique_values <- unique(values)
+      unique_values <- known_values[[column]] %||% unique(values)
       normalized_values <- tolower(enc2utf8(unique_values))
       if (anyNA(normalized_values))
         normalized_values[is.na(normalized_values)] <- ""
@@ -1232,6 +1526,7 @@ metadata_overlay_match_rows <- function(
   before_keys = NULL
 ) {
   if (nrow(after) == 0L) return(integer())
+  if (nrow(before) == 0L) return(rep(NA_integer_, nrow(after)))
   if (
     all(vapply(
       keys,
@@ -1264,7 +1559,12 @@ metadata_overlay_match_rows <- function(
   )
 }
 
-metadata_overlay_patch_existing_index <- function(context, overlay, previous) {
+metadata_overlay_patch_existing_index <- function(
+  context,
+  overlay,
+  previous,
+  with_size = FALSE
+) {
   if (
     is.null(previous) ||
       !identical(previous$overlay$overlay_version, overlay$overlay_version) ||
@@ -1439,21 +1739,65 @@ metadata_overlay_patch_existing_index <- function(context, overlay, previous) {
     index$groups$source_label,
     index$groups$group_id
   )
-  validate_metadata_index(index, context$source_fingerprint)
+  index <- validate_metadata_index(index, context$source_fingerprint)
+  if (!with_size) return(list(index = index))
+  # No rows were added on this path. Compacted physical paths reuse old path
+  # strings; all other columns are unchanged or subsets except the values,
+  # search text, group summaries and revision labels counted below. Including
+  # their entire new vectors overcounts rather than subtracting shared strings.
+  # Count replacement values twice: once in the typed overlay table and once in
+  # the index. Numeric table cells need no more space than their text index cells.
+  added_bytes <- if (changed_paths) Inf else {
+    current <- match(
+      previous$index$entries$entry_id[changed_entries],
+      index$entries$entry_id
+    )
+    current <- current[!is.na(current)]
+    as.numeric(utils::object.size(list(
+      index$entries$value[current],
+      index$entries$value[current],
+      index$entries$search_text[current],
+      index$groups
+    ))) +
+      4 * as.numeric(utils::object.size(label))
+  }
+  list(index = index, added_bytes = added_bytes)
 }
 
-metadata_overlay_patch_index <- function(context, overlay, previous = NULL) {
-  patched <- metadata_overlay_patch_existing_index(context, overlay, previous)
-  if (!is.null(patched)) return(patched)
+metadata_overlay_patch_index <- function(
+  context,
+  overlay,
+  previous = NULL,
+  with_size = FALSE
+) {
+  patched <- metadata_overlay_patch_existing_index(
+    context,
+    overlay,
+    previous,
+    with_size
+  )
+  if (!is.null(patched)) {
+    return(if (with_size) patched else patched$index)
+  }
   extra <- metadata_overlay_typed_index(context, overlay)
   index <- context$source_index
   for (part in c("nodes", "entries", "groups")) {
-    index[[part]] <- metadata_overlay_bind_index(list(
-      index[[part]],
-      extra[[part]]
-    ))
+    # Joined sort ranks are immediately recomputed. Do not allocate four
+    # temporary full-length rank columns just to overwrite them below.
+    index[[part]] <- metadata_overlay_bind_index(
+      list(index[[part]], extra[[part]]),
+      omit = if (part == "entries")
+        paste0("sort_rank_", c("path", "field", "value", "source")) else
+        character()
+    )
   }
-  index$entries <- metadata_overlay_rank_entries(index$entries)
+  index$entries <- metadata_overlay_rank_entries(
+    index$entries,
+    known_values = list(
+      field = unique(index$groups$field),
+      source_label = unique(index$groups$source_label)
+    )
+  )
   ranked <- index$groups
   ranked$path <- ranked$group_path
   ranked$value <- ranked$value_preview
@@ -1471,7 +1815,35 @@ metadata_overlay_patch_index <- function(context, overlay, previous = NULL) {
     index$nodes$node_id,
     nomatch = 0L
   )
-  validate_metadata_index(index, context$source_fingerprint)
+  index <- validate_metadata_index(index, context$source_fingerprint)
+  if (!with_size) return(index)
+  list(
+    index = index,
+    index_bytes = metadata_overlay_index_bound(context, extra, index)
+  )
+}
+
+metadata_overlay_bundle_bytes <- function(context, bundle) {
+  cached <- context$size_cache
+  if (is.environment(cached) && identical(cached$bundle, bundle)) {
+    return(cached$bytes)
+  }
+  as.numeric(utils::object.size(bundle))
+}
+
+metadata_overlay_bundle_budget <- function(bundle, bound, limit = 32 * 1024^2) {
+  # A loose upper bound must not reject an otherwise valid edit. Near the
+  # threshold (or without a proved bound), use the original exact size gate.
+  if (!is.finite(bound) || bound > limit) {
+    bound <- as.numeric(utils::object.size(bundle))
+  }
+  if (bound > limit) {
+    abort_llw(
+      "This metadata update exceeds the 32 MiB bundle budget. Reduce the edit scope.",
+      type = "validation"
+    )
+  }
+  bound
 }
 
 metadata_overlay_replace <- function(
@@ -1484,17 +1856,31 @@ metadata_overlay_replace <- function(
   metadata_overlay_assert_context(record, context)
   bundle <- record$metadata_bundle
   bundle$overlay <- overlay
-  bundle$index <- metadata_overlay_patch_index(
+  patched <- metadata_overlay_patch_index(
     context,
     overlay,
-    index_base
+    index_base,
+    with_size = TRUE
   )
-  if (as.numeric(utils::object.size(bundle)) > 32 * 1024^2) {
-    abort_llw(
-      "This metadata update exceeds the 32 MiB bundle budget. Reduce the edit scope.",
-      type = "validation"
-    )
+  bundle$index <- patched$index
+  parts <- bundle
+  parts[c("index", "overlay")] <- list(NULL, NULL)
+  if (!is.null(patched$index_bytes)) {
+    static_bytes <- if (identical(parts, context$bundle_parts)) {
+      context$bundle_parts_bytes
+    } else as.numeric(utils::object.size(parts))
+    bound <- static_bytes +
+      patched$index_bytes +
+      as.numeric(utils::object.size(overlay))
+  } else {
+    prior_parts <- index_base
+    prior_parts[c("index", "overlay")] <- list(NULL, NULL)
+    bound <- if (identical(parts, prior_parts)) {
+      metadata_overlay_bundle_bytes(context, index_base) +
+        patched$added_bytes
+    } else Inf
   }
+  size <- metadata_overlay_bundle_budget(bundle, bound)
   if (history) {
     snapshot <- dataset_snapshot(record)
     attr(snapshot, "llw_change_type") <- "metadata_overlay"
@@ -1502,6 +1888,10 @@ metadata_overlay_replace <- function(
   }
   record$metadata_bundle <- bundle
   record$revision <- record$revision + 1L
+  # Disposable, context-local accounting for one committed bundle only. It is
+  # never serialized into the record or used as a source-integrity assertion.
+  context$size_cache$bundle <- bundle
+  context$size_cache$bytes <- size
   record
 }
 
@@ -1529,16 +1919,25 @@ apply_metadata_overlay <- function(record, context, preview) {
       type = "validation"
     )
   }
-  verified <- metadata_overlay_preview(
-    record,
-    context,
-    preview$target_id,
-    preview$value,
-    preview$scope,
-    preview$action,
-    preview$resolve_legacy,
-    eligible_ids = preview$eligible_ids
-  )
+  verified <- if (inherits(preview, "llw_focus_overlay_preview")) {
+    metadata_overlay_focus_preview(
+      record,
+      context,
+      preview$variable,
+      preview$inputs$label,
+      preview$inputs$unit
+    )
+  } else
+    metadata_overlay_preview(
+      record,
+      context,
+      preview$target_id,
+      preview$value,
+      preview$scope,
+      preview$action,
+      preview$resolve_legacy,
+      eligible_ids = preview$eligible_ids
+    )
   if (!identical(preview, verified)) {
     abort_llw(
       "The edit target or preview changed. Review the current targets again.",
@@ -1552,7 +1951,7 @@ apply_metadata_overlay <- function(record, context, preview) {
     record$metadata_bundle$overlay,
     context$catalog
   )
-  tables <- metadata_overlay_patch_tables(overlay, preview)
+  tables <- metadata_overlay_patch_tables(overlay, preview, context)
   if (resolving) {
     overlay$unresolved <- lapply(overlay$unresolved, function(legacy) {
       affected <- metadata_overlay_legacy_conflicts(

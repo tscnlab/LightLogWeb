@@ -1049,25 +1049,135 @@ reduce_session_model <- function(model, event) {
   )
 }
 
+# Compare immutable in-memory payloads, not a freshly computed payload hash.
+# Metadata presentation and history cannot change measurement-derived results.
+dataset_record_same_data <- function(previous, current) {
+  if (
+    !inherits(previous, "llw_dataset_record") ||
+      !inherits(current, "llw_dataset_record")
+  )
+    return(FALSE)
+  exclude <- c("display_name", "revision", "history", "metadata_bundle")
+  identical(
+    previous[setdiff(names(previous), exclude)],
+    current[setdiff(names(current), exclude)]
+  ) &&
+    identical(
+      previous$metadata_bundle$source_fingerprint,
+      current$metadata_bundle$source_fingerprint
+    )
+}
+
+# Size the retained record, not a decoded copy. The account contains only byte
+# counts. Unchanged snapshots reuse their counts, including after history shifts.
+dataset_record_size_account <- function(
+  record,
+  previous = NULL,
+  account = NULL,
+  bundle_bytes = NULL
+) {
+  without_bundle <- function(value) {
+    value["metadata_bundle"] <- list(NULL)
+    value
+  }
+  parts <- without_bundle(record)
+  parts["history"] <- list(NULL)
+  prior_parts <- if (!is.null(previous)) without_bundle(previous) else NULL
+  if (!is.null(prior_parts)) prior_parts["history"] <- list(NULL)
+  fixed <- if (!is.null(account) && identical(parts, prior_parts)) {
+    account$fixed
+  } else as.numeric(utils::object.size(parts))
+  if (is.null(bundle_bytes)) {
+    bundle_bytes <- if (
+      !is.null(account) &&
+        identical(record$metadata_bundle, previous$metadata_bundle)
+    )
+      account$bundle else as.numeric(utils::object.size(record$metadata_bundle))
+  }
+  history_bytes <- vapply(
+    record$history,
+    function(snapshot) {
+      if (!is.null(account)) {
+        matches <- which(vapply(
+          previous$history,
+          identical,
+          logical(1),
+          snapshot
+        ))
+        if (length(matches)) return(account$history[[matches[[1L]]]])
+      }
+      metadata_bytes <- if (
+        !is.null(account) &&
+          identical(snapshot$metadata_bundle, previous$metadata_bundle)
+      )
+        account$bundle else
+        as.numeric(utils::object.size(snapshot$metadata_bundle))
+      as.numeric(utils::object.size(without_bundle(snapshot))) + metadata_bytes
+    },
+    numeric(1)
+  )
+  history_shell <- record$history
+  history_shell[] <- rep(list(NULL), length(history_shell))
+  list(
+    fixed = fixed,
+    bundle = bundle_bytes,
+    history = history_bytes,
+    bytes = fixed +
+      bundle_bytes +
+      sum(history_bytes) +
+      as.numeric(utils::object.size(history_shell))
+  )
+}
+
 new_session_store <- function(profile) {
   assert_scalar_string(profile, "profile")
   model_value <- shiny::reactiveVal(new_session_model(profile = profile))
 
   model <- shiny::reactive(model_value())
-  datasets <- shiny::reactive(model_value()$datasets)
-  selected_dataset_id <- shiny::reactive(model_value()$selected_dataset_id)
+  datasets_value <- shiny::reactiveVal(list())
+  selected_id_value <- shiny::reactiveVal(NULL)
+  sized_record <- NULL
+  size_account <- NULL
+  record_bytes <- function(record, bundle_bytes = NULL) {
+    if (identical(record, sized_record) && !is.null(size_account)) {
+      return(size_account$bytes)
+    }
+    next_account <- dataset_record_size_account(
+      record,
+      sized_record,
+      size_account,
+      bundle_bytes
+    )
+    sized_record <<- record
+    size_account <<- next_account
+    next_account$bytes
+  }
+  datasets <- shiny::reactive(datasets_value())
+  selected_dataset_id <- shiny::reactive(selected_id_value())
+  set_model <- function(value) {
+    if (
+      !is.null(sized_record) &&
+        !identical(value$datasets[[sized_record$id]], sized_record)
+    ) {
+      sized_record <<- NULL
+      size_account <<- NULL
+    }
+    model_value(value)
+    datasets_value(value$datasets)
+    selected_id_value(value$selected_dataset_id)
+    invisible(value)
+  }
   selected_dataset <- shiny::reactive({
-    current <- model_value()
     # All writes enter through validated dispatch or the bounded metadata-only
     # methods below. Reading this private store must not decode every dataset.
-    if (is.null(current$selected_dataset_id)) NULL else
-      current$datasets[[current$selected_dataset_id]]
+    id <- selected_dataset_id()
+    if (is.null(id)) NULL else datasets()[[id]]
   })
 
   dispatch <- function(event) {
     current_model <- shiny::isolate(model_value())
     next_model <- reduce_session_model(current_model, event)
-    model_value(next_model)
+    set_model(next_model)
     invisible(next_model)
   }
 
@@ -1079,7 +1189,7 @@ new_session_store <- function(profile) {
     }
     if (!identical(current$selected_dataset_id, dataset_id)) {
       current$selected_dataset_id <- dataset_id
-      model_value(current)
+      set_model(current)
     }
     invisible(current$datasets[[dataset_id]])
   }
@@ -1096,8 +1206,17 @@ new_session_store <- function(profile) {
     updated <- if (isTRUE(undo)) undo_metadata_overlay(record, context) else
       apply_metadata_overlay(record, context, preview)
     if (!identical(record, updated)) {
+      # Reuse the engine's proved bundle bound. Do not size its immutable source
+      # index again in each consumer after the same transaction.
+      record_bytes(
+        updated,
+        metadata_overlay_bundle_bytes(
+          context,
+          updated$metadata_bundle
+        )
+      )
       current$datasets[[updated$id]] <- updated
-      model_value(current)
+      set_model(current)
     }
     updated
   }
@@ -1113,6 +1232,7 @@ new_session_store <- function(profile) {
     },
     dispatch = dispatch,
     select_dataset = select_dataset,
+    record_bytes = record_bytes,
     apply_overlay = apply_overlay
   )
 }

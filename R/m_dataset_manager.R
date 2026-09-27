@@ -371,18 +371,33 @@ datasetManagerServer <- function(id, datasets, selected_dataset_id) {
       )
     })
 
+    last_library_choices <- NULL
     observe({
-      datasets()
-      selected_dataset_id()
-      sync_dataset_selection()
+      current <- list(
+        labels = vapply(datasets(), `[[`, character(1), "display_name"),
+        selected = selected_dataset_id()
+      )
+      if (!identical(current, last_library_choices)) {
+        sync_dataset_selection()
+        last_library_choices <<- current
+      }
     })
 
+    inventory_cache <- new_append_ui_cache(
+      max_entries = 12L,
+      max_bytes = 1024^2
+    )
+    session$onSessionEnded(inventory_cache$clear)
     output$selected_summary <- renderUI({
       dataset_id <- selected_dataset_id()
       if (is.null(dataset_id)) return(NULL)
       record <- datasets()[[dataset_id]]
       req(record)
-      inventory <- dataset_record_inventory(record)
+      inventory <- inventory_cache$get(
+        dataset_inventory_signature(record),
+        function() dataset_record_inventory(record)
+      )
+      inventory <- dataset_inventory_presentation(inventory, record)
       warning_label <- if (inventory$warning_count == 0L) {
         "No recorded warnings"
       } else {

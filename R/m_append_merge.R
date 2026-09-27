@@ -31,8 +31,13 @@ append_ui_record_signature <- function(record) {
     )
   }
   required <- c(
-    "id", "display_name", "revision", "raw_checksum", "source_manifest",
-    "factual_metadata", "analysis_settings"
+    "id",
+    "display_name",
+    "revision",
+    "raw_checksum",
+    "source_manifest",
+    "factual_metadata",
+    "analysis_settings"
   )
   if (!all(required %in% names(record))) {
     abort_llw("The append source contract is incomplete.", type = "validation")
@@ -43,7 +48,6 @@ append_ui_record_signature <- function(record) {
       list(
         id = record$id,
         display_name = record$display_name,
-        revision = record$revision,
         raw_checksum = record$raw_checksum,
         source_manifest = record$source_manifest,
         factual_metadata = record$factual_metadata,
@@ -57,7 +61,10 @@ append_ui_record_signature <- function(record) {
 
 append_record_column_choices_from_data <- function(record, data) {
   if (!is.data.frame(data)) {
-    abort_llw("Append column choices require a data frame.", type = "validation")
+    abort_llw(
+      "Append column choices require a data frame.",
+      type = "validation"
+    )
   }
   data <- data[append_user_column_names(data)]
   atomic <- names(data)[vapply(
@@ -104,7 +111,10 @@ append_record_column_choices_from_data <- function(record, data) {
 
 append_record_column_choices <- function(record) {
   record <- validate_dataset_record(record)
-  append_record_column_choices_from_data(record, unserialize(record$raw_payload))
+  append_record_column_choices_from_data(
+    record,
+    unserialize(record$raw_payload)
+  )
 }
 
 append_record_variable_metadata_unchecked <- function(record, variable) {
@@ -173,14 +183,23 @@ new_append_ui_cache <- function(
   max_bytes = 24 * 1024^2
 ) {
   if (
-    !is.numeric(max_entries) || length(max_entries) != 1L ||
-      is.na(max_entries) || max_entries < 1 || max_entries != floor(max_entries)
+    !is.numeric(max_entries) ||
+      length(max_entries) != 1L ||
+      is.na(max_entries) ||
+      max_entries < 1 ||
+      max_entries != floor(max_entries)
   ) {
-    abort_llw("`max_entries` must be a positive whole number.", type = "validation")
+    abort_llw(
+      "`max_entries` must be a positive whole number.",
+      type = "validation"
+    )
   }
   if (
-    !is.numeric(max_bytes) || length(max_bytes) != 1L || is.na(max_bytes) ||
-      !is.finite(max_bytes) || max_bytes < 1
+    !is.numeric(max_bytes) ||
+      length(max_bytes) != 1L ||
+      is.na(max_bytes) ||
+      !is.finite(max_bytes) ||
+      max_bytes < 1
   ) {
     abort_llw("`max_bytes` must be positive and finite.", type = "validation")
   }
@@ -213,7 +232,8 @@ new_append_ui_cache <- function(
       if (
         length(present) <= as.integer(max_entries) &&
           total_bytes() <= as.numeric(max_bytes)
-      ) break
+      )
+        break
       candidates <- setdiff(present, protect)
       if (length(candidates) == 0L) break
       ages <- vapply(candidates, function(key) get(key, touched), integer(1))
@@ -445,7 +465,12 @@ append_measurement_strategy_ui <- function(ns, selected, candidates) {
   )
 }
 
-append_time_selection <- function(input, records, source_ids, contracts = NULL) {
+append_time_selection <- function(
+  input,
+  records,
+  source_ids,
+  contracts = NULL
+) {
   zones <- vapply(
     source_ids,
     function(dataset_id) {
@@ -1783,6 +1808,16 @@ append_merge_server <- function(
       max_entries = 24L,
       max_bytes = 24 * 1024^2
     )
+    control_records <- reactiveVal(list())
+    control_signatures <- NULL
+    observe({
+      records <- datasets()
+      signatures <- vapply(records, append_ui_record_signature, character(1))
+      if (!identical(signatures, control_signatures)) {
+        control_records(records)
+        control_signatures <<- signatures
+      }
+    })
 
     schedule_append_action <- function(callback) {
       run <- function() {
@@ -1868,7 +1903,7 @@ append_merge_server <- function(
     })
 
     selected_source_ids <- reactive({
-      intersect(input$source_ids %||% character(), names(datasets()))
+      intersect(input$source_ids %||% character(), names(control_records()))
     })
 
     identity_ready <- reactive({
@@ -2050,7 +2085,10 @@ append_merge_server <- function(
           )
           time_issues <- append_time_issues(profiles, spec)
           if (length(time_issues$errors) > 0L) {
-            notify_append(paste(time_issues$errors, collapse = " "), type = "error")
+            notify_append(
+              paste(time_issues$errors, collapse = " "),
+              type = "error"
+            )
             return()
           }
           incProgress(0.4, detail = "Opening the review step")
@@ -2101,7 +2139,7 @@ append_merge_server <- function(
       bindEvent(input$resolve_preview_error, ignoreInit = TRUE)
 
     output$source_selector <- renderUI({
-      records <- datasets()
+      records <- control_records()
       if (length(records) < 2L) {
         return(llw_status_callout(
           "idle",
@@ -2156,7 +2194,7 @@ append_merge_server <- function(
     })
 
     output$identity_controls <- renderUI({
-      records <- datasets()
+      records <- control_records()
       source_ids <- selected_source_ids()
       if (length(source_ids) < 2L) return(NULL)
       policy <- input$participant_policy %||% "prefix_source"
@@ -2175,7 +2213,7 @@ append_merge_server <- function(
     })
 
     output$measurement_strategy_control <- renderUI({
-      records <- datasets()
+      records <- control_records()
       source_ids <- selected_source_ids()
       candidates <- append_common_measurement_candidates(
         records,
@@ -2190,7 +2228,7 @@ append_merge_server <- function(
     })
 
     output$mapping_controls <- renderUI({
-      records <- datasets()
+      records <- control_records()
       source_ids <- selected_source_ids()
       if (length(source_ids) < 2L) return(NULL)
       strategy <- input$measurement_strategy %||% "separate"
@@ -2681,10 +2719,11 @@ append_merge_server <- function(
       is_current = reactive(preview_is_current()),
       add_dataset = reactive(added_dataset_value()),
       action_state = reactive(append_action_state()),
-      cache_stats = function() list(
-        contracts = contract_cache$stats(),
-        profiles = profile_cache$stats()
-      )
+      cache_stats = function()
+        list(
+          contracts = contract_cache$stats(),
+          profiles = profile_cache$stats()
+        )
     )
   })
 }

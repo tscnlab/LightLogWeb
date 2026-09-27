@@ -72,6 +72,11 @@ test_that("append UI contracts are lightweight, cached, bounded, and exact", {
 
   revised <- first
   revised$revision <- revised$revision + 1L
+  expect_true(identical(
+    append_ui_record_signature(first),
+    append_ui_record_signature(revised)
+  ))
+  revised$analysis_settings$primary_variable <- "Another variable"
   expect_false(identical(
     append_ui_record_signature(first),
     append_ui_record_signature(revised)
@@ -129,6 +134,41 @@ test_that("cached append inputs preserve spec parity while full preview revalida
     current_preview$fingerprint,
     append_source_fingerprint(current_records, current_spec)
   )
+})
+
+test_that("annotation edits reuse append contracts but invalidate preview freshness", {
+  skip_if_not(file.exists(file.path(
+    m7_fixture_directory(),
+    "tum-medi-only.rds"
+  )))
+  records <- list(m7_fixture_record(), m7_fixture_record("iztech-light-subset"))
+  names(records) <- vapply(records, `[[`, character(1), "id")
+  first <- records[[1L]]
+  edited <- m7_overlay_edit(first, "unit", "klx", "single")
+  spec <- list(mappings = list(list(dataset_id = first$id)))
+  fingerprint <- append_source_fingerprint(records, spec)
+  contract <- append_ui_record_contract(first)
+  inventory <- dataset_record_inventory(first)
+  testthat::local_mocked_bindings(
+    unserialize = function(...) stop("payload decoded"),
+    .package = "base"
+  )
+  expect_identical(
+    append_ui_record_signature(first),
+    append_ui_record_signature(edited)
+  )
+  expect_identical(
+    dataset_inventory_signature(first),
+    dataset_inventory_signature(edited)
+  )
+  changed <- records
+  changed[[1L]] <- edited
+  expect_false(identical(append_source_fingerprint(changed, spec), fingerprint))
+  expect_identical(
+    dataset_inventory_presentation(inventory, edited)$primary_display_unit,
+    "varies by retained source"
+  )
+  expect_identical(contract$choices$measurement[[1L]], "MEDI")
 })
 
 test_that("dataset duplication creates a new independent stable record", {

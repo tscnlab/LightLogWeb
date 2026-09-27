@@ -537,6 +537,206 @@ test_that("appended overlay resolution stays inside its exact source mapping", {
   expect_false(resolved_b$conflict)
 })
 
+test_that("legacy factual units take precedence over a same-source manifest description", {
+  record <- sample_dataset_record()
+  expect_identical(record$factual_metadata$variables$MEDI$unit, "lux")
+  expect_identical(
+    record$source_manifest$details$units$MEDI,
+    "lux (melanopic EDI)"
+  )
+  expect_identical(metadata_resolve_variable(record, "MEDI")$unit, "lux")
+  record$factual_metadata$variables$MEDI$unit <- NA_character_
+  expect_identical(
+    metadata_resolve_variable(record, "MEDI")$unit,
+    "lux (melanopic EDI)"
+  )
+})
+
+test_that("legacy factual variable focus resolves exact retained fields without an overlay", {
+  record <- sample_dataset_record()
+  before <- record
+  resolved <- metadata_resolve_variable(record, "MEDI")
+  expect_s3_class(resolved$target, "llw_metadata_focus_request")
+  expect_identical(resolved$target$namespace_id, record$id)
+  expect_identical(resolved$target$field, "label")
+  focus <- metadata_resolve_focus_request(
+    record$metadata_bundle,
+    resolved$target
+  )
+  expect_identical(focus$state, "resolved")
+  group <- metadata_index_group(record$metadata_bundle$index, focus$group_id)
+  expect_identical(
+    group$entries$value,
+    record$factual_metadata$variables$MEDI$label
+  )
+  expect_identical(group$entries$layer, "Immutable source")
+  expect_identical(record, before)
+  expect_identical(
+    metadata_resolve_variable(record, "MEDI")$target,
+    resolved$target
+  )
+  expect_null(metadata_resolve_variable(record, "MED")$target)
+
+  factual_source <- function(id, facts, type = "test") {
+    new_metadata_source_namespace(
+      id,
+      "Synthetic factual metadata",
+      type,
+      records = list(factual_metadata = list(variables = facts))
+    )
+  }
+  facts <- list(MEDI = list(unit = "lux"), MEDI_extra = list(label = "Other"))
+  source <- factual_source(record$id, facts)
+  record$metadata_bundle <- new_metadata_bundle(stats::setNames(
+    list(source),
+    source$namespace_id
+  ))
+  expect_identical(
+    metadata_resolve_variable(record, "MEDI")$target$field,
+    "unit"
+  )
+  source <- factual_source(record$id, facts["MEDI_extra"])
+  record$metadata_bundle <- new_metadata_bundle(stats::setNames(
+    list(source),
+    source$namespace_id
+  ))
+  # Manifest values and similarly named variables do not invent retained paths.
+  expect_null(metadata_resolve_variable(record, "MEDI")$target)
+
+  source <- factual_source(record$id, facts)
+  other <- factual_source("other", facts)
+  record$metadata_bundle <- new_metadata_bundle(stats::setNames(
+    list(source, other),
+    c(source$namespace_id, other$namespace_id)
+  ))
+  expect_null(metadata_resolve_variable(record, "MEDI")$target)
+  record$provenance$append_merge$source_records <- list(list(
+    dataset_id = "other",
+    mapping = list(
+      measurement_target = "mapped_MEDI",
+      measurement_column = "MEDI"
+    )
+  ))
+  mapped <- metadata_resolve_variable(record, "mapped_MEDI")$target
+  expect_identical(mapped$namespace_id, "other")
+  expect_identical(
+    metadata_resolve_focus_request(record$metadata_bundle, mapped)$state,
+    "resolved"
+  )
+  expect_null(metadata_resolve_variable(record, "MEDI")$target)
+  record$provenance <- list()
+  other <- factual_source("other", facts, "append_source")
+  record$metadata_bundle <- new_metadata_bundle(list(other = other))
+  expect_null(metadata_resolve_variable(record, "MEDI")$target)
+})
+
+test_that("aggregate variable metadata respects each single and batch occurrence", {
+  skip_if_not(file.exists(file.path(
+    m7_fixture_directory(),
+    "tum-medi-only.rds"
+  )))
+  for (fixture in c(
+    "tum-medi-only",
+    "iztech-light-subset",
+    "ucr-all-light-variables"
+  )) {
+    record <- m7_fixture_record(fixture)
+    single <- m7_overlay_edit(record, "unit", "klx", "single")
+    resolved <- metadata_resolve_variable(single, "MEDI")
+    expect_true(resolved$conflict, info = fixture)
+    expect_identical(resolved$unit, "varies by retained source")
+    expect_match(resolved$unit_provenance, "LightLogWeb overlay", fixed = TRUE)
+    expect_match(resolved$unit_provenance, "Immutable source", fixed = TRUE)
+    expect_equal(sum(resolved$candidates$unit == "klx"), 1L)
+    expect_equal(
+      sum(resolved$candidates$unit == "lx"),
+      if (fixture == "iztech-light-subset") 5L else 4L
+    )
+    expect_identical(single$raw_payload, record$raw_payload)
+    expect_identical(
+      single$metadata_bundle$sources,
+      record$metadata_bundle$sources
+    )
+    all <- m7_overlay_edit(record, "unit", "klx")
+    expect_identical(metadata_resolve_variable(all, "MEDI")$unit, "klx")
+    expect_false(metadata_resolve_variable(all, "MEDI")$conflict)
+    label <- m7_overlay_edit(record, "label", "Only one label", "single")
+    expect_identical(
+      metadata_resolve_variable(label, "MEDI")$display_label,
+      "MEDI"
+    )
+    context <- metadata_overlay_context(single)
+    undone <- undo_metadata_overlay(single, context)
+    expect_identical(metadata_resolve_variable(undone, "MEDI")$unit, "lx")
+  }
+})
+
+test_that("nested source overlays and colliding legacy keys remain source qualified", {
+  skip_if_not(file.exists(file.path(
+    m7_fixture_directory(),
+    "tum-medi-only.rds"
+  )))
+  record <- m7_fixture_record()
+  edited <- m7_overlay_edit(record, "unit", "klx", "single")
+  nested <- new_metadata_source_namespace(
+    "nested",
+    "Retained source",
+    "append_source",
+    records = list(metadata_bundle = edited$metadata_bundle)
+  )
+  record$metadata_bundle <- new_metadata_bundle(list(nested = nested))
+  resolved <- metadata_resolve_variable(record, "MEDI")
+  expect_true(resolved$conflict)
+  expect_match(
+    resolved$unit_provenance,
+    "Retained source overlay",
+    fixed = TRUE
+  )
+  expect_equal(sum(resolved$candidates$unit == "klx"), 1L)
+  expect_equal(sum(resolved$candidates$unit == "lx"), 4L)
+  expect_identical(unique(resolved$candidates$namespace_id), "nested")
+
+  original <- m7_fixture_record()
+  source <- original$metadata_bundle$sources[[1L]]
+  collision <- new_metadata_source_namespace(
+    "collision",
+    "Independent source",
+    "test",
+    records = source$records
+  )
+  bundle <- new_metadata_bundle(c(
+    original$metadata_bundle$sources,
+    list(collision = collision)
+  ))
+  tables <- metadata_empty_overlay_tables()
+  row <- source$records$variable_inventory
+  row <- row[row$name == "MEDI", ][1L, ]
+  tables$variables <- data.frame(
+    dataset_id = row$dataset_id,
+    file_group_id = row$file_group_id,
+    name = "MEDI",
+    label = NA_character_,
+    unit = "klx"
+  )
+  record$metadata_bundle <- new_metadata_bundle(
+    bundle$sources,
+    new_metadata_overlay(bundle$source_fingerprint, tables, revision = 1L)
+  )
+  expect_identical(metadata_resolve_variable(record, "MEDI")$unit, "lx")
+  expect_false(metadata_resolve_variable(record, "MEDI")$conflict)
+  # Ambiguous legacy values need explicit resolution, not implicit precedence.
+  expect_error(
+    m7_overlay_edit(record, "unit", "klx", "single"),
+    "older overlay"
+  )
+  record$metadata_bundle <- bundle
+  exact <- m7_overlay_edit(record, "unit", "klx", "single")
+  expect_equal(
+    sum(metadata_resolve_variable(exact, "MEDI")$candidates$unit == "klx"),
+    1L
+  )
+})
+
 test_that("semantic metadata rows group peers without collecting siblings", {
   variable_rows <- function(dataset_id, descriptions) {
     data.frame(
@@ -973,5 +1173,34 @@ test_that("append metadata keeps exact source namespaces and lineage", {
       setNames("partial", second$id),
       setNames("absent", third$id)
     )
+  )
+})
+
+test_that("typed variable inventory binding retains exact order and missing values", {
+  first <- data.frame(
+    source_scope = c("source-a", "source-a"),
+    dataset_id = c("D2", "D1"),
+    name = c("MEDI", "LIGHT"),
+    label = c("Melanopic EDI", NA_character_),
+    unit = c("lux", ""),
+    stringsAsFactors = FALSE
+  )
+  second <- first[2:1, ]
+  second$source_scope <- "source-b"
+  second$unit <- c(NA_character_, "lx")
+  rows <- list(first, first[FALSE, ], second)
+  reference <- do.call(rbind, rows)
+  rownames(reference) <- NULL
+  expect_identical(
+    metadata_bind_variable_inventories(rows),
+    dplyr::as_tibble(reference)
+  )
+  expect_identical(
+    metadata_bind_variable_inventories(list(first)),
+    dplyr::as_tibble(first)
+  )
+  expect_identical(
+    metadata_bind_variable_inventories(list(first[FALSE, ])),
+    dplyr::tibble()
   )
 })

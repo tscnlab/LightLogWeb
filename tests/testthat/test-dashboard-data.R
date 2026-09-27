@@ -157,7 +157,12 @@ test_that("dashboard crosslinks preserve an exact two-device participant context
       )
       session$flushReact()
 
-      metadata_html <- output$metadata_context
+      metadata_html <- list(
+        html = paste(
+          output$metadata_context$html,
+          output$metadata_entities$html
+        )
+      )
       metadata_html <- if (
         is.list(metadata_html) && !is.null(metadata_html$html)
       ) {
@@ -230,7 +235,12 @@ test_that("dashboard device actions keep identity during participant refresh", {
         show_all_participants = FALSE
       )
       session$flushReact()
-      metadata_html <- output$metadata_context
+      metadata_html <- list(
+        html = paste(
+          output$metadata_context$html,
+          output$metadata_entities$html
+        )
+      )
       metadata_html <- if (
         is.list(metadata_html) && !is.null(metadata_html$html)
       ) {
@@ -244,7 +254,12 @@ test_that("dashboard device actions keep identity during participant refresh", {
       session$setInputs(participants = "MELIDOS_IZTECH_S004")
       session$flushReact()
       expect_null(returned$event())
-      metadata_html <- output$metadata_context
+      metadata_html <- list(
+        html = paste(
+          output$metadata_context$html,
+          output$metadata_entities$html
+        )
+      )
       metadata_html <- if (
         is.list(metadata_html) && !is.null(metadata_html$html)
       ) {
@@ -345,7 +360,12 @@ test_that("dashboard metadata actions use the same four-item participant and dev
       )
       session$flushReact()
 
-      metadata_html <- output$metadata_context
+      metadata_html <- list(
+        html = paste(
+          output$metadata_context$html,
+          output$metadata_entities$html
+        )
+      )
       metadata_html <- if (
         is.list(metadata_html) && !is.null(metadata_html$html)
       ) {
@@ -382,7 +402,12 @@ test_that("dashboard metadata actions use the same four-item participant and dev
         participants = paste0("MELIDOS_IZTECH_S00", seq_len(4L))
       )
       session$flushReact()
-      metadata_html <- output$metadata_context
+      metadata_html <- list(
+        html = paste(
+          output$metadata_context$html,
+          output$metadata_entities$html
+        )
+      )
       metadata_html <- if (
         is.list(metadata_html) && !is.null(metadata_html$html)
       ) {
@@ -455,7 +480,12 @@ test_that("dashboard participant actions ignore identities removed during refres
       session$setInputs(participants = "MELIDOS_IZTECH_S004")
       session$flushReact()
       expect_null(returned$event())
-      metadata_html <- output$metadata_context
+      metadata_html <- list(
+        html = paste(
+          output$metadata_context$html,
+          output$metadata_entities$html
+        )
+      )
       metadata_html <- if (
         is.list(metadata_html) && !is.null(metadata_html$html)
       ) {
@@ -648,7 +678,12 @@ test_that("appended participant crosslink uses exact source lineage", {
         show_all_participants = FALSE
       )
       session$flushReact()
-      metadata_html <- output$metadata_context
+      metadata_html <- list(
+        html = paste(
+          output$metadata_context$html,
+          output$metadata_entities$html
+        )
+      )
       metadata_html <- if (
         is.list(metadata_html) && !is.null(metadata_html$html)
       ) {
@@ -726,6 +761,116 @@ test_that("dashboard snapshot cache is bounded and invalidates exact record cont
   cache$clear()
   expect_identical(cache$stats()$entries, 0L)
   expect_identical(cache$stats()$bytes, 0)
+})
+
+test_that("metadata-only dashboard refresh reuses numerical state and bounded storage", {
+  skip_if_not(file.exists(file.path(
+    m7_fixture_directory(),
+    "tum-medi-only.rds"
+  )))
+  record <- m7_fixture_record()
+  changed <- m7_overlay_edit(record, "label", "Integration label")
+  cache <- new_dashboard_snapshot_cache(max_entries = 2L)
+  initial <- cache$get(record)
+  view <- dashboard_focus_view(initial$value)
+  testthat::local_mocked_bindings(
+    dashboard_daily_coverage = function(...) stop("coverage rebuilt"),
+    dashboard_participant_ranges = function(...) stop("ranges rebuilt"),
+    .package = "LightLogWeb"
+  )
+  testthat::local_mocked_bindings(
+    unserialize = function(...) stop("payload decoded"),
+    .package = "base"
+  )
+  warm <- cache$get(changed)
+  expect_true(warm$cache_hit)
+  expect_identical(warm$signature, initial$signature)
+  expect_identical(warm$value$primary_label, "Integration label")
+  expect_identical(warm$value$coverage, initial$value$coverage)
+  expect_identical(warm$value$quality, initial$value$quality)
+  expect_identical(
+    warm$value$participant_ranges,
+    initial$value$participant_ranges
+  )
+  expect_identical(cache$stats()$builds, 1L)
+  expect_identical(cache$stats()$entries, 1L)
+  expect_lte(cache$stats()$bytes, cache$stats()$max_bytes)
+  expect_gte(cache$stats()$bytes, as.numeric(object.size(warm$value)))
+  refreshed <- dashboard_refresh_focus_view(view, warm$value)
+  expect_identical(refreshed$focus_label, "Integration label")
+  expect_identical(refreshed$missingness, view$missingness)
+  expect_identical(refreshed$data, view$data)
+  undone <- undo_metadata_overlay(changed, metadata_overlay_context(changed))
+  expect_true(cache$get(undone)$cache_hit)
+  expect_identical(cache$stats()$entries, 1L)
+  settings <- changed
+  settings$analysis_settings$analysis_timezone <- "UTC"
+  expect_false(dataset_record_same_data(changed, settings))
+  prepared <- changed
+  prepared$prepared_payload <- as.raw(c(1L, 2L))
+  expect_false(dataset_record_same_data(changed, prepared))
+})
+
+test_that("dashboard annotations preserve windows, pages, choices and plot data", {
+  test_environment <- environment()
+  skip_if_not(file.exists(file.path(
+    m7_fixture_directory(),
+    "tum-medi-only.rds"
+  )))
+  record <- m7_fixture_record()
+  changed <- m7_overlay_edit(record, "unit", "klx", "single")
+  current <- shiny::reactiveVal(record)
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = current,
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      session$flushReact()
+      session$setInputs(
+        focus_variable = "MEDI",
+        participants = snapshot()$participants[[2L]],
+        show_all_participants = FALSE,
+        data_stage = "source",
+        time_basis = "calendar",
+        date_window = c(snapshot()$date_start, snapshot()$date_end),
+        plot_scale = "linear",
+        view_mode = "detailed",
+        days_per_page = 1L,
+        participants_per_page = 1L
+      )
+      session$flushReact()
+      previous <- list(
+        data = data_preview(),
+        selection = selection(),
+        date_control = output$date_window_ui,
+        scope = scope_revision(),
+        table = table_schema_revision(),
+        signature = snapshot_signature()
+      )
+      testthat::local_mocked_bindings(
+        dashboard_plot_preview = function(...)
+          stop("numeric plot preview rebuilt"),
+        dashboard_dataset_snapshot = function(...) stop("snapshot rebuilt"),
+        dashboard_daily_coverage = function(...) stop("coverage rebuilt"),
+        .package = "LightLogWeb",
+        .env = test_environment
+      )
+      current(changed)
+      session$flushReact()
+      expect_identical(data_preview(), previous$data)
+      expect_identical(selection(), previous$selection)
+      expect_identical(output$date_window_ui, previous$date_control)
+      expect_identical(scope_revision(), previous$scope)
+      expect_identical(table_schema_revision(), previous$table)
+      expect_identical(snapshot_signature(), previous$signature)
+      expect_identical(preview()$focus_unit, "varies by retained source")
+      expect_identical(snapshot()$record, changed)
+      expect_identical(snapshot_cache$stats()$builds, 1L)
+    }
+  )
 })
 
 test_that("dashboard switch is staged, cached, recoverable, and schema-isolated", {
@@ -2259,6 +2404,141 @@ test_that("dashboard showcase uses reviewed real-data records", {
   expect_s3_class(dataset_dashboard_app(), "shiny.appobj")
 })
 
+test_that("table view restoration validates browser input and maps raw identities", {
+  columns <- c("Id", "Datetime", "MEDI")
+  state <- list(
+    time = 1000,
+    columns = rep(list(list(visible = TRUE)), 3L),
+    search = list(search = "S003", regex = TRUE),
+    order = list(list(2L, "desc"), list(0L, "asc")),
+    start = 25L,
+    length = 25L
+  )
+  restore <- function(value = state, now = columns, rows = 160L, count = 32L) {
+    dashboard_restore_table_view(value, columns, now, rows, count)
+  }
+  view <- restore()
+  expect_identical(view$search$search, "S003")
+  expect_false(view$search$regex)
+  expect_identical(view$order, state$order)
+  expect_identical(view$displayStart, 25L)
+  expect_identical(view$pageLength, 25L)
+  expect_identical(restore(now = rev(columns))$order[[1L]], list(0L, "desc"))
+  expect_identical(restore(now = columns[1:2])$order, list(list(0L, "asc")))
+  expect_identical(restore(now = rev(columns))$displayStart, 0L)
+  expect_identical(restore(rows = 0L, count = 0L)$displayStart, 0L)
+  expect_identical(restore(count = 0L)$displayStart, 0L)
+  expect_identical(restore(count = 12L)$displayStart, 0L)
+  expect_identical(restore(count = Inf)$displayStart, 25L)
+
+  malformed <- list(
+    NULL,
+    "state",
+    list(),
+    utils::modifyList(state, list(search = list(search = NA_character_))),
+    utils::modifyList(state, list(search = list(search = c("x", "y")))),
+    utils::modifyList(state, list(search = list(search = strrep("x", 4097L)))),
+    utils::modifyList(state, list(length = -1L)),
+    utils::modifyList(state, list(length = 100000L)),
+    utils::modifyList(state, list(start = Inf)),
+    utils::modifyList(state, list(start = -1L)),
+    utils::modifyList(state, list(start = 1.5)),
+    replace(state, "columns", list(list())),
+    replace(state, "order", list(rep(list(list(0L, "asc")), 33L)))
+  )
+  for (bad in malformed) expect_identical(restore(bad), list())
+  invalid_order <- state
+  invalid_order$order <- list(
+    list(-1L, "asc"),
+    list(999L, "desc"),
+    list(1L, "bad")
+  )
+  expect_identical(restore(invalid_order)$order, list())
+  invalid_order$order <- list(list(NA_real_, "asc"), "bad", list(1L))
+  expect_identical(restore(invalid_order)$order, list())
+  unaligned <- state
+  unaligned$start <- 29L
+  expect_identical(restore(unaligned)$displayStart, 25L)
+
+  display <- data.frame(Id = "S003", Datetime = Sys.time(), Label = 1)
+  attr(display, "llw_raw_column_names") <- columns
+  widget <- dashboard_datatable(display, "State test", view_options = view)
+  expect_identical(widget$x$options$search$search, "S003")
+  expect_identical(widget$x$options$displayStart, 25L)
+  expect_false(widget$x$options$stateSave)
+  expect_true(widget$x$options$destroy)
+})
+
+test_that("table state is bounded, session/stage isolated and fenced after data changes", {
+  source <- new_dashboard_table_view_state()
+  prepared <- new_dashboard_table_view_state()
+  columns <- c("Id", "Datetime", "MEDI")
+  state <- list(
+    time = 1000,
+    columns = vector("list", 3L),
+    search = list(search = "S003"),
+    order = list(list(2L, "desc")),
+    start = 10L,
+    length = 10L
+  )
+  expect_identical(source(NULL, "dataset-a/data-1", columns, 160L), list())
+  expect_identical(prepared(NULL, "dataset-a/data-1", columns, 160L), list())
+  expected <- source(state, "dataset-a/data-1", columns, 160L, 32L)
+  expect_identical(expected$displayStart, 10L)
+  expect_identical(prepared(NULL, "dataset-a/data-1", columns, 160L), list())
+  for (i in seq_len(5L)) {
+    expect_identical(
+      source(state, "dataset-a/data-1", columns, 160L, 32L),
+      expected
+    )
+  }
+  # Reordered columns followed by another redraw before a native acknowledgement.
+  moved <- source(state, "dataset-a/data-1", rev(columns), 160L, 32L)
+  expect_identical(moved$order, list(list(0L, "desc")))
+  expect_identical(
+    source(state, "dataset-a/data-1", rev(columns), 160L, 32L),
+    moved
+  )
+  expect_identical(
+    source(state, "dataset-b/data-1", columns, 160L, 32L),
+    list()
+  )
+  expect_identical(
+    source(state, "dataset-b/data-1", columns, 160L, 32L),
+    list()
+  )
+  state$time <- 1001
+  state$search$search <- "S004"
+  expect_identical(
+    source(state, "dataset-b/data-1", columns, 160L, 32L)$search$search,
+    "S004"
+  )
+  expect_identical(
+    source(state, "dataset-b/data-2", columns, 160L, 32L),
+    list()
+  )
+  # Genuine data/schema replacement clears old state even for the same dataset.
+  expect_identical(
+    source(state, "dataset-b/data-3", c("Id", "CAP_SENS_1"), 1L),
+    list()
+  )
+  fresh_session <- new_dashboard_table_view_state()
+  expect_identical(
+    fresh_session(state, "dataset-a/data-1", columns, 160L),
+    list()
+  )
+  expect_setequal(
+    ls(environment(source)),
+    c(
+      "previous_identity",
+      "previous_columns",
+      "input_time",
+      "pending_state",
+      "pending_count"
+    )
+  )
+})
+
 test_that("active-data tables declare the scalable server-side contract", {
   contract <- dashboard_table_contract()
   expect_true(contract$server)
@@ -2734,5 +3014,28 @@ test_that("metadata context follows the dashboard workbench", {
   expect_gt(
     regexpr("dashboard-metadata_context", html, fixed = TRUE)[[1L]],
     regexpr("dashboard-dashboard_tabs", html, fixed = TRUE)[[1L]]
+  )
+})
+
+test_that("genuine settings and prepared measurement changes rebuild snapshots", {
+  record <- m7_fixture_record()
+  cache <- new_dashboard_snapshot_cache()
+  first <- cache$get(record)
+  settings <- record
+  settings$analysis_settings$analysis_timezone <- "UTC"
+  second <- cache$get(settings)
+  expect_false(identical(first$signature, second$signature))
+  expect_equal(cache$stats()$builds, 2L)
+  data <- dataset_prepared_data(settings)
+  data$MEDI[[1L]] <- data$MEDI[[1L]] + 1
+  changed <- settings
+  changed$prepared_payload <- serialize_dataset_data(data)
+  third <- cache$get(changed)
+  expect_false(identical(second$signature, third$signature))
+  expect_equal(cache$stats()$builds, 3L)
+  expect_identical(third$value$prepared_data$MEDI[[1L]], data$MEDI[[1L]])
+  expect_identical(
+    dashboard_timeline_segments(data[FALSE, ], third$value$quality),
+    character()
   )
 })

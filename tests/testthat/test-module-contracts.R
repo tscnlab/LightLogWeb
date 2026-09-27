@@ -256,6 +256,43 @@ test_that("append module returns a new record only after a current safe preview"
       expect_true(returned$is_current())
       expect_null(returned$add_dataset())
 
+      updated <- records
+      updated[[1L]] <- m7_overlay_edit(records[[1L]], "unit", "klx")
+      controls <- lapply(
+        c("source_selector", "identity_controls", "mapping_controls"),
+        function(name) output[[name]]
+      )
+      cached <- returned$cache_stats()
+      testthat::with_mocked_bindings(
+        {
+          datasets(updated)
+          session$flushReact()
+          expect_identical(
+            lapply(
+              c("source_selector", "identity_controls", "mapping_controls"),
+              function(name) output[[name]]
+            ),
+            controls
+          )
+          expect_identical(
+            returned$cache_stats()$contracts$builds,
+            cached$contracts$builds
+          )
+          expect_identical(
+            returned$cache_stats()$profiles$builds,
+            cached$profiles$builds
+          )
+          expect_identical(input$source_ids, ids)
+          expect_identical(
+            input[[append_mapping_input_id(ids[[1L]], "measurement_target")]],
+            "first_MEDI"
+          )
+          expect_false(returned$is_current())
+        },
+        unserialize = function(...) stop("warm append decoded measurements"),
+        .package = "base"
+      )
+
       session$setInputs(display_name = "Changed after preview")
       session$flushReact()
       expect_false(returned$is_current())
@@ -288,6 +325,10 @@ test_that("append module returns a new record only after a current safe preview"
       result <- returned$add_dataset()
       expect_s3_class(result, "llw_dataset_record")
       expect_identical(result$source_manifest$source_type, "append_merge")
+      expect_identical(
+        metadata_resolve_variable(result, "first_MEDI")$unit,
+        "klx"
+      )
       expect_equal(nrow(dataset_raw_data(result)), 6L)
       expect_null(returned$preview())
       expect_identical(

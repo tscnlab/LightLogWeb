@@ -185,6 +185,8 @@ metadata_overlay_server <- function(
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     editing <- shiny::reactiveVal(NULL)
+    focus_draft <- shiny::reactiveVal(NULL)
+    focus_error <- shiny::reactiveVal(NULL)
     preview <- shiny::reactiveVal(NULL)
     notice <- shiny::reactiveVal(NULL)
     draft_error <- shiny::reactiveVal(NULL)
@@ -211,6 +213,207 @@ metadata_overlay_server <- function(
       }
       cache[[record$id]]
     }
+    open_focus <- function(dataset_id, variable) {
+      if (!is.null(editing()) || !is.null(focus_draft()))
+        return(invisible(NULL))
+      tryCatch(
+        {
+          record <- dataset()
+          if (is.null(record) || !identical(record$id, dataset_id))
+            abort_llw(
+              "The selected dataset changed. Open the editor again from its Dashboard.",
+              type = "validation"
+            )
+          if (!is.null(record$draft))
+            abort_llw(
+              "Finish or discard the dataset preparation draft before editing metadata.",
+              type = "validation"
+            )
+          context <- get_context(record)
+          state <- metadata_overlay_focus_state(record, context, variable)
+          focus_draft(list(
+            record = record,
+            context = context,
+            variable = variable,
+            state = state
+          ))
+          focus_error(NULL)
+          field_input <- function(field, label) {
+            value <- state$fields[[field]]
+            shiny::tagList(
+              shiny::textInput(
+                ns(paste0("focus_", field)),
+                label,
+                value$value,
+                updateOn = "blur"
+              ),
+              if (value$mixed)
+                shiny::tags$p(
+                  "Multiple current values. Leave empty to keep them unchanged."
+                ),
+              if (value$incomplete)
+                shiny::tags$p(
+                  "Some occurrences have no value. Leave empty to preserve this coverage."
+                ),
+              shiny::tags$p(
+                class = "llw-secondary small",
+                paste(
+                  value$present,
+                  "specified;",
+                  value$missing,
+                  "not specified."
+                )
+              )
+            )
+          }
+          count <- sum(state$targets$field == "label")
+          dialog <- shiny::modalDialog(
+            title = "Focus variable metadata",
+            size = "m",
+            easyClose = FALSE,
+            fade = FALSE,
+            shiny::tags$div(
+              id = ns("focus_draft"),
+              class = "llw-overlay-draft",
+              `data-escape-input` = ns("focus_escape"),
+              shiny::tags$p(
+                shiny::tags$strong(record$display_name),
+                " | ",
+                shiny::tags$code(variable)
+              ),
+              shiny::tags$p(paste(
+                "Applies to all",
+                count,
+                "exact variable occurrences across",
+                length(unique(state$targets$source_scope)),
+                "retained source scope(s) in this library dataset. Dashboard filters do not reduce this scope."
+              )),
+              shiny::tags$div(
+                class = "llw-overlay-value-input",
+                field_input("label", "Label"),
+                field_input("unit", "Unit")
+              ),
+              shiny::tags$p(
+                class = "llw-secondary small",
+                "Clearing a prefilled field removes its overlay override and uses the source value, or leaves it unspecified if absent. An empty mixed field is unchanged. Units are declarations only: measurements are never converted. Source metadata remain unchanged."
+              ),
+              shiny::tags$details(
+                shiny::tags$summary("Exact affected items and current values"),
+                DT::DTOutput(ns("focus_values"))
+              ),
+              shiny::uiOutput(ns("focus_error"))
+            ),
+            footer = shiny::tagList(
+              shiny::actionButton(
+                ns("focus_discard"),
+                "Discard",
+                class = "btn-outline-secondary"
+              ),
+              bslib::input_task_button(
+                ns("focus_save"),
+                "Save",
+                label_busy = "Saving metadata..."
+              )
+            )
+          )
+          dialog <- htmltools::tagQuery(dialog)$find(".modal-dialog")$addClass(
+            "modal-dialog-scrollable"
+          )$allTags()
+          shiny::showModal(dialog)
+          last_action("Editing focus variable")
+        },
+        error = function(cnd) {
+          shiny::showNotification(
+            conditionMessage(cnd),
+            type = "error",
+            duration = 10
+          )
+          last_action("Not applied")
+        }
+      )
+      invisible(NULL)
+    }
+    output$focus_values <- DT::renderDT(
+      {
+        draft <- focus_draft()
+        shiny::req(draft)
+        DT::datatable(
+          metadata_overlay_current_table(
+            draft$state$overlay,
+            draft$state$targets
+          ),
+          rownames = FALSE,
+          escape = TRUE,
+          selection = "none",
+          options = list(pageLength = 5L, scrollX = TRUE, order = list())
+        )
+      },
+      server = TRUE
+    )
+    output$focus_error <- shiny::renderUI(message_ui(
+      focus_error(),
+      error = TRUE
+    ))
+    discard_focus <- function() {
+      if (is.null(focus_draft())) return(invisible(NULL))
+      focus_draft(NULL)
+      focus_error(NULL)
+      shiny::removeModal()
+      last_action("Draft discarded")
+    }
+    shiny::observeEvent(input$focus_discard, discard_focus(), ignoreInit = TRUE)
+    shiny::observeEvent(input$focus_escape, discard_focus(), ignoreInit = TRUE)
+    shiny::observeEvent(
+      input$focus_save,
+      {
+        draft <- focus_draft()
+        if (is.null(draft)) return(invisible(NULL))
+        tryCatch(
+          {
+            current <- dataset()
+            if (
+              is.null(current) ||
+                !identical(current$id, draft$record$id) ||
+                !identical(current$revision, draft$record$revision)
+            ) {
+              abort_llw(
+                "This draft is stale or the dataset changed. Discard and reopen from the Dashboard to use current values. Nothing has been saved.",
+                type = "validation"
+              )
+            }
+            patch <- metadata_overlay_focus_preview(
+              current,
+              draft$context,
+              draft$variable,
+              input$focus_label,
+              input$focus_unit
+            )
+            result <- apply_callback(draft$context, patch, undo = FALSE)
+            focus_draft(NULL)
+            focus_error(NULL)
+            shiny::removeModal()
+            notice(paste(
+              "Focus metadata saved. Overlay revision",
+              result$metadata_bundle$overlay$revision,
+              ". Source records and measurements are unchanged."
+            ))
+            shiny::showNotification(
+              if (any(patch$changed)) "Focus variable metadata saved." else
+                "No metadata values changed.",
+              type = "message"
+            )
+            last_action(
+              if (any(patch$changed)) "Applied" else "No values changed"
+            )
+          },
+          error = function(cnd) {
+            focus_error(conditionMessage(cnd))
+            last_action("Not applied")
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
     missing_targets <- shiny::reactive({
       if (is.null(dataset())) return(character())
       metadata_overlay_missing_targets(get_context(dataset()))
@@ -339,7 +542,8 @@ metadata_overlay_server <- function(
     )
 
     open_editor <- function(missing_only = FALSE) {
-      if (!is.null(editing())) return(invisible(NULL))
+      if (!is.null(editing()) || !is.null(focus_draft()))
+        return(invisible(NULL))
       tryCatch(
         {
           record <- dataset()
@@ -999,7 +1203,7 @@ metadata_overlay_server <- function(
       {
         tryCatch(
           {
-            if (!is.null(editing()))
+            if (!is.null(editing()) || !is.null(focus_draft()))
               abort_llw(
                 "Finish or discard the open draft before undoing.",
                 type = "validation"
@@ -1018,16 +1222,17 @@ metadata_overlay_server <- function(
       ignoreInit = TRUE
     )
     list(
+      open_focus = open_focus,
       presentation = presentation,
       preview = shiny::reactive(
         if (is.null(preview())) NULL else preview()$patch
       ),
       status = shiny::reactive(list(
-        editing = !is.null(editing()),
+        editing = !is.null(editing()) || !is.null(focus_draft()),
         confirming_discard = confirm_close(),
         preview_ready = !is.null(preview()),
         last_action = last_action(),
-        error = draft_error()
+        error = if (!is.null(focus_draft())) focus_error() else draft_error()
       ))
     )
   })

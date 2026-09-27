@@ -818,6 +818,20 @@ Milestone 13 acceptance item.
 
 ### Milestone 7 — Metadata essentials and settings separation
 
+Status: complete; accepted by the owner on 2026-09-27, including final
+integration, Dashboard quick metadata editing, the R58/R60/R61 corrections and
+the visible "Dataset details" wording. The owner authorized milestone closeout,
+commit and push. The dated checkpoints below preserve the review history;
+their former pending gates are superseded by this acceptance. Final closeout
+evidence is recorded in `dev/milestone-7-overlay-authoring.md`.
+
+Remaining limitations are explicit: R59 is a deferred, nonblocking mobile
+table-layout improvement; the 50 ms design target is not uniformly met despite
+passing hard gates; wide-mutation allocation has narrow headroom. Standalone
+overlay export was removed from scope, not passed. Edited GLC generation,
+Milestone 8 preprocessing and Milestone 13 project/reproducibility outputs are
+not included in this completion.
+
 Milestone 7 is divided into three independently reviewable vertical slices:
 
 1. A read-only explorer foundation and versioned source-versus-overlay value
@@ -886,10 +900,71 @@ Report 2.10.0 at `2026-09-23T12:13:57Z` passes all hard timing, memory and
 identity gates. Ordinary maximum p95 is 76.6/100 ms, approved stress removal
 68/150 ms, and initial/bulk index work 190.95/500 ms. The 50 ms design target is
 not uniformly met; mutation allocation retains limited headroom below 64 MiB.
-Full-app wiring, later slices, push and deployment still require an owner gate.
+That verification did not authorize full-app wiring, later slices, push or deployment.
 
-Slice 3 is currently a production-module showcase, not a full-app integrated
-build. The ordinary 100 ms p95 hard gate and 64 MiB
+The owner subsequently approved `APPROVE M7 FINAL INTEGRATION CONTRACT` on
+2026-09-23. This final slice wires the accepted editor into the actual app,
+resolves effective labels/units per exact occurrence, and refreshes presentation
+without rebuilding measurement-derived dashboard, library or append state.
+The approved boundary and baseline audit are recorded in
+`dev/milestone-7-overlay-authoring.md`. Frozen-build independent review, owner
+final acceptance and a separate commit gate remain open. Milestone 7 is not yet
+declared complete. No new export, dependency, JavaScript or live read is authorized.
+
+The owner also approved the narrow final-integration overlay performance
+correction on 2026-09-23. `R/metadata-overlay.R` is added to that integration
+allowlist; all earlier boundaries remain in force. Conservative bundle-size
+accounting retains an exact fallback at the 32 MiB limit, and shared session
+accounting avoids repeated sizing of unchanged history in dashboard refreshes.
+The 100/150/500 ms timing gates and 64 MiB transaction-allocation gate are not
+relaxed. Local final verification now passes: 5,240 full-suite assertions with
+zero failures/errors, package check Status OK, and report 2.11.0 at
+`2026-09-23T16:38:08Z` passes every hard timing/memory/invariant gate. Ordinary
+maximum p95 is 93.3/100 ms; approved stress removal is 80.65/150 ms and maximum
+initial/bulk work is 236.55/500 ms. The 50 ms design target is not uniformly met.
+The widest integrated batch allocates 65,884,576 of 67,108,864 allowed bytes.
+All seven integrated cases have zero post-startup measurement decodes and retain
+source, numerical data and valid context. Main-app browser checks cover the
+three fixtures, appended/absent cases, six viewport widths and stale append
+preview recovery. Existing datepicker locale warnings remain documented.
+The frozen local packet is `/private/tmp/llw-m7-final-integration-review-gyOZEO`.
+The owner subsequently resumed normal review transmission. Independent review
+found M7-UX-R58: metadata-only Apply/Undo reset DT table search and paging. The
+owner approved the table-state correction on 2026-09-24. Native, validated,
+session-only DT view restoration is now implemented for both table stages,
+scoped to numerical data/schema identity and raw column names. It neither adds
+browser persistence nor new JavaScript. Focused tests pass 896 assertions and
+the full suite passes 5,320 with no failures/errors. Package check is Status OK
+(5,239 installed-test passes). Report 2.12.1 passes unchanged hard gates: ordinary
+maximum 88/100 ms, stress removal 79.65/150 ms, bulk maximum 215.6/500 ms, and
+65,884,576/67,108,864 bytes maximum transaction allocation. The 50 ms design
+target is not uniformly met. The new frozen handoff is
+`/private/tmp/llw-m7-r58-review-Zas6Ij`. Details and the exact correction
+boundary are in `dev/milestone-7-overlay-authoring.md`. Independent acceptance,
+owner final check and a separate commit gate remain open. This is not milestone
+completion.
+
+On 2026-09-27 the owner accepted the independently reviewed R58 build and
+approved `APPROVE M7 DASHBOARD QUICK METADATA CONTRACT`. This follow-up adds a
+Dashboard-only two-field Label/Unit editor with Adjust/Create, exact mapped
+current-library-dataset scope, atomic single-revision Save/Undo and unchanged
+source/measurement/settings/table state. It also corrects the small example's
+false unit conflict by using factual metadata before the same-source manifest
+fallback. It does not reconcile different retained sources or convert units.
+The narrow file boundary and unchanged performance budgets are recorded in
+`dev/milestone-7-overlay-authoring.md`. The candidate passes 1,950 focused and
+5,409 full-suite assertions (zero failures/errors) and package check Status OK.
+Benchmark 2.13.0 passes all hard timing/memory/integrity gates: ordinary
+integrated p95 maximum 98/100 ms, wide removal 93/150 ms and explicit bulk
+maximum 245.7/500 ms. Wide two-field Save allocates 66,283,528/67,108,864 bytes,
+with limited remaining headroom; the 50 ms design target is not uniformly met.
+Post-initialization payload decoding and package reopening remain zero. The
+frozen candidate is `/private/tmp/llw-m7-quick-review-u9vfBx`. Independent
+review, owner final check and a separate commit gate remain open. No owner
+showcase is left running. R59 remains outside this boundary, and standalone
+metadata export remains removed.
+
+Slice 3 was accepted as a production-module showcase. Its ordinary 100 ms p95 hard gate and 64 MiB
 commit/index-patch allocation limit remain unchanged. The owner subsequently
 approved a separate 500 ms p95 limit for explicit large-inventory commits,
 initial index attachment and bulk transactions, with immediate busy feedback,
@@ -1082,6 +1157,48 @@ separate external review, as requested. R52 is now superseded by feature removal
 not passed by a saved-file test. The prior benchmark and frozen reviewer packet
 remain historical evidence, not verification of this later refinement. Full-app
 integration, commit and push still require their owner gates.
+
+Owner final-check consistency correction, 2026-09-27: the accepted Dashboard
+quick-edit build correctly prefills imported factual label/unit values and treats
+unchanged Save as a no-op, but its Focus variable metadata crosslink omitted
+those already-indexed factual fields. The owner authorized a scoped correction.
+Exact retained factual variable paths now supply a source-qualified fallback
+focus target without creating an overlay, reconciling sources or rebuilding the
+index. Inventory/overlay routes retain precedence; ambiguous or unmapped source
+ownership remains unavailable. Initial navigation, unchanged Save, genuine edit
+and Undo are regression-tested together. Independent acceptance, owner final
+check and commit are still separate gates; this does not declare M7 complete.
+Local verification: 1,988 focused and 5,447 full assertions, package check Status
+OK with 5,366 installed passes and only documented warnings/skips. The full
+benchmark at `2026-09-27T12:07:08Z` passes unchanged hard gates (ordinary maximum
+87 ms p95; exact factual focus 2 ms). Source/index, payload and lineage remain
+unchanged. Frozen follow-up packet:
+`/private/tmp/llw-m7-factual-focus-review-TZjk2b`; independent acceptance pending.
+
+The subsequent independent pass closed that factual-navigation defect as R60
+and required R61: clear stale successful crosslink feedback when Undo or clearing
+removes its field. The owner approved the narrow R61 correction contract on
+2026-09-27. The existing explorer observer now validates the requested group
+against the retained in-memory index on overlay revisions, without changing
+valid exploration context or data. Focused regressions pass 954 assertions;
+full tests pass 5,531 assertions with two expected warnings and six mirai skips.
+Package check is Status OK (5,450 passes, two expected warnings and nine skips).
+Browser checks verify Undo/clear feedback and protected source-backed navigation.
+Complete status refresh takes p95 62.65/81.95 ms for absent/actual-small cases,
+below 100 ms with no measurement decoding. The refreshed full matrix passes all
+hard gates: integrated ordinary maximum 84/100 ms, wide single removal
+79.3/150 ms, wide bulk 176.6/500 ms; mutation allocation headroom remains
+825,336 bytes under 64 MiB. The 50 ms design goal is not uniformly met. Frozen
+revision `/private/tmp/llw-m7-r61-review-uFEw8S` was subsequently accepted by the
+independent reviewer: R61 closed, R60 remained closed and R58 stayed protected.
+The owner then accepted the showcase and authorized milestone closeout, commit
+and push on 2026-09-27. R59 stays deferred and nonblocking.
+
+The owner-approved "Dataset details" label replaces "Factual Metadata" in
+explorer paths and matches the section selector. It is display wording only:
+the `factual_metadata` key, exact paths, source fingerprints, provenance and
+overlay distinction remain unchanged. The heading does not imply independent
+verification of imported facts.
 
 The owner-approved Slice 1B extends only the read-only explorer foundation.
 Selecting a result exposes every sibling property belonging to the same exact

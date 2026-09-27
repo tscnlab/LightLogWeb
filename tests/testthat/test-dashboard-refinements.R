@@ -90,6 +90,92 @@ refinement_detailed_preview <- function(
   dashboard_plot_preview(snapshot, selection)
 }
 
+test_that("metadata redraws retain separate native table views without reactive loops", {
+  skip_if_not(file.exists(file.path(
+    m7_fixture_directory(),
+    "tum-medi-only.rds"
+  )))
+  record <- m7_fixture_record()
+  current <- shiny::reactiveVal(record)
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(dataset = current, active_panel = shiny::reactive("dashboard")),
+    {
+      session$flushReact()
+      session$setInputs(source_main_only = FALSE, preprocessed_main_only = TRUE)
+      session$flushReact()
+      widget <- function(id)
+        jsonlite::fromJSON(output[[id]], simplifyVector = FALSE)$x
+      raw_before <- widget("raw_table")
+      prepared_before <- widget("prepared_table")
+      columns <- attr(source_table_data(), "llw_raw_column_names")
+      prepared_columns <- attr(
+        preprocessed_table_data(),
+        "llw_raw_column_names"
+      )
+      native_state <- function(columns, search, start, length) {
+        list(
+          time = 1000,
+          columns = vector("list", base::length(columns)),
+          search = list(search = search),
+          order = list(list(match("MEDI", columns) - 1L, "desc")),
+          start = start,
+          length = length
+        )
+      }
+      session$setInputs(
+        raw_table_state = native_state(columns, "S003", 10L, 10L),
+        raw_table_rows_all = seq_len(32L),
+        prepared_table_state = native_state(prepared_columns, "S004", 25L, 25L),
+        prepared_table_rows_all = seq_len(32L)
+      )
+      session$flushReact()
+      expect_identical(widget("raw_table"), raw_before)
+      expect_identical(widget("prepared_table"), prepared_before)
+      changed <- m7_overlay_edit(record, "label", "R58 label")
+      current(changed)
+      session$flushReact()
+      raw <- widget("raw_table")
+      prepared <- widget("prepared_table")
+      expect_match(raw$container, "R58 label", fixed = TRUE)
+      expect_match(prepared$container, "R58 label", fixed = TRUE)
+      expect_identical(raw$options$search$search, "S003")
+      expect_equal(raw$options$displayStart, 10L)
+      expect_equal(raw$options$pageLength, 10L)
+      expect_identical(prepared$options$search$search, "S004")
+      expect_equal(prepared$options$displayStart, 25L)
+      expect_equal(prepared$options$pageLength, 25L)
+      expect_identical(raw$options$order[[1L]][[2L]], "desc")
+      expect_false(raw$options$stateSave)
+      expect_false(input$source_main_only)
+      expect_true(input$preprocessed_main_only)
+      expect_identical(snapshot_cache$stats()$builds, 1L)
+      # Undo before another native state acknowledgement must retain the view.
+      current(undo_metadata_overlay(changed, metadata_overlay_context(changed)))
+      session$flushReact()
+      expect_false(grepl(
+        "R58 label",
+        widget("raw_table")$container,
+        fixed = TRUE
+      ))
+      expect_identical(widget("raw_table")$options$search$search, "S003")
+      expect_equal(widget("prepared_table")$options$displayStart, 25L)
+
+      second <- m7_fixture_record("iztech-light-subset")
+      current(second)
+      session$flushReact()
+      expect_identical(snapshot()$record$id, second$id)
+      expect_null(widget("raw_table")$options$search)
+      expect_null(widget("prepared_table")$options$displayStart)
+      current(m7_overlay_edit(second, "label", "Second dataset label"))
+      session$flushReact()
+      expect_null(widget("raw_table")$options$search)
+      expect_null(widget("prepared_table")$options$displayStart)
+      expect_length(table_view_states, 2L)
+    }
+  )
+})
+
 test_that("focus missingness keeps all three denominators auditable", {
   datetimes <- as.POSIXct(
     c(

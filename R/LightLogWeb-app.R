@@ -267,6 +267,19 @@ LightLogWeb <- function(
   max_upload_mb = 200,
   workers = NULL
 ) {
+  lightlogweb_app(profile, max_upload_mb, workers)
+}
+
+# Internal bootstrap for the actual application. Only development harnesses
+# inject offline records or a registry loader; the public launcher is unchanged.
+lightlogweb_app <- function(
+  profile = c("auto", "hosted", "local"),
+  max_upload_mb = 200,
+  workers = NULL,
+  initial_records = list(),
+  registry_loader = glcdp_registry_load
+) {
+  initial_records <- lapply(initial_records, validate_dataset_record)
   runtime_profile <- resolve_runtime_profile(
     profile = profile,
     max_upload_mb = max_upload_mb,
@@ -283,7 +296,7 @@ LightLogWeb <- function(
     title = lightlogweb_wordmark(),
     window_title = "LightLogWeb - Make light exposure legible",
     id = "main_nav",
-    selected = "Import",
+    selected = if (length(initial_records) > 0L) "metadata" else "Import",
     theme = lightlogweb_theme(),
     navbar_options = navbar_options(theme = "auto", underline = TRUE),
     header = tagList(
@@ -341,7 +354,17 @@ LightLogWeb <- function(
       tags$main(
         class = "llw-main-shell llw-metadata-shell",
         `aria-label` = "Explore retained dataset metadata",
-        metadata_explorer_ui("metadata")
+        if (length(initial_records) > 0L)
+          llw_status_callout(
+            "idle",
+            "Offline integration showcase. Bounded derived fixtures, not complete published datasets or live evidence. Edits are disposable within this session.",
+            heading = "Milestone 7 final integration",
+            compact = TRUE
+          ),
+        metadata_explorer_ui(
+          "metadata",
+          field_actions = metadata_overlay_context_ui("overlay")
+        )
       )
     ),
     nav_panel(
@@ -367,6 +390,10 @@ LightLogWeb <- function(
     session$allowReconnect(TRUE)
     runtime <- new_session_runtime(runtime_profile, session = session)
     store <- new_session_store(runtime$profile$name)
+    for (record in initial_records)
+      store$dispatch(new_session_event("add", value = record))
+    if (length(initial_records) > 0L)
+      store$select_dataset(initial_records[[1L]]$id)
     if (inherits(runtime$startup_error, "llw_error")) {
       showNotification(
         llw_public_message(runtime$startup_error),
@@ -385,7 +412,8 @@ LightLogWeb <- function(
     )
     glc_source <- glcSourceServer(
       "glc_source",
-      registry_url = glc_default_registry_url()
+      registry_url = glc_default_registry_url(),
+      registry_loader = registry_loader
     )
     glc_import <- glcPreviewServer(
       "glc_preview",
@@ -411,12 +439,25 @@ LightLogWeb <- function(
         as.numeric(runtime_profile$cache_max_bytes) * 0.4,
         384 * 1024^2
       ),
-      snapshot_cache_max_entries = 3L
+      snapshot_cache_max_entries = 3L,
+      record_bytes = store$record_bytes
     )
     metadata <- metadata_explorer_server(
       "metadata",
       dataset = store$selected_dataset,
-      focus_request = reactive(metadata_focus_request_value())
+      focus_request = reactive(metadata_focus_request_value()),
+      editable = TRUE,
+      presentation = reactive(editor$presentation()),
+      overlay_actions = metadata_overlay_ui("overlay", contextual = TRUE)
+    )
+    editor <- metadata_overlay_server(
+      "overlay",
+      store$selected_dataset,
+      store$apply_overlay,
+      selection = reactive(list(
+        group = metadata$selected_group(),
+        focus_path = metadata$hierarchy_context()$node$path
+      ))
     )
     appended <- append_merge_server(
       "append",
@@ -789,10 +830,8 @@ LightLogWeb <- function(
             started <- dashboard$request_switch(
               target,
               on_success = function() {
-                dispatch_safely(new_session_event(
-                  "select",
-                  dataset_id = event$dataset_id
-                ))
+                store$select_dataset(event$dataset_id)
+                TRUE
               },
               on_error = function(condition) restore_manager_selection()
             )
@@ -877,6 +916,8 @@ LightLogWeb <- function(
           store$selected_dataset(),
           event$focus_request
         )
+      } else if (identical(event$type, "edit_focus_metadata")) {
+        editor$open_focus(event$dataset_id, event$variable)
       }
     }) |>
       bindEvent(dashboard$event(), ignoreInit = TRUE)

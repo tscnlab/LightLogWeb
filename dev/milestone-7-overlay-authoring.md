@@ -5,7 +5,13 @@ default and a single-item option. The owner explicitly resolved batch scope to
 the current library dataset, including appended sources. No other library entry
 may be changed. Baseline: `00ecd229f174503996aa91256120074f2b2faf37`.
 
-Status: the owner accepted the Slice 3 production module and authorized wrap-up
+Current status: Milestone 7 is complete and owner-accepted on 2026-09-27.
+The owner authorized closeout, commit and push after independent acceptance of
+R61 and owner testing, including the "Dataset details" display wording. See the
+closeout section at the end for final evidence and explicit deferred items.
+Earlier checkpoints below retain their historical scope and authority.
+
+Slice 3 checkpoint: the owner accepted the production module and authorized wrap-up
 and commit on 2026-09-23. This includes the owner-requested UI consolidation,
 standalone export removal, toolbar placement and source-variable selector
 refinement. R57 was accepted by the independent reviewer for owner final check
@@ -14,8 +20,13 @@ external review for the subsequent refinements and has now accepted them.
 R52 is superseded by removal of the export feature, not passed by saved-file
 verification. Earlier checkpoints below are historical; the final verification
 section records the accumulated accepted build.
-The slice is not integrated into the full app. Full application wiring, later
-slices, push and deployment remain separately gated.
+At that acceptance checkpoint the slice was not integrated into the full app.
+The subsequently approved final integration is implemented. Independent review
+identified M7-UX-R58, loss of dashboard table state on metadata-only redraws.
+The owner approved its correction on 2026-09-24; see the final section of this
+note. Independent acceptance, owner final check and commit were still open at
+that checkpoint; review handoff transmission was authorized. The later owner
+closeout supersedes those gates, without authorizing deployment or later work.
 
 ## User contract
 
@@ -98,6 +109,174 @@ categorical types. These are input constraints, not authoritative GLC validation
   No source writes or live reads.
 - Reviewer acceptance permits owner final check only. Stop unused task-owned
   instances after each development step; leave unrelated processes alone.
+
+## Final integration contract approved on 2026-09-23
+
+The owner approved `APPROVE M7 FINAL INTEGRATION CONTRACT` after the read-only
+audit of commit `9568feaf9ee646526d24ae7b5714de92940d6a45`. The remaining slice
+wires the accepted editor into the main app, resolves effective metadata per
+source-qualified occurrence, and isolates presentation invalidation from
+measurement-derived state in the library, dashboard and append wizard. Its
+exact contract and baseline evidence are retained at
+`/private/tmp/llw-m7-final-integration-audit-xvmupg/contract.md` and
+`/private/tmp/llw-m7-final-integration-audit-xvmupg/results.json`.
+
+The runtime boundary is `R/LightLogWeb-app.R`, `R/metadata-model.R`,
+`R/session-model.R`, `R/dashboard-data.R`, `R/m_dataset_dashboard.R`,
+`R/m_dataset_manager.R`, `R/append-merge.R`, and the expressly added
+`R/m_append_merge.R`. Test boundaries are the milestone-7 helper and existing
+app-smoke, metadata-model, metadata-overlay, session-model, dashboard-data,
+dashboard-navigation, dashboard-refinements, append-merge and module-contracts
+test files. The development boundary is the existing overlay app, metadata
+acceptance driver and report, this note and `project-plan.md`. No new runtime
+file, browser JavaScript, stylesheet, dependency, public API or fixture edit is
+authorized. Existing timing/memory limits and source/recovery contracts remain.
+
+The baseline probe found five payload decodes per post-edit dashboard get,
+sixteen per library-inventory rebuild and four per append-contract rebuild.
+These are direct-call counts, not a summed browser transaction. Across all
+three fixtures a single `klx` annotation incorrectly appeared as the whole
+variable's unit although four or five retained `lx` occurrences were unchanged.
+Integration must correct both defects without converting measurements.
+
+Implementation and verification are authorized. Freeze for independent review,
+then stop for owner acceptance and a separate commit gate. This section is not
+acceptance evidence or a claim that the milestone is finished.
+
+### Initial integration implementation and historical performance probes
+
+The working implementation connects the accepted contextual editor to the main
+application. A development-only internal bootstrap loads the frozen offline
+records and disables registry loading; the public launcher and normal startup
+remain unchanged. Source-qualified effective variable occurrences are resolved
+before aggregation. Mixed units remain explicitly mixed and conflicting labels
+fall back to the raw variable name. Nested source overlays retain their own
+provenance; ambiguous legacy keys are not fanned out.
+
+Metadata-only updates reuse measurement-derived dashboard state, library
+inventories and append source contracts. Selection, date/window, page, scale and
+table state remain keyed to data/settings changes, not annotation revisions.
+Append preview freshness remains revision-sensitive and creation revalidates
+the latest sources. Private store writes still pass through the established
+dispatch or overlay transaction boundaries. A library copy rekeys only its
+generated metadata-absent authoring identities; source identities and namespaces
+are untouched. Reset and existing session recovery retain the overlay.
+
+Positive invalidation tests exposed a pre-existing dashboard issue when a real
+analysis timezone differs from the source clock. Recomputed import quality now
+uses the timezone of immutable raw timestamps; local dashboard dates continue
+to use the chosen display timezone. The empty timeline helper also returns an
+empty segment vector for an empty selection. Neither change alters measurements.
+
+Exploratory integration evidence is in
+`/private/tmp/llw-m7-integration-vRVoEH`, separate from the baseline audit. The
+first seven-case probe performed zero measurement payload decodes and retained
+one numerical dashboard cache entry/build per case. Numerical data, coverage,
+source namespaces and settings remained identical. It did not pass every gate:
+UCR and appended ordinary paths reached approximately 160 ms p95, and the
+5,000-occurrence single removal reached 348.75 ms with 153,361,016 allocated
+bytes. These are diagnostic, unfrozen results, not acceptance evidence.
+
+Profiling identified repeated metadata resolution and focus-target ID creation.
+The current working revision shares resolved display metadata within a snapshot,
+uses stable presentation targets (the existing delivery route still reapplies
+repeated clicks), and avoids duplicate key construction. A further component
+probe measured 65,975,800 allocated bytes for the existing large batch mutation
+alone. Its full-bundle size calculation and index patch dominate that allocation,
+leaving insufficient room for integrated presentation under 64 MiB. The owner
+was asked to add `R/metadata-overlay.R` to the boundary for this targeted
+optimization, with no budget relaxation. At that checkpoint the file had not
+been edited; the subsequent authorization is recorded below.
+
+The updated acceptance driver measures the production store transaction and
+explorer/library/dashboard/append presentation consumers together, with setup,
+cleanup and decode instrumentation outside timing samples. It includes all three
+frozen packages, appended and absent records, 5,000 variable occurrences and a
+synthetic 250,000-row R-derived scaling case. This is R-side evidence, not an
+end-to-end browser or concurrent-load claim. At this historical checkpoint the
+JSON report was version 2.10.0; final integration verification below supersedes it.
+
+At this checkpoint focused verification was in progress. Full suite/package
+verification, the full performance report, frozen-build independent review and
+owner final check remained open. No showcase had yet been started, no fixture
+or dependency was changed, and nothing was staged, committed, pushed or deployed.
+
+The second diagnostic integration probe (`integration-probe-v2.json`, with its
+exact changed-file hashes and session record alongside it) passes every ordinary
+case: maximum p95 is 87 ms for appended batch Apply, and the 250,000-row synthetic
+case is at most 28 ms. All seven cases retain zero payload decodes, unchanged
+source/numerical state, one dashboard build/entry, and conservative cache byte
+accounting within the configured bound. Large-row Apply allocates 2,701,072 bytes
+versus 2,700,968 for its small-row counterpart, after removing repeated sizing
+of unchanged measurement tables.
+
+The 5,000-occurrence case still fails: batch Apply is 357.3/500 ms with
+114,886,344 allocated bytes; single removal is 267.25/150 ms with 120,559,056
+bytes. Undo is 27.65/500 ms and 32,242,528 bytes. The mutation allocation gate is
+67,108,864 bytes. No limit was relaxed. Work stopped at the proposed one-file
+extension documented in `performance-correction-contract.md` in the evidence
+directory. `R/metadata-overlay.R` was unchanged at that checkpoint.
+
+An earlier focused run passed 3,316 assertions. The subsequent run found a
+104-byte underestimate in new cache bookkeeping, with 3,316 passes and one
+failure; this was corrected by counting the outer snapshot attributes. The
+three directly affected cache/settings tests then passed 37 assertions, and
+the second integration probe verifies conservative sizing in all seven cases.
+The expected malformed-import recovery warning remains explained in the logs.
+The final full-suite/package/browser gates had not run for that provisional
+build. The runtime uses exact list lookup for the optional cached metadata map,
+avoiding an intermediate R partial-matching error found and fixed by tests.
+
+A reviewer status notification was blocked by the app's approval control,
+because the earlier transmission permission covered a specific handoff. No
+project details were sent. Obtain approval for the exact new frozen review
+packet before transmitting it. The independent review itself remains pending.
+
+### Approved final-integration performance correction
+
+On 2026-09-23 the owner supplied `PPROVE M7 FINAL INTEGRATION OVERLAY
+PERFORMANCE CORRECTION`, treated as the evident typo for the requested approval.
+This adds only `R/metadata-overlay.R` to the existing final-integration boundary;
+the earlier authorized integration files remain in scope. No timing or memory
+limit, source/overlay contract, dependency or review gate changes.
+
+The correction removes repeated construction of exact keys, unnecessary
+whole-table copies and repeated per-field lookup work. A unique validated key
+component can prove tuple uniqueness, but never replaces the full source key
+for identity matching. When no component is unique, the same exact composite
+duplicate check runs. Presentation lookup positions are prepared once in the
+immutable source context; editable targets and scalar types are unchanged.
+
+Bundle accounting uses conservative component bounds, with the original
+`object.size()` check whenever the bound is uncertain or exceeds 32 MiB. Joined
+identity/value columns are sized directly so their shared strings are not
+double-counted. All remaining separate-component overhead is retained, not
+subtracted. Incremental updates retain the previous bound and add the new
+value/search text, group summaries and revision-label contributions. Removed
+rows and compacted path strings do not justify subtracting guessed bytes.
+The implementation uses public R sizing, not assumptions about internal object
+headers. R documents within-vector string sharing and the approximate nature
+of these sizes in [object.size](https://search.r-project.org/R/refmans/utils/html/object.size.html).
+
+Each editing context keeps at most one committed bundle in its disposable size
+cache, capped at 32 MiB. This cache is included explicitly in the benchmark's
+context memory report; an environment's contents are not included by a plain
+`object.size(context)` call. It contains no decoded measurements and is never
+serialized into source metadata, overlays or recovered records.
+
+The production session store shares the verified bundle accounting with the
+dashboard and reuses byte counts for unchanged history snapshots. Its account
+contains only byte counts alongside one current record reference, not another
+measurement snapshot per revision. Removing or replacing that record clears
+the account. Numerical invalidation and cache byte/entry ceilings are unchanged.
+Tests compare these bounds with full `object.size()` across Apply, single
+removal, repeated edits, history rollover, Undo, unknown fields and failures.
+
+Intermediate diagnostics are retained as `integration-probe-v3.json` and
+`wide-v4.json` through `wide-v7.json` in the integration evidence directory.
+They are not frozen acceptance evidence. The full test/check/performance/browser
+run and exact review packet are still required. No commit, push, dependency
+change or live-data access is authorized by this correction.
 
 ## Approved boundary
 
@@ -1314,4 +1493,460 @@ Full-app authoring wiring and its integration regressions remain the next owner
 gate. This acceptance does not mark the whole Milestone 7 complete and does not
 authorize a later slice, push, deployment, dependency installation/repin or new
 live reads. No additional test server was started during final verification;
-the approved 7383 showcase and the owner's older edited sessions remain intact.
+the approved 7383 showcase and the owner's older edited sessions remained intact
+at that historical module-only acceptance checkpoint.
+
+## Final integration local verification, 2026-09-23
+
+The final integration and narrow overlay performance correction are implemented
+against `9568feaf9ee646526d24ae7b5714de92940d6a45`. The actual main app now hosts
+the accepted editor. Source-qualified metadata presentation updates without
+measurement payload decoding or unnecessary dashboard/library/append rebuilds.
+The public launcher, source metadata, frozen fixtures, dependencies, JavaScript
+and stylesheets are unchanged. No standalone overlay export is restored.
+
+Local verification is complete, but independent review, owner final check and
+the separate commit gate remain open. This does not declare Milestone 7 complete.
+The frozen local review packet is
+`/private/tmp/llw-m7-final-integration-review-gyOZEO`; explicit owner permission
+is required before transmitting its exact handoff to the external reviewer.
+This packet supersedes the provisional performance probes above, not their
+historical record of failures and subsequent corrections.
+
+### Tests and package verification
+
+- Full suite: 5,240 passes, zero failures/errors, two expected warnings and
+  six skips. Warnings exercise the private-worker failure and malformed
+  `P01_bad.txt` retry paths; skips require unavailable mirai daemons.
+- `R CMD check --no-manual`: Status OK, zero errors/warnings/notes. Installed
+  tests: 5,159 passes, two expected warnings and nine skips, including three
+  optional development fixtures absent from the built package. Repository-index
+  lookup messages remain in the console log; no dependency was installed.
+- Namespace/manual regeneration in the disposable source copy is byte-identical.
+  Air and diff-whitespace checks pass. No runtime/test file changed after the
+  final suite and package check. The freeze compares all runtime, test and app
+  asset hashes with that checked source copy and verifies fixture hashes at HEAD.
+- Tests protect vectorized/exact-key lookup equivalence, conservative byte bounds
+  and exact-limit fallback, repeated edits/history rollover/Undo, atomic failure,
+  unknown fields, metadata-absent duplication, record/session recovery, numerical
+  cache reuse and positive invalidation on genuine data/settings changes.
+
+Logs and the checked tarball are in
+`/private/tmp/llw-m7-final-check-nU52er`; full-suite and benchmark logs are in
+`/private/tmp/llw-m7-integration-vRVoEH`. R is 4.6.1, Shiny 1.14.0, bslib 0.11.0
+and testthat 3.3.2. glcdp remains pinned to
+`e49fcf153a114916ce2680f8b40eb475e694e10d`.
+
+### Final performance evidence
+
+Report 2.11.0 at `2026-09-23T16:38:08Z` passes all operation-specific hard timing,
+memory, identity, relationship and final-integration invariant gates. It was run
+after the tests/check processes completed, without a concurrent showcase process.
+The full matrix's ordinary maximum is 93.3/100 ms p95. The 50 ms design target
+is not uniformly met: this includes the appended update path and the widest
+IZTECH contents render at 50.65 ms. Approved stress single removal is
+80.65/150 ms; the largest explicit bulk/initial operation is 236.55/500 ms.
+Development fixture startup is 3,165 ms p95 and is explicitly not an ordinary
+interaction; it is not included in those interaction maxima.
+
+The integrated production-store transaction plus explorer, library, dashboard
+and append-presentation consumers gives these R-side p95 times:
+
+| Inventory | Batch Apply | Single remove | Undo |
+| --- | ---: | ---: | ---: |
+| TUM, 160 rows / 5 targets | 31.95 ms | 23 ms | 19 ms |
+| IZTECH, 192 rows / 6 targets | 29 ms | 12.65 ms | 18.65 ms |
+| UCR, 160 rows / 5 targets | 53.65 ms | 39 ms | 35.65 ms |
+| Appended, 352 rows / 11 targets | 93.3 ms | 75.65 ms | 69 ms |
+| Metadata absent, 1 target | 22 ms | 13.15 ms | 12.15 ms |
+| 5,000 variable occurrences | 168.65 ms | 80.65 ms | 27 ms |
+| R-derived 250,000 rows / 5 targets | 29 ms | 23 ms | 17.65 ms |
+
+All seven cases have zero post-initialization payload decodes, unchanged source,
+raw/prepared data, settings and numerical coverage, and one dashboard cache
+entry/build. Cache byte bounds pass. The wide integrated batch allocates
+65,884,576 bytes against 67,108,864 (64 MiB), leaving limited headroom. Its
+single removal allocates 50,392,488 bytes. The three fixture bundles total
+6,286,168 bytes; the scaled source index is 35,702,368 bytes. Context size caches
+are included explicitly. Ordinary exploration performs zero package reopens.
+No budget was relaxed. These are local sequential R measurements, not browser
+latency or concurrent-capacity guarantees.
+
+### Browser evidence and remaining handoff
+
+The package-checked copy runs the actual application with an offline-only
+development bootstrap at `http://127.0.0.1:7383/`. Programmer verification covers
+batch/single Apply, invalid unit recovery, source/effective value separation,
+Undo, Escape/dirty-draft confirmation/focus, exact/repeated crosslinks, IZTECH's
+two-device participant, widest UCR hierarchy, 11-occurrence appended scope,
+other-library-record isolation and metadata-absent fallback. Nondefault dashboard
+participant/date/page/data-stage/scale settings survive edits. Append prefixes
+and mappings survive metadata changes; its stale preview blocks creation, and
+Update preview restores readiness.
+
+All six widths (1440, 1200, 1024, 768, 390, 320) were checked without page-level
+horizontal overflow. Mobile editor content wraps and scrolls vertically. No
+console errors were captured; five existing bootstrap-datepicker locale
+deprecation warnings are documented, not suppressed. Browser evidence and
+automation timing limitations are in `browser-verification.md` in the packet.
+This is programmer verification, not independent acceptance or a formal
+accessibility audit.
+
+Test edits were undone and the browser reloaded to the original fixture state.
+Only the intended port-7383 review showcase remains running; obsolete project R
+instances were not left behind. The skills' profiling-first and verification
+workflow informed the bounded optimization and evidence. No staging, commit,
+push, deployment, installation, repin or live measurement read occurred.
+
+## R58 table-state correction, 2026-09-24
+
+The owner approved `APPROVE M7 R58 TABLE-STATE CORRECTION CONTRACT` after the
+independent reviewer found that a settled label Apply/Undo reset Source and
+Pre-processed table search and paging. The earlier nondefault-dashboard-control
+checks did not cover DT widget state and did not establish that it was retained.
+R58 remains open until independent retest of this candidate.
+
+The correction changes only `R/dashboard-data.R`, `R/m_dataset_dashboard.R`,
+their dashboard-data/refinements and app-smoke tests, the existing acceptance
+driver/report, this note and `project-plan.md`. No source, fixture, dependency,
+asset, new JavaScript, overlay mutation or exported interface is changed.
+
+DT 0.34.0's installed native binding supplies its Shiny state input even with
+`stateSave = FALSE`. A temporary native-only browser probe established that
+restoring `search`, `order`, `displayStart` and `pageLength` updates the header
+while retaining S003 and rows 11-20 of 32. The production module now validates
+and restores those options on presentation redraws without browser storage.
+Search is bounded to 4,096 bytes, page length to 1-100, and sorting to 32 valid
+raw-column targets. Arbitrary options, regex and column-search flags are not
+replayed. Invalid input falls back safely to the normal configuration.
+
+Two private session descriptors keep Source and Pre-processed views independent.
+Compatibility uses the existing numerical snapshot signature and schema revision,
+not metadata labels. Sort positions are remapped by exact raw column identity.
+Changing the searchable column set returns to its first page; incompatible sort
+targets are dropped. Native filtered-row counts clamp out-of-range paging without
+scanning measurements. Genuine data/dataset changes clear the view. A native
+draw-timestamp fence rejects old input after reset; already validated options
+survive successive redraws before a new browser acknowledgement. Only bounded
+view parameters and column names are retained, never rows or revision history.
+Isolated reads avoid a reactive draw loop. No additional payload decode or
+source-package access is introduced.
+
+Focused verification: 896 assertions, zero failures/errors/warnings/skips.
+Full suite: 5,320 passes, zero failures/errors, two expected warnings and six
+environment-dependent skips. Tests include malformed browser values, empty and
+out-of-range views, raw-name sort mapping, repeated/delayed native inputs,
+stage/session/data isolation, actual rendered widget options, main-app Apply/Undo
+and unchanged numerical cache counts. Logs are in
+`/private/tmp/llw-m7-r58-work-Kql2hj`. The package check is Status OK with zero
+errors/warnings/notes. Installed-package tests pass 5,239 assertions, with two
+expected warnings and nine expected skips. Disposable-copy documentation and
+namespace regeneration is unchanged. Restricted repository-index lookup messages
+are retained in the console evidence; no dependency was installed or changed.
+
+Report 2.12.1, measured from `2026-09-24T06:58:20Z`, passes all hard gates.
+Ordinary maximum p95 is 88/100 ms, stress single removal 79.65/150 ms, and explicit
+bulk/initial maximum 215.6/500 ms. The integrated 5,000-occurrence Apply is 178 ms
+and allocates 65,884,576 of 67,108,864 permitted bytes. Headroom remains limited.
+Both table restorations together have p95 below the elapsed timer's 1 ms
+resolution in all seven cases, with at most 2,368 Rprofmem-tracked bytes. These
+values do not mean zero runtime cost or zero total allocation. Each integrated
+case retains zero post-initialization measurement decodes and bounded cache
+state. The full test/package processes were not concurrent with timing; the
+loopback showcase was active. These are R-side observations, not browser p95.
+
+The report aggregate originally covered exploration but omitted final-integration
+design flags. Version 2.12.1 recomputes that aggregate from the same recorded
+timings, correctly reporting that the 50 ms target is not uniformly met. No
+timings were discarded or rerun. The original 2.12.0 report and the R derivation
+are retained in the evidence directory. No gate was relaxed.
+
+Programmer browser verification on the actual app covers the original TUM
+S003/page-2 Apply path, independent Source/Pre-processed searches, Undo, unit
+Remove, sorting and custom additional columns, IZTECH S004's single file-group
+override, UCR, appended empty-result retention, and absent-metadata fallback.
+Assertions use settled changed headers. All six contract widths have no
+page-level horizontal overflow; the 320-pixel Source table remains cramped with
+internal horizontal scrolling. R58 changes no layout/CSS, and this observation
+is explicitly passed to the reviewer, not claimed as full mobile usability
+acceptance. No console errors were captured; the five existing datepicker locale
+warnings remain. Disposable browser edits were cleared by reloading the test
+session and the viewport override was reset.
+
+Frozen review packet: `/private/tmp/llw-m7-r58-review-Zas6Ij`. It includes exact
+source and evidence hashes, full integration and R58-only differences, the
+package-checked runtime, browser observations, benchmark derivation and an
+offline actual-app launcher. Independent acceptance is still required.
+
+The owner has resumed sending reviewable Milestone 7 states to the existing
+external reviewer before owner final check. This supersedes the historical
+per-handoff transmission gate above, not the independent acceptance, owner final
+check or commit gates. R52 remains historical, not passed; standalone export
+remains removed. Milestone 7 is not yet declared complete.
+
+## Dashboard quick metadata contract, 2026-09-27
+
+The independent reviewer accepted R58 and the owner approved that build. The
+owner then approved `APPROVE M7 DASHBOARD QUICK METADATA CONTRACT`, recorded at
+`/private/tmp/llw-m7-dashboard-metadata-audit-cwvcoH/contract.md` (SHA-256
+`ef124a217008cc614a0b61e9c06a0e08538ed2cf43daafdf4ad5588735f9ca67`).
+This is a separately reviewable follow-up, not a commit gate or milestone closure.
+
+The Dashboard places an Adjust/Create action next to Focus variable metadata,
+with the same bullseye icon. It opens a two-field Label/Unit dialog without
+changing tabs. Effective unambiguous values are prefilled. Mixed values and
+partial coverage are distinct; blank mixed inputs preserve existing values.
+Clearing a prefilled value removes its override, returning to retained source
+metadata or an unspecified fallback. Raw-name and missing-unit placeholders
+are never saved as metadata assertions. Opening, Discard and Escape write nothing.
+
+The scope is the selected library dataset, including exact mapped appended
+source occurrences; Dashboard participant/date filters do not reduce it.
+Collapsed details list identities and current/source values. Neither similar
+labels nor unit spellings establish equivalence. Missing or ambiguous retained
+identities cannot silently reduce a batch. Both changed fields validate before
+one atomic commit, one overlay revision and one Undo entry. Invalid/stale drafts
+preserve committed state and offer recovery. Static Dashboard openers reuse the
+existing modal keyboard/viewport return behavior; no JavaScript or CSS is added.
+
+The small LightLogR example contains factual unit `lux` and a same-source
+manifest description `lux (melanopic EDI)`. Previously both were treated as
+conflicting assertions. The resolver now takes a present factual unit first,
+then the manifest fallback. This changes neither retained value, normalizes no
+unit spelling, and preserves real cross-occurrence conflicts and partial coverage.
+
+The exact implementation boundary is five existing runtime files:
+`R/LightLogWeb-app.R`, `R/m_dataset_dashboard.R`, `R/m_metadata_overlay.R`,
+`R/metadata-overlay.R`, `R/metadata-model.R`; six existing test files:
+`test-app-smoke.R`, `test-dashboard-data.R`, `test-metadata-model.R`,
+`test-metadata-overlay.R`, `test-metadata-overlay-module.R`, `test-session-model.R`;
+and this document, `project-plan.md`, the existing metadata acceptance runner
+and its JSON report. Fixtures, source pins, dependencies, export removal,
+numerical processing, R58 table-state semantics and deferred R59 are unchanged.
+
+Gates remain p95 100 ms for ordinary interactions (50 ms design target), the
+existing 150 ms wide single-removal exception and 500 ms explicit wide bulk
+gate, 10 MiB ordinary temporary allocation, 64 MiB mutation allocation, 32 MiB
+retained bundles and established cache/index limits. Tests cover all three
+offline public fixtures, appended/absent cases, the actual small example,
+5,000 variable occurrences and 250,000 synthetic rows. Browser acceptance and
+the frozen independent review remain required before owner final check.
+
+### Dashboard quick metadata verification
+
+The 2026-09-27 candidate passes 1,950 focused assertions with no warnings/skips
+and 5,409 full-suite assertions with zero failures/errors, two expected
+failure-recovery warnings and six unavailable-mirai skips. Package check is
+Status OK; its installed suite passes 5,328 assertions, with the same two
+expected warnings and nine documented skips. Air and diff whitespace checks
+pass. The runtime/test/asset hashes match the package-checked build. Source
+fixtures, dependency pins and unrelated working files are unchanged.
+
+Report 2.13.0, measured from `2026-09-27T10:43:02Z`, passes all unchanged hard
+timing, allocation and integrity gates. Across eight integrated cases, ordinary
+operations peak at p95 98/100 ms; wide single removal is 93/150 ms and explicit
+wide bulk work peaks at 245.7/500 ms. The new two-field Save plus all presentation
+refreshes is 36.6 ms for TUM, 36 ms for IZTECH, 59 ms for UCR, 91.95 ms for the
+appended focus, 25 ms for absent metadata, 24.65 ms for the actual small example,
+198.65 ms for 5,000 occurrences and 34 ms for 250,000 measurement rows. Warm
+quick-edit state resolution is p95 1-2 ms and allocates at most 2,436,136 bytes.
+The widest mutation allocates 66,283,528 of 67,108,864 allowed bytes, leaving
+only 825,336 bytes of headroom. The 50 ms design target is not uniformly met;
+the near-limit appended timings and wide allocations are explicit risks, not
+new budget exceptions. Post-initialization measurement deserializations and
+package reopenings remain zero, with source, payload, lineage and cache-bound
+invariants passing. These are sequential local R-side observations, not a
+claim about browser/network latency or concurrent deployment capacity.
+
+Earlier timing/allocation failures are retained in the review history. Profiling
+led to compact typed patch/index construction and type-preserving inventory
+binding rather than another cache. Browser inspection also corrected the quick
+benchmark to use the actual appended output `iztech_MEDI` (six occurrences),
+not the eleven similarly named raw MEDI occurrences. Explicit output mappings
+are now required for appended quick edits. `tum_MEDI` remains five separate
+occurrences; missing mappings are rejected, not inferred.
+
+Programmer browser checks cover Save/Undo, invalid input, dirty Escape, actual
+small-example prefill, absent Create/clear, IZTECH two-device identities, UCR,
+appended scope, R58 Source-table page/search retention and six viewport widths.
+The exact final build still requires independent browser review; the packet
+clearly records the last browser-rerun limitation and does not substitute
+server tests for it. The owner no longer needs a showcase, so all project
+showcase/test servers were stopped. The offline launcher is available for a
+temporary independent-review session only.
+
+Frozen review packet: `/private/tmp/llw-m7-quick-review-u9vfBx`. Its manifest
+separates the fifteen approved follow-up paths from the previously accepted
+uncommitted integration/R58 changes. Independent acceptance, owner final check
+and separate commit authority remain required. No commit or push was performed.
+
+### Imported factual metadata focus consistency, 2026-09-27
+
+The independent reviewer accepted the Dashboard quick metadata candidate for
+owner final check. The owner then identified a real inconsistency in
+`sample.data.environment`: Adjust correctly recognized its retained factual
+label/unit and prefilled them, while Focus variable metadata was unavailable
+until an overlay was created. Saving unchanged values correctly did nothing;
+creating a redundant overlay merely to enable navigation would be wrong.
+
+The owner authorized a targeted correction through the usual review process.
+The variable resolver now falls back to an exact indexed factual label, unit or
+calibration field when there is no existing inventory/overlay target. The focus
+request retains the source namespace and stable group identity. Similar names,
+manifest-only values, ambiguous sources and unknown append ownership do not
+invent navigation targets. The source and its index are neither rebuilt nor
+changed. Opening, unchanged Save, Discard and Escape still write nothing; Undo
+restores navigation to the retained source facts. This correction adds no
+JavaScript, CSS, dependency, source read, cache or unit conversion.
+
+The runtime boundary is only `R/metadata-model.R`, with regressions in the
+existing model, overlay and actual-app smoke tests. All earlier accepted
+integration, R58 table-state and quick-edit changes remain intact. Performance
+and independent-review evidence for this follow-up is recorded separately from
+the historical quick-edit packet. Owner final check and commit gates remain open.
+
+Final local verification passes 1,988 focused assertions without warnings/skips,
+5,447 full-suite assertions (two expected recovery warnings and six unavailable
+mirai skips), and package check Status OK with 5,366 installed-test passes
+(the same expected warnings and nine documented skips). Actual-app tests cover
+initial navigation, unchanged Save, a genuine overlay edit, Undo and no
+post-initialization payload deserialization. Browser checks confirm the retained
+label/unit neighborhood and revision 0 after unchanged Save. The temporary
+programmer server was stopped; the owner's existing 7383 session was preserved.
+
+The unchanged benchmark matrix at `2026-09-27T12:07:08Z` passes all hard gates:
+integrated ordinary maximum 87/100 ms p95, wide single removal 81/150 ms and
+wide bulk maximum 233.3/500 ms. The new factual-focus resolver and exact group
+resolution take 2 ms p95 and 85,016 allocated bytes for the actual small example;
+missing and ambiguous controls take 1 ms. No source/index change or measurement
+decode/package reopening occurs. Maximum mutation allocation remains 66,283,528
+bytes, leaving 825,336 bytes under the 64 MiB limit. The 50 ms design goal is not
+uniformly met. These are sequential local R-side observations, not browser or
+concurrency guarantees. New packet:
+`/private/tmp/llw-m7-factual-focus-review-TZjk2b`. Independent acceptance is pending.
+
+### R61 removed-target feedback correction, 2026-09-27
+
+The independent reviewer closed the source-backed factual navigation defect as
+R60, but withheld acceptance for R61. Undo or clearing the last overlay field
+correctly restored absent metadata while an earlier successful crosslink notice
+still claimed that an exact field was selected. The findings are retained at
+`/private/tmp/llw-m7-factual-focus-independent-fFwmRi/reviewer-findings-2026-09-27.md`.
+
+The owner approved `APPROVE M7 R61 STALE METADATA STATUS CORRECTION CONTRACT`.
+The exact follow-up boundary is `R/m_metadata_explorer.R`, the existing explorer
+and app-smoke test files, this document, `project-plan.md` and the existing
+metadata benchmark JSON. Prior accepted integration, R58 and quick-edit work,
+plus the closed R60 correction, remain intact. No source fixtures, dependencies,
+JavaScript, CSS, public API, live reads, source values or measurements change.
+
+On an overlay revision, the existing record observer now checks whether its
+exact requested group still exists in the in-memory index. If removed, it clears
+the obsolete request pin and resolved success feedback. It does not replay that
+request if the field is later recreated. Valid queries, filters, source-field
+selections and hierarchy context are preserved; ordinary dataset/source switches
+retain their existing resets. A fresh explicit crosslink works normally.
+
+The new actual-app regressions first reproduced stale feedback after both Undo
+and clearing, including removal of a source-backed example's temporary overlay.
+The final focused run passes 954 assertions with zero failures, errors, warnings
+or skips. Earlier diagnostic runs are retained: one test incorrectly attempted
+to Undo an Undo, and another treated a still-present unspecified field as a
+removed group. These test constructions were corrected to use explicit re-creation
+and an actually removed overlay alongside unrelated retained source facts.
+
+Evidence is under `/private/tmp/llw-m7-r61-P3k6om`. Full verification passes
+5,531 assertions without failures or errors, with two expected recovery warnings
+and six unavailable-mirai skips. Package check reports Status OK, with 5,450
+installed-test passes, the same two expected warnings and nine documented skips
+(six mirai plus three optional development fixtures). Air and diff checks pass.
+Programmer browser checks reproduce and verify both absent-metadata removal
+paths, sample no-op Save and return to factual metadata, retained TUM targets
+through edit/Undo, Enter navigation and Escape cancellation. They found no
+browser errors. The temporary test server was stopped; owner 7383 stayed intact.
+
+The complete explorer refresh and rendered-status retrieval benchmark passes
+the 100 ms gate over 60 iterations per case: absent metadata p95 62.65 ms and
+624,280 allocated bytes; actual small example p95 81.95 ms and 1,119,688 bytes.
+Both are below the 10 MiB allocation gate but above the 50 ms design goal.
+Precomputed revisions isolate refresh cost from mutation cost. No measurement
+decode or package reopening occurs during the operation; source and raw payload
+remain unchanged. Two temporary harness diagnostics (trap placement before
+initialization, then unpropagated `testServer()` measurement variables) were
+corrected and are not passing evidence. No production changes followed the
+initial observer correction.
+
+The refreshed full matrix at `2026-09-27T15:03:39Z` passes all hard timing,
+memory, integration, navigation, relationship and appended-identity gates.
+Integrated ordinary maximum is 84/100 ms p95, wide single removal 79.3/150 ms
+and wide bulk maximum 176.6/500 ms. Actual-small two-field Save/refresh is 23 ms;
+the 5,000-occurrence case is 176.6 ms. Maximum mutation allocation remains
+66,283,528 bytes, with only 825,336 bytes of headroom under 64 MiB. This narrow
+margin is retained as a risk. The 50 ms design goal is not uniformly met. These
+are sequential local R-side measurements, not browser or concurrency guarantees.
+
+Frozen packet: `/private/tmp/llw-m7-r61-review-uFEw8S`, with a six-path delta,
+source/evidence hashes, checked-package equivalence and unchanged fixture hashes.
+Independent review subsequently accepted the exact packet for owner final check,
+closing R61 and preserving R60/R58. Its report is
+`/private/tmp/llw-m7-r61-independent-PDWLo4/reviewer-findings-2026-09-27.md`
+(SHA-256 `8049a5ac7707a118d54419e6d5ba20085722a693c92552f22f27520eafec2a14`).
+The owner completed that check and separately authorized milestone closeout,
+commit and push on 2026-09-27. No deployment or later milestone is authorized.
+
+## Milestone 7 closeout, 2026-09-27
+
+The owner accepted the final R61 showcase and authorized milestone completion,
+commit and push. Before the closeout wording change, all 190 tracked files
+matched the independently accepted R61 manifest exactly. The only subsequent
+runtime change is the visible "Dataset details" name for `factual_metadata`,
+used consistently in result locations, hierarchy paths and section labels.
+The exact key, source paths, namespace identities, provenance, fingerprints and
+overlay semantics stay unchanged. This is not independent verification of
+imported facts and does not promote metadata to a stronger validation status.
+
+The delta from R61 is limited to `R/m_metadata_explorer.R`, its existing explorer
+tests, this note and `project-plan.md`. Fifteen new assertions protect the
+human-readable labels and byte-identical retained bundle. Focused explorer
+tests pass 829 assertions without failures, errors, warnings or skips. The full
+suite passes 5,546 assertions, with no failures/errors, two deliberately
+exercised recovery warnings and six unavailable-mirai skips. Package check is
+Status OK; installed tests pass 5,465 assertions with the same two warnings and
+nine documented skips (six mirai plus three optional development fixtures).
+Air and diff checks pass. No dependencies, public exports, roxygen interfaces,
+fixtures, JavaScript or CSS changed in this closeout.
+
+Browser checks on the isolated offline 7385 instance confirm the sample's seven
+retained fields, renamed result path and breadcrumb, adjacent label/unit values,
+unchanged exact key and immutable provenance. Ordinary GLC headings remain
+Core Metadata, Dataset Inventory and Variable Inventory. Screenshots and logs
+are retained in `/private/tmp/llw-m7-closeout-vMwBlA`. That temporary tab/server
+was closed; the owner's 7384 R61 session and edits were preserved. Its running
+process is intentionally the accepted pre-wording snapshot, not hot-reloaded.
+
+The unchanged, hash-bound R61 benchmark matrix at `2026-09-27T15:03:39Z` is the
+final performance evidence. Every hard timing, memory and integrity gate passes:
+ordinary integrated maximum 84/100 ms p95, wide single removal 79.3/150 ms and
+wide bulk 176.6/500 ms. No post-initialization measurement decode or package
+reopening occurs. The closeout changes display wording only; the full stress
+matrix was not rerun or relabelled as a newer measurement. Maximum mutation
+allocation is 66,283,528 bytes, with 825,336 bytes remaining under 64 MiB.
+The universal 50 ms design target is not passed. Results are sequential local
+R-side measurements, not browser latency or deployed-concurrency guarantees.
+
+Independent R61 acceptance closes R60/R61 and protects R58. R59 remains the
+explicitly deferred, nonblocking mobile table-layout refinement. R52 is
+historical and superseded by removal of standalone overlay export, not passed.
+The prior rejected visual-hierarchy prototype remains dropped. Immutable source
+metadata, versioned overlay, namespaced append lineage, offline three-source
+fixtures, recoverable authoring and metadata/settings separation are complete
+within the accepted scope. Milestone 6 transport/recovery is reused; no new
+recovery store is introduced. Milestone 8 preprocessing, edited GLC generation,
+and Milestone 13 bundles/outputs remain outside this completion.
+
+The active Shiny and R development skills guided the focused wording regression,
+full package verification, isolated browser check and explicit Git file boundary.
+Only the 27 milestone-related tracked paths are included in the closeout commit.
+Unrelated `dev/brand/candidates/**` and `man/man.Rproj` remain untouched. No live
+measurements, dependency installation/repinning, deployment or later milestone
+work occurred.

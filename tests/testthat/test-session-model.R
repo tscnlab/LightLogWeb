@@ -1,3 +1,91 @@
+test_that("store byte accounts cover Apply, shifted history, Undo and replacement", {
+  domain <- shiny::MockShinySession$new()
+  on.exit(domain$close(), add = TRUE)
+  store <- shiny::withReactiveDomain(domain, new_session_store("local"))
+  record <- m7_fixture_record("tum-medi-only")
+  store$dispatch(new_session_event("add", value = record))
+  context <- metadata_overlay_context(record)
+  target <- context$catalog$target_id[
+    context$catalog$field == "unit" & context$catalog$name == "MEDI"
+  ][[1L]]
+  check_bytes <- function(record) {
+    expect_gte(store$record_bytes(record), as.numeric(object.size(record)))
+    expect_equal(store$record_bytes(record), store$record_bytes(record))
+  }
+  check_bytes(record)
+  for (i in seq_len(22L)) {
+    record <- store$apply_overlay(
+      context,
+      metadata_overlay_preview(
+        record,
+        context,
+        target,
+        paste0("custom-unit-", i)
+      )
+    )
+    check_bytes(record)
+  }
+  expect_length(record$history, 20L)
+  for (i in seq_len(3L)) {
+    record <- store$apply_overlay(context, undo = TRUE)
+    check_bytes(record)
+  }
+  record <- store$apply_overlay(
+    context,
+    metadata_overlay_preview(
+      record,
+      context,
+      target,
+      scope = "single",
+      action = "remove"
+    )
+  )
+  check_bytes(record)
+  store$dispatch(new_session_event(
+    "rename",
+    dataset_id = record$id,
+    value = "Renamed"
+  ))
+  check_bytes(shiny::isolate(store$selected_dataset()))
+  store$dispatch(new_session_event("remove", dataset_id = record$id))
+  expect_null(shiny::isolate(store$selected_dataset()))
+  other <- m1_record()
+  store$dispatch(new_session_event("add", value = other))
+  check_bytes(other)
+})
+
+test_that("quick edits create one store history entry and remain session-local", {
+  domain <- shiny::MockShinySession$new()
+  on.exit(domain$close(), add = TRUE)
+  record <- m7_fixture_record("tum-medi-only")
+  first <- shiny::withReactiveDomain(domain, new_session_store("local"))
+  second <- shiny::withReactiveDomain(domain, new_session_store("local"))
+  for (store in list(first, second))
+    store$dispatch(new_session_event("add", value = record))
+  context <- metadata_overlay_context(record)
+  updated <- first$apply_overlay(
+    context,
+    metadata_overlay_focus_preview(
+      record,
+      context,
+      "MEDI",
+      "Quick label",
+      "klx"
+    )
+  )
+  expect_length(updated$history, 1L)
+  expect_identical(updated$metadata_bundle$overlay$revision, 1L)
+  expect_identical(shiny::isolate(second$selected_dataset()), record)
+  expect_gte(first$record_bytes(updated), as.numeric(object.size(updated)))
+  restored <- first$apply_overlay(context, undo = TRUE)
+  expect_equal(nrow(restored$metadata_bundle$overlay$tables$variables), 0L)
+  expect_identical(restored$raw_payload, record$raw_payload)
+  expect_identical(
+    restored$metadata_bundle$sources,
+    record$metadata_bundle$sources
+  )
+})
+
 test_that("dataset records keep an immutable canonical raw payload", {
   record <- m1_record()
   original_payload <- record$raw_payload
@@ -182,6 +270,51 @@ test_that("canonical raw checksums detect direct payload tampering", {
     class = "llw_validation_error",
     regexp = "immutable checksum"
   )
+})
+
+test_that("copy and recovery keep source and metadata-free annotations usable", {
+  for (record in list(m7_fixture_record(), m1_record("No source metadata"))) {
+    edited <- m7_overlay_edit(record, "label", "Local display label")
+    copy <- duplicate_dataset_record(edited, "Independent copy")
+    expect_false(identical(copy$id, edited$id))
+    expect_identical(
+      copy$metadata_bundle$sources,
+      edited$metadata_bundle$sources
+    )
+    expect_identical(copy$raw_payload, edited$raw_payload)
+    expect_identical(copy$prepared_payload, edited$prepared_payload)
+    expect_identical(
+      metadata_resolve_variable(copy, "MEDI")$label,
+      "Local display label"
+    )
+    context <- metadata_overlay_context(copy)
+    target <- context$catalog$target_id[
+      context$catalog$table == "variables" &
+        context$catalog$field == "label" &
+        context$catalog$name == "MEDI"
+    ][[1L]]
+    removed <- apply_metadata_overlay(
+      copy,
+      context,
+      metadata_overlay_preview(copy, context, target, action = "remove")
+    )
+    expect_false(identical(
+      metadata_resolve_variable(removed, "MEDI")$label,
+      "Local display label"
+    ))
+    expect_identical(
+      metadata_resolve_variable(edited, "MEDI")$label,
+      "Local display label"
+    )
+    reset <- reset_dataset_record(copy)
+    expect_identical(reset$metadata_bundle, copy$metadata_bundle)
+    recovered <- unserialize(serialize(reset, NULL, version = 3L))
+    expect_identical(recovered, reset)
+    expect_identical(
+      metadata_resolve_variable(recovered, "MEDI")$label,
+      "Local display label"
+    )
+  }
 })
 
 test_that("recipes use stable, enabled, serializable steps and cache keys", {

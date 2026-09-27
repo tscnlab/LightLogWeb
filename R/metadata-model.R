@@ -171,17 +171,30 @@ metadata_validate_overlay_table <- function(table, name, version = "1.0.0") {
       )
     }
   }
-  key_values <- do.call(
-    paste0,
-    lapply(table[keys], function(value) {
-      paste0(nchar(value, type = "bytes"), ":", value)
-    })
-  )
-  if (anyDuplicated(key_values)) {
-    abort_llw(
-      paste0("Metadata overlay table `", name, "` has duplicate identities."),
-      type = "validation"
+  # If any validated key component is unique, the complete tuple is unique.
+  # Otherwise perform the same exact length-prefixed composite-key check. This
+  # avoids allocating thousands of long strings for the common distinct-ID case
+  # without treating a component as the source-qualified identity.
+  unique_component <- FALSE
+  for (key in keys) {
+    if (!anyDuplicated(table[[key]])) {
+      unique_component <- TRUE
+      break
+    }
+  }
+  if (!unique_component) {
+    key_values <- do.call(
+      paste0,
+      lapply(table[keys], function(value) {
+        paste0(nchar(value, type = "bytes"), ":", value)
+      })
     )
+    if (anyDuplicated(key_values)) {
+      abort_llw(
+        paste0("Metadata overlay table `", name, "` has duplicate identities."),
+        type = "validation"
+      )
+    }
   }
   if (identical(name, "sites")) {
     latitude <- table$latitude
@@ -2391,116 +2404,163 @@ metadata_variable_source_mappings <- function(record, variable) {
   mappings
 }
 
-metadata_source_variable_inventory <- function(source) {
-  direct <- source$records$variable_inventory %||% NULL
-  if (is.data.frame(direct)) return(direct)
+metadata_variable_overrides <- function(
+  inventory,
+  overlay,
+  namespaces = character()
+) {
+  values <- overlay$tables$variables
+  if (nrow(inventory) == 0L || is.null(values) || nrow(values) == 0L)
+    return(inventory)
+  keep <- values$name %in% inventory$name
+  if (!all(keep)) values <- values[keep, , drop = FALSE]
+  if (nrow(values) == 0L) return(inventory)
+  keys <- c("dataset_id", "file_group_id", "name")
+  if ("source_scope" %in% names(values)) {
+    distinct_scopes <- unique(values$source_scope)
+    scopes <- vapply(
+      distinct_scopes,
+      function(scope) {
+        parts <- tryCatch(jsonlite::fromJSON(scope), error = function(cnd) NULL)
+        if (!is.character(parts) || length(parts) == 0L) return(NA_character_)
+        metadata_overlay_scope(c(namespaces, parts))
+      },
+      character(1)
+    )
+    values$source_scope <- scopes[match(values$source_scope, distinct_scopes)]
+    positions <- metadata_overlay_match_rows(
+      inventory,
+      values,
+      c("source_scope", keys)
+    )
+  } else {
+    # Legacy keys may be applied only when there is exactly one retained scope.
+    retained_keys <- metadata_overlay_row_key(inventory, keys)
+    requested_keys <- metadata_overlay_row_key(values, keys)
+    ambiguous <- duplicated(retained_keys) |
+      duplicated(retained_keys, fromLast = TRUE)
+    requested_keys[
+      requested_keys %in% retained_keys[ambiguous]
+    ] <- NA_character_
+    positions <- match(retained_keys, requested_keys)
+  }
+  layer <- if (length(namespaces) == 0L) "LightLogWeb overlay" else
+    "Retained source overlay"
+  for (field in c("label", "unit")) {
+    if (!field %in% names(values)) next
+    replacement <- values[[field]][positions]
+    use <- !is.na(positions) & !is.na(replacement) & nzchar(replacement)
+    inventory[[field]][use] <- replacement[use]
+    inventory[[paste0(field, "_layer")]][use] <- layer
+  }
+  inventory
+}
+
+metadata_bind_variable_inventories <- function(rows) {
+  rows <- Filter(function(row) nrow(row) > 0L, rows)
+  if (length(rows) == 0L) return(dplyr::tibble())
+  if (length(rows) == 1L) return(dplyr::as_tibble(rows[[1L]]))
+  # These typed inventories share a schema. The typed row binder avoids
+  # deparsing complete nested inventories to construct unused row names.
+  dplyr::as_tibble(dplyr::bind_rows(unname(rows)))
+}
+
+metadata_source_variable_inventory <- function(
+  source,
+  namespaces = source$namespace_id,
+  source_names = NULL,
+  overlay = NULL
+) {
   nested <- source$records$metadata_bundle %||% NULL
-  if (!inherits(nested, "llw_metadata_bundle")) return(data.frame())
-  rows <- lapply(nested$sources, function(nested_source) {
-    inventory <- nested_source$records$variable_inventory %||% data.frame()
-    if (!is.data.frame(inventory)) data.frame() else inventory
-  })
-  rows <- rows[vapply(rows, nrow, integer(1)) > 0L]
-  if (length(rows) == 0L) return(data.frame())
-  result <- do.call(rbind, rows)
-  rownames(result) <- NULL
-  result
+  if (inherits(nested, "llw_metadata_bundle")) {
+    rows <- lapply(names(nested$sources), function(name) {
+      metadata_source_variable_inventory(
+        nested$sources[[name]],
+        c(namespaces, name),
+        source_names,
+        nested$overlay
+      )
+    })
+    result <- metadata_bind_variable_inventories(rows)
+    return(metadata_variable_overrides(result, nested$overlay, namespaces))
+  }
+  inventory <- source$records$variable_inventory
+  # Metadata-free imports have authoring identities retained in their typed
+  # overlay. Recover those identities without reopening measurement payloads,
+  # including an overlay preserved inside an appended source namespace.
+  imported <- FALSE
+  if (
+    !is.data.frame(inventory) &&
+      !identical(source$source_type, "append_source")
+  ) {
+    values <- overlay$tables$variables
+    if (is.data.frame(values) && "source_scope" %in% names(values)) {
+      keep <- values$source_scope ==
+        metadata_overlay_scope(utils::tail(namespaces, 1L)) &
+        values$file_group_id == paste0("llw:import:", values$dataset_id)
+      inventory <- values[which(keep), c("dataset_id", "file_group_id", "name")]
+      imported <- TRUE
+    }
+  }
+  if (!is.data.frame(inventory) || !"name" %in% names(inventory))
+    return(data.frame())
+  if (!is.null(source_names)) {
+    keep <- inventory$name %in% source_names
+    if (!all(keep)) inventory <- inventory[keep, , drop = FALSE]
+  }
+  value <- function(column) {
+    if (column %in% names(inventory)) as.character(inventory[[column]]) else
+      rep(NA_character_, nrow(inventory))
+  }
+  dplyr::as_tibble(list(
+    source_scope = rep(metadata_overlay_scope(namespaces), nrow(inventory)),
+    namespace_id = rep(namespaces[[1L]], nrow(inventory)),
+    dataset_id = value("dataset_id"),
+    file_group_id = value("file_group_id"),
+    name = value("name"),
+    label = value("label"),
+    unit = value("unit"),
+    calibration = value("calibration"),
+    label_layer = rep(
+      if (imported) "Not specified" else "Immutable source",
+      nrow(inventory)
+    ),
+    unit_layer = rep(
+      if (imported) "Not specified" else "Immutable source",
+      nrow(inventory)
+    ),
+    calibration_layer = rep(
+      if (imported) "Not specified" else "Immutable source",
+      nrow(inventory)
+    )
+  ))
 }
 
 metadata_variable_candidate_rows <- function(record, variable) {
   bundle <- metadata_bundle_for_record(record)
   mappings <- metadata_variable_source_mappings(record, variable)
+  source_names <- unique(vapply(mappings, `[[`, character(1), "source_name"))
+  inventory <- metadata_bind_variable_inventories(lapply(
+    bundle$sources,
+    metadata_source_variable_inventory,
+    source_names = source_names,
+    overlay = bundle$overlay
+  ))
+  inventory <- metadata_variable_overrides(inventory, bundle$overlay)
   rows <- list()
-  overlay <- bundle$overlay$tables$variables
   for (mapping in mappings) {
-    source <- bundle$sources[[mapping$namespace_id]] %||% NULL
-    inventory <- if (is.null(source)) {
-      data.frame()
-    } else {
-      metadata_source_variable_inventory(source)
-    }
-    inventory_matches <- if (
-      is.data.frame(inventory) && "name" %in% names(inventory)
-    ) {
-      inventory[
-        as.character(inventory$name) == mapping$source_name,
-        ,
-        drop = FALSE
-      ]
-    } else {
-      data.frame()
-    }
-    if (is.data.frame(overlay) && nrow(overlay) > 0L) {
-      matches <- overlay$name == mapping$source_name
-      if ("source_scope" %in% names(overlay)) {
-        scopes <- unique(overlay$source_scope)
-        scope_roots <- vapply(
-          scopes,
-          function(scope) {
-            path <- tryCatch(
-              jsonlite::fromJSON(scope),
-              error = function(cnd) character()
-            )
-            if (is.character(path) && length(path) > 0L) path[[1L]] else ""
-          },
-          character(1)
-        )
-        matches <- matches &
-          overlay$source_scope %in% scopes[scope_roots == mapping$namespace_id]
-      }
-      mapped_dataset_ids <- unique(c(
-        metadata_nonempty_text(inventory_matches$dataset_id %||% character()),
-        metadata_nonempty_text(mapping$session_source_dataset_id)
-      ))
-      mapped_file_group_ids <- metadata_nonempty_text(
-        inventory_matches$file_group_id %||% character()
-      )
-      if (length(mapped_dataset_ids) > 0L) {
-        matches <- matches & overlay$dataset_id %in% mapped_dataset_ids
-      }
-      if (length(mapped_file_group_ids) > 0L) {
-        matches <- matches & overlay$file_group_id %in% mapped_file_group_ids
-      }
-      for (row in which(matches)) {
-        rows[[length(rows) + 1L]] <- data.frame(
-          layer = "LightLogWeb overlay",
-          namespace_id = metadata_overlay_namespace_id(),
-          source_dataset_id = as.character(overlay$dataset_id[[row]]),
-          file_group_id = as.character(overlay$file_group_id[[row]]),
-          source_name = mapping$source_name,
-          display_name = variable,
-          label = as.character(overlay$label[[row]]),
-          unit = as.character(overlay$unit[[row]]),
-          calibration = NA_character_,
-          stringsAsFactors = FALSE
-        )
-      }
-    }
-    if (is.null(source)) next
-    if (!is.data.frame(inventory) || !"name" %in% names(inventory)) next
-    matches <- as.character(inventory$name) == mapping$source_name
-    for (row in which(matches)) {
-      value <- function(column) {
-        if (!column %in% names(inventory)) return(NA_character_)
-        as.character(inventory[[column]][[row]])
-      }
-      rows[[length(rows) + 1L]] <- data.frame(
-        layer = "Immutable source",
-        namespace_id = mapping$namespace_id,
-        source_dataset_id = value("dataset_id"),
-        file_group_id = value("file_group_id"),
-        source_name = mapping$source_name,
-        display_name = variable,
-        label = value("label"),
-        unit = value("unit"),
-        calibration = value("calibration"),
-        stringsAsFactors = FALSE
-      )
-    }
+    if (nrow(inventory) == 0L) next
+    matches <- inventory$name == mapping$source_name &
+      inventory$namespace_id == mapping$namespace_id
+    selected <- if (all(matches)) inventory else inventory[which(matches), ]
+    selected$source_dataset_id <- selected$dataset_id
+    selected$source_name <- selected$name
+    selected$display_name <- rep(variable, nrow(selected))
+    rows[[length(rows) + 1L]] <- selected
   }
   if (length(rows) == 0L) {
     return(data.frame(
-      layer = character(),
+      source_scope = character(),
       namespace_id = character(),
       source_dataset_id = character(),
       file_group_id = character(),
@@ -2509,12 +2569,70 @@ metadata_variable_candidate_rows <- function(record, variable) {
       label = character(),
       unit = character(),
       calibration = character(),
+      label_layer = character(),
+      unit_layer = character(),
+      calibration_layer = character(),
       stringsAsFactors = FALSE
     ))
   }
-  values <- do.call(rbind, rows)
-  rownames(values) <- NULL
-  values
+  metadata_bind_variable_inventories(rows)
+}
+
+metadata_factual_variable_focus <- function(record, variable) {
+  bundle <- metadata_bundle_for_record(record)
+  append_sources <- record$provenance$append_merge$source_records %||% list()
+  if (length(append_sources) > 0L) {
+    mapped <- vapply(
+      append_sources,
+      function(source) {
+        mapping <- source$mapping %||% list()
+        variable %in% c(mapping$measurement_target, mapping$optional_targets)
+      },
+      logical(1)
+    )
+    if (!any(mapped)) return(NULL)
+  } else if (
+    any(vapply(
+      bundle$sources,
+      function(source) {
+        identical(source$source_type, "append_source")
+      },
+      logical(1)
+    ))
+  ) {
+    return(NULL)
+  }
+  # Legacy facts are already indexed. Resolve their exact retained paths rather
+  # than creating an inventory or a redundant overlay merely to enable a link.
+  groups <- bundle$index$groups
+  targets <- list()
+  for (mapping in metadata_variable_source_mappings(record, variable)) {
+    paths <- paste(
+      mapping$namespace_id,
+      "factual_metadata/variables",
+      mapping$source_name,
+      c("label", "unit", "calibration"),
+      sep = "/"
+    )
+    rows <- which(
+      groups$namespace_id == mapping$namespace_id &
+        groups$layer == "Immutable source" &
+        groups$group_path %in% paths
+    )
+    if (length(rows) == 0L) next
+    if (anyDuplicated(groups$group_path[rows])) return(NULL)
+    row <- rows[order(match(groups$group_path[rows], paths))][[1L]]
+    targets[[length(targets) + 1L]] <- new_metadata_focus_request(
+      dataset_id = record$id,
+      namespace_id = mapping$namespace_id,
+      field = groups$field[[row]],
+      group_id = groups$group_id[[row]],
+      label = paste("Variable metadata for", variable),
+      request_id = paste0("metadata_focus_", groups$group_id[[row]])
+    )
+  }
+  # Different retained sources remain distinct, even when their values agree.
+  if (length(targets) == 1L) targets[[1L]] else NULL
 }
 
 metadata_resolve_variable <- function(record, variable) {
@@ -2526,17 +2644,21 @@ metadata_resolve_variable <- function(record, variable) {
   legacy <- record$factual_metadata$variables[[variable]] %||% list()
   legacy_units <- record$source_manifest$details$units %||% list()
   resolve_property <- function(column, fallback = character()) {
-    for (layer in c("LightLogWeb overlay", "Immutable source")) {
-      rows <- candidates[candidates$layer == layer, , drop = FALSE]
-      present <- if (nrow(rows) == 0L) character() else rows[[column]]
-      present <- unique(metadata_nonempty_text(present))
-      if (length(present) > 0L) {
-        return(list(values = present, layer = layer))
-      }
+    present <- candidates[[column]]
+    valid <- !is.na(present) & nzchar(present)
+    if (any(valid)) {
+      layers <- unique(candidates[[paste0(column, "_layer")]][valid])
+      if (any(!valid)) layers <- c(layers, "Not specified")
+      return(list(
+        values = unique(present[valid]),
+        incomplete = any(!valid),
+        layer = paste(layers, collapse = " + ")
+      ))
     }
     fallback <- unique(metadata_nonempty_text(fallback))
     list(
       values = fallback,
+      incomplete = FALSE,
       layer = if (length(fallback) > 0L) {
         "Imported source details"
       } else {
@@ -2545,12 +2667,13 @@ metadata_resolve_variable <- function(record, variable) {
     )
   }
   label_result <- resolve_property("label", legacy$label %||% character())
+  # A manifest description is a fallback for this same imported source, not a
+  # second unit assertion. Preserve literal differences across real occurrences.
+  factual_unit <- metadata_nonempty_text(legacy$unit %||% character())
   unit_result <- resolve_property(
     "unit",
-    c(
-      legacy$unit %||% character(),
+    if (length(factual_unit)) factual_unit else
       legacy_units[[variable]] %||% character()
-    )
   )
   calibration_result <- resolve_property(
     "calibration",
@@ -2563,9 +2686,10 @@ metadata_resolve_variable <- function(record, variable) {
   labels <- label_result$values
   units <- unit_result$values
   calibrations <- calibration_result$values
-  label_conflict <- length(labels) > 1L
-  unit_conflict <- length(units) > 1L
-  calibration_conflict <- length(calibrations) > 1L
+  label_conflict <- length(labels) > 1L || label_result$incomplete
+  unit_conflict <- length(units) > 1L || unit_result$incomplete
+  calibration_conflict <- length(calibrations) > 1L ||
+    calibration_result$incomplete
   label_unit_layers <- unique(c(label_result$layer, unit_result$layer))
   label_unit_layers <- setdiff(label_unit_layers, "Not specified")
   provenance <- if (length(label_unit_layers) == 0L) {
@@ -2592,13 +2716,17 @@ metadata_resolve_variable <- function(record, variable) {
         "Immutable source"
       )
   ]
-  target_layer <- if (length(target_layer) == 0L) NULL else target_layer[[1L]]
+  target_layer <- if (length(target_layer) == 0L) {
+    if (nrow(candidates) > 0L) "Immutable source" else NULL
+  } else target_layer[[1L]]
   selected <- if (is.null(target_layer)) {
     candidates[FALSE, , drop = FALSE]
   } else {
-    candidates[candidates$layer == target_layer, , drop = FALSE]
+    candidates
   }
   namespace_id <- unique(metadata_nonempty_text(selected$namespace_id))
+  if (identical(target_layer, "LightLogWeb overlay"))
+    namespace_id <- metadata_overlay_namespace_id()
   source_name <- unique(metadata_nonempty_text(selected$source_name))
   target <- if (length(namespace_id) == 1L && length(source_name) == 1L) {
     path <- if (identical(target_layer, "LightLogWeb overlay")) {
@@ -2612,10 +2740,22 @@ metadata_resolve_variable <- function(record, variable) {
       field = "name",
       path_contains = path,
       record_identity = source_name[[1L]],
-      label = paste("Variable metadata for", variable)
+      label = paste("Variable metadata for", variable),
+      # This is a stable presentation target, not a click event. The app's
+      # delivery route explicitly reapplies repeated requests when activated.
+      request_id = paste0(
+        "metadata_focus_",
+        digest::digest(
+          list(record$id, namespace_id[[1L]], path, source_name[[1L]]),
+          algo = "xxhash64"
+        )
+      )
     )
   } else {
     NULL
+  }
+  if (is.null(target) && nrow(candidates) == 0L) {
+    target <- metadata_factual_variable_focus(record, variable)
   }
   structure(
     list(
@@ -2653,16 +2793,21 @@ metadata_resolve_variable <- function(record, variable) {
   )
 }
 
-metadata_variable_choice_labels <- function(record, variables) {
+metadata_variable_choice_labels <- function(
+  record,
+  variables,
+  resolved = NULL
+) {
   assert_character_vector(variables, "variables")
   values <- vapply(
     variables,
     function(variable) {
-      resolved <- metadata_resolve_variable(record, variable)
-      label <- resolved$display_label
+      metadata <- resolved[[variable]] %||%
+        metadata_resolve_variable(record, variable)
+      label <- metadata$display_label %||% metadata$label
       if (!identical(label, variable))
         label <- paste0(label, " [", variable, "]")
-      paste0(label, " \u00b7 ", resolved$unit)
+      paste0(label, " \u00b7 ", metadata$unit)
     },
     character(1)
   )

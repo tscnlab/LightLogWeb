@@ -2,6 +2,25 @@ m7_fixture_directory <- function() {
   testthat::test_path("fixtures", "milestone-7")
 }
 
+m7_overlay_edit <- function(
+  record,
+  field,
+  value,
+  scope = "all",
+  name = "MEDI"
+) {
+  context <- metadata_overlay_context(record)
+  rows <- context$catalog
+  target <- rows$target_id[
+    rows$table == "variables" & rows$field == field & rows$name == name
+  ][[1L]]
+  apply_metadata_overlay(
+    record,
+    context,
+    metadata_overlay_preview(record, context, target, value, scope)
+  )
+}
+
 m7_fixture_manifest <- function() {
   jsonlite::read_json(
     file.path(m7_fixture_directory(), "manifest.json"),

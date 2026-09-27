@@ -132,6 +132,7 @@ metadata_result_table_ui <- function(rows, max_rows = 25L) {
 }
 
 metadata_friendly_name <- function(value) {
+  if (identical(value, "factual_metadata")) return("Dataset details")
   value <- gsub("[_-]+", " ", value)
   tools::toTitleCase(value)
 }
@@ -199,7 +200,7 @@ metadata_section_label <- function(section_id) {
     core_metadata = "Core Metadata",
     dataset_inventory = "Dataset Inventory",
     variable_inventory = "Variable Inventory",
-    factual_metadata = "Record Summary",
+    factual_metadata = "Dataset details",
     metadata_bundle = "Retained Source Metadata",
     metadata_friendly_name(section_id)
   )
@@ -2631,7 +2632,19 @@ metadata_explorer_server <- function(
           !identical(overlay_revision, previous_overlay_revision)
         previous_record_source <<- identity
         previous_overlay_revision <<- overlay_revision
-        if (overlay_change) return(invisible(NULL))
+        if (overlay_change) {
+          requested <- requested_group_id()
+          if (!is.null(requested) && !requested %in% index()$groups$group_id) {
+            # Keep valid exploration state, but never retain a successful
+            # crosslink or replay its pin after that exact field is removed.
+            requested_group_id(NULL)
+            requested_group_synced(FALSE)
+            if (identical(external_focus_status()$state, "resolved")) {
+              external_focus_status(NULL)
+            }
+          }
+          return(invisible(NULL))
+        }
         updateTextInput(session, "query", value = "")
         record_selection_revision(record_selection_revision() + 1L)
         group_input_revision(-1L)

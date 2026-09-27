@@ -1,3 +1,65 @@
+test_that("Dashboard quick dialog is atomic, recoverable and never writes on open or Escape", {
+  record <- m7_fixture_record("iztech-light-subset")
+  current <- shiny::reactiveVal(record)
+  commit <- function(context, preview = NULL, undo = FALSE) {
+    value <- shiny::isolate(current())
+    value <- if (undo) undo_metadata_overlay(value, context) else
+      apply_metadata_overlay(value, context, preview)
+    current(value)
+    value
+  }
+  shiny::testServer(
+    metadata_overlay_server,
+    args = list(dataset = current, apply_callback = commit),
+    {
+      session$flushReact()
+      returned <- session$getReturned()
+      returned$open_focus(record$id, "MEDI")
+      session$flushReact()
+      expect_identical(current(), record)
+      expect_true(returned$status()$editing)
+      expect_identical(focus_draft()$state$fields$unit$value, "lx")
+      session$setInputs(
+        focus_label = "Changed label",
+        focus_unit = "unit not specified",
+        focus_save = 1L
+      )
+      expect_identical(current(), record)
+      expect_true(returned$status()$editing)
+      expect_match(returned$status()$error, "unit", ignore.case = TRUE)
+      session$setInputs(focus_unit = "klx", focus_save = 2L)
+      expect_false(returned$status()$editing)
+      expect_identical(current()$metadata_bundle$overlay$revision, 1L)
+      expect_length(current()$history, 1L)
+      saved <- current()
+      session$setInputs(focus_save = 3L)
+      expect_identical(current(), saved)
+      returned$open_focus(record$id, "MEDI")
+      expect_identical(focus_draft()$state$fields$label$value, "Changed label")
+      session$setInputs(
+        focus_label = "Not saved",
+        focus_escape = list(dirty = TRUE, tick = 1)
+      )
+      expect_false(returned$status()$editing)
+      expect_identical(current(), saved)
+      returned$open_focus(record$id, "MEDI")
+      session$setInputs(focus_discard = 1L)
+      expect_identical(current(), saved)
+      returned$open_focus(record$id, "MEDI")
+      stale <- saved
+      stale$revision <- stale$revision + 1L
+      current(stale)
+      session$setInputs(focus_save = 4L)
+      expect_identical(current(), stale)
+      expect_match(returned$status()$error, "stale")
+      expect_identical(input$focus_label, "Not saved")
+      session$setInputs(focus_discard = 2L, undo = 1L)
+      expect_equal(nrow(current()$metadata_bundle$overlay$tables$variables), 0L)
+      expect_identical(current()$raw_payload, record$raw_payload)
+    }
+  )
+})
+
 test_that("overlay module previews batch defaults and applies only reviewed inputs", {
   record <- m7_fixture_record("iztech-light-subset")
   current <- shiny::reactiveVal(record)

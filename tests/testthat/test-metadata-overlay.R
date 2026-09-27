@@ -59,6 +59,343 @@ overlay_target <- function(context, field, table = NULL, name = NULL) {
   rows$target_id[[1L]]
 }
 
+test_that("Dashboard focus edits preserve mixed values and commit two fields atomically", {
+  record <- overlay_test_record()
+  context <- metadata_overlay_context(record)
+  state <- metadata_overlay_focus_state(record, context, "MEDI")
+  expect_equal(nrow(state$targets), 8L)
+  expect_true(state$fields$unit$mixed)
+  expect_identical(state$fields$unit$value, "")
+  expect_identical(state$fields$label$value, "Melanopic EDI")
+  patch <- metadata_overlay_focus_preview(
+    record,
+    context,
+    "MEDI",
+    "New label",
+    "klx"
+  )
+  updated <- apply_metadata_overlay(record, context, patch)
+  expect_identical(updated$metadata_bundle$overlay$revision, 1L)
+  expect_length(updated$history, 1L)
+  expect_equal(sum(patch$changed), 8L)
+  expect_identical(
+    unique(updated$metadata_bundle$overlay$tables$variables$label),
+    "New label"
+  )
+  expect_identical(
+    unique(updated$metadata_bundle$overlay$tables$variables$unit),
+    "klx"
+  )
+  for (key in c(
+    "raw_payload",
+    "prepared_payload",
+    "analysis_settings",
+    "factual_metadata",
+    "source_manifest"
+  ))
+    expect_identical(updated[[key]], record[[key]])
+  expect_identical(
+    updated$metadata_bundle$sources,
+    record$metadata_bundle$sources
+  )
+  reverted <- undo_metadata_overlay(updated, context)
+  expect_identical(
+    reverted$metadata_bundle$overlay$tables,
+    metadata_overlay_upgrade(
+      record$metadata_bundle$overlay,
+      context$catalog
+    )$tables
+  )
+  expect_error(
+    metadata_overlay_focus_preview(
+      record,
+      context,
+      "MEDI",
+      "Valid",
+      "unit not specified"
+    ),
+    "unit",
+    ignore.case = TRUE
+  )
+  expect_error(apply_metadata_overlay(updated, context, patch), "stale")
+  tampered <- patch
+  tampered$proposed[[1L]] <- "Not reviewed"
+  expect_error(
+    apply_metadata_overlay(record, context, tampered),
+    "target or preview changed"
+  )
+  noop <- metadata_overlay_focus_preview(
+    record,
+    context,
+    "MEDI",
+    "Melanopic EDI",
+    ""
+  )
+  expect_identical(apply_metadata_overlay(record, context, noop), record)
+  cleared <- apply_metadata_overlay(
+    updated,
+    context,
+    metadata_overlay_focus_preview(updated, context, "MEDI", "", "klx")
+  )
+  expect_true(all(is.na(
+    cleared$metadata_bundle$overlay$tables$variables$label
+  )))
+  expect_true(all(
+    cleared$metadata_bundle$overlay$tables$variables$unit == "klx"
+  ))
+  expect_error(metadata_overlay_focus_state(record, context, "Id"), "numeric")
+})
+
+test_that("quick metadata handles factual fallback, missing coverage and exact append mappings", {
+  record <- sample_dataset_record()
+  context <- metadata_overlay_context(record)
+  state <- metadata_overlay_focus_state(record, context, "MEDI")
+  expect_identical(state$fields$unit$value, "lux")
+  expect_identical(metadata_resolve_variable(record, "MEDI")$unit, "lux")
+  original_target <- metadata_resolve_variable(record, "MEDI")$target
+  expect_identical(
+    metadata_resolve_focus_request(
+      record$metadata_bundle,
+      original_target
+    )$state,
+    "resolved"
+  )
+  unchanged <- apply_metadata_overlay(
+    record,
+    context,
+    metadata_overlay_focus_preview(
+      record,
+      context,
+      "MEDI",
+      state$fields$label$value,
+      state$fields$unit$value
+    )
+  )
+  expect_identical(unchanged, record)
+  expect_identical(
+    metadata_resolve_variable(unchanged, "MEDI")$target,
+    original_target
+  )
+  updated <- apply_metadata_overlay(
+    record,
+    context,
+    metadata_overlay_focus_preview(record, context, "MEDI", "Label only", "lux")
+  )
+  expect_true(all(is.na(updated$metadata_bundle$overlay$tables$variables$unit)))
+  expect_identical(metadata_resolve_variable(updated, "MEDI")$unit, "lux")
+  expect_identical(
+    metadata_resolve_variable(
+      undo_metadata_overlay(updated, context),
+      "MEDI"
+    )$unit,
+    "lux"
+  )
+  expect_identical(
+    metadata_resolve_variable(
+      undo_metadata_overlay(updated, context),
+      "MEDI"
+    )$target,
+    original_target
+  )
+
+  record <- overlay_test_record()
+  context <- metadata_overlay_context(record)
+  # Explicit mapping names only source a, despite the identical label/name in b.
+  record$provenance$append_merge$source_records <- list(list(
+    dataset_id = "a",
+    mapping = list(measurement_target = "Focus", measurement_column = "MEDI")
+  ))
+  state <- metadata_overlay_focus_state(record, context, "Focus")
+  expect_equal(nrow(state$targets), 4L)
+  expect_identical(unique(state$targets$source_scope), '["a"]')
+  expect_error(
+    metadata_overlay_focus_state(record, context, "MEDI"),
+    "No retained append mapping"
+  )
+  context$catalog$source_value[[which(context$catalog$field == "unit")[[
+    1L
+  ]]]] <- NA_character_
+  state <- metadata_overlay_focus_state(record, context, "Focus")
+  expect_true(state$fields$unit$incomplete)
+  expect_false(state$fields$unit$mixed)
+  expect_identical(state$fields$unit$value, "")
+  expect_false(any(
+    metadata_overlay_focus_preview(
+      record,
+      context,
+      "Focus",
+      "Melanopic EDI",
+      ""
+    )$changed
+  ))
+})
+
+test_that("quick edits follow separated appended outputs and reject missing mappings", {
+  records <- metadata_explorer_fixture_records(m7_fixture_directory())
+  record <- records[["dataset_m7appendedreview"]]
+  context <- metadata_overlay_context(record)
+  for (variable in c("tum_MEDI", "iztech_MEDI", "iztech_LIGHT")) {
+    state <- metadata_overlay_focus_state(record, context, variable)
+    expect_equal(
+      sum(state$targets$field == "unit"),
+      if (variable == "tum_MEDI") 5L else 6L
+    )
+    expect_length(unique(state$targets$source_scope), 1L)
+  }
+  expect_error(
+    metadata_overlay_focus_state(record, context, "MEDI"),
+    "No retained append mapping"
+  )
+  record$provenance$append_merge$source_records <- NULL
+  expect_error(
+    metadata_overlay_focus_state(record, context, "iztech_MEDI"),
+    "no retained column mappings"
+  )
+})
+
+test_that("compact ranking is identical to complete sorting for mixed text and missing values", {
+  record <- overlay_test_record()
+  context <- metadata_overlay_context(record)
+  patch <- metadata_overlay_focus_preview(
+    record,
+    context,
+    "MEDI",
+    "Case LABEL ä",
+    "test-unit"
+  )
+  updated <- apply_metadata_overlay(record, context, patch)
+  entries <- updated$metadata_bundle$index$entries
+  expect_identical(metadata_overlay_rank_entries(entries), entries)
+  expect_gte(
+    metadata_overlay_bundle_bytes(context, updated$metadata_bundle),
+    as.numeric(object.size(updated$metadata_bundle))
+  )
+})
+
+test_that("overlay size bounds preserve the bundle gate and atomic recovery", {
+  record <- overlay_test_record()
+  overlay <- record$metadata_bundle$overlay
+  overlay$unknown <- list(future = list(value = c("", NA, "\u00e4")))
+  record$metadata_bundle <- new_metadata_bundle(
+    record$metadata_bundle$sources,
+    overlay
+  )
+  context <- metadata_overlay_context(record)
+  original <- record
+  target <- overlay_target(context, "unit", "variables", "MEDI")
+  check_bound <- function(value) {
+    bound <- metadata_overlay_bundle_bytes(context, value$metadata_bundle)
+    expect_gte(bound, as.numeric(object.size(value$metadata_bundle)))
+    expect_lte(bound, 32 * 1024^2)
+    expect_identical(
+      value$metadata_bundle$sources,
+      original$metadata_bundle$sources
+    )
+    expect_identical(value$metadata_bundle$overlay$unknown, overlay$unknown)
+    expect_identical(value$raw_payload, original$raw_payload)
+    expect_identical(value$analysis_settings, original$analysis_settings)
+  }
+  for (step in seq_len(12L)) {
+    record <- apply_metadata_overlay(
+      record,
+      context,
+      metadata_overlay_preview(
+        record,
+        context,
+        target,
+        paste0("custom-unit-", strrep("x", 31L * step)),
+        scope = if (step %% 2L) "all" else "single"
+      )
+    )
+    check_bound(record)
+  }
+  removed <- apply_metadata_overlay(
+    record,
+    context,
+    metadata_overlay_preview(
+      record,
+      context,
+      target,
+      scope = "single",
+      action = "remove"
+    )
+  )
+  check_bound(removed)
+  restored <- undo_metadata_overlay(removed, context)
+  check_bound(restored)
+  check_bound(apply_metadata_overlay(
+    restored,
+    context,
+    metadata_overlay_preview(
+      restored,
+      context,
+      target,
+      action = "remove"
+    )
+  ))
+
+  # An intentionally loose bound falls back instead of rejecting a valid value.
+  bytes <- as.numeric(object.size(original$metadata_bundle))
+  expect_equal(
+    metadata_overlay_bundle_budget(original$metadata_bundle, Inf, bytes),
+    bytes
+  )
+  expect_error(
+    metadata_overlay_bundle_budget(original$metadata_bundle, Inf, bytes - 1),
+    "budget"
+  )
+  oversized <- original$metadata_bundle
+  oversized$future_blob <- raw(32 * 1024^2)
+  expect_error(metadata_overlay_bundle_budget(oversized, Inf), "32 MiB")
+
+  before_cache <- context$size_cache$bundle
+  preview <- metadata_overlay_preview(restored, context, target, "another-unit")
+  local_mocked_bindings(metadata_overlay_bundle_budget = function(...) {
+    abort_llw("Injected bundle budget rejection", type = "validation")
+  })
+  expect_error(
+    apply_metadata_overlay(restored, context, preview),
+    "budget rejection"
+  )
+  expect_identical(context$size_cache$bundle, before_cache)
+  expect_identical(
+    restored$metadata_bundle$sources,
+    original$metadata_bundle$sources
+  )
+})
+
+test_that("vectorized overlay presentation retains exact typed per-target values", {
+  record <- overlay_test_record()
+  context <- metadata_overlay_context(record)
+  for (field in c("unit", "sex", "latitude")) {
+    id <- overlay_target(context, field)
+    value <- if (field == "latitude") c(latitude = 42, longitude = 8) else
+      "assertion"
+    record <- apply_metadata_overlay(
+      record,
+      context,
+      metadata_overlay_preview(
+        record,
+        context,
+        id,
+        value,
+        scope = "single"
+      )
+    )
+  }
+  overlay <- record$metadata_bundle$overlay
+  actual <- metadata_overlay_values(overlay, context$catalog)
+  expect_identical(
+    metadata_overlay_values(overlay, context$catalog, context),
+    actual
+  )
+  for (i in seq_len(nrow(context$catalog))) {
+    single <- metadata_overlay_values(overlay, context$catalog[i, ])
+    expect_identical(actual$values[i], single$values)
+    expect_identical(actual$overridden[[i]], single$overridden[[1L]])
+  }
+})
+
 test_that("unit placeholders cannot enter batch or single assertions", {
   for (fixture in c(
     "tum-medi-only",

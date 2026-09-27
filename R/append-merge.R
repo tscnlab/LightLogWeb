@@ -208,6 +208,45 @@ dominant_interval_seconds <- function(data, id_column, datetime_column) {
   as.numeric(names(counts)[which.max(counts)])
 }
 
+dataset_inventory_signature <- function(record) {
+  paste0(
+    "inventory:",
+    digest::digest(
+      list(
+        id = record$id,
+        raw_checksum = record$raw_checksum,
+        source_manifest = record$source_manifest,
+        factual_metadata = record$factual_metadata,
+        analysis_settings = record$analysis_settings,
+        recipe = record$recipe,
+        provenance = record$provenance
+      ),
+      algo = "sha256"
+    )
+  )
+}
+
+dataset_inventory_presentation <- function(inventory, record) {
+  metadata <- if (
+    is.character(inventory$primary_variable) &&
+      length(inventory$primary_variable) == 1L &&
+      !is.na(inventory$primary_variable)
+  ) {
+    metadata_resolve_variable(record, inventory$primary_variable)
+  } else
+    list(
+      display_label = "not specified",
+      unit = "unit not specified",
+      provenance = "Not specified"
+    )
+  inventory$display_name <- record$display_name
+  inventory$recipe_revision <- record$revision
+  inventory$primary_display_label <- metadata$display_label
+  inventory$primary_display_unit <- metadata$unit
+  inventory$primary_metadata_provenance <- metadata$provenance
+  inventory
+}
+
 dataset_record_inventory <- function(record) {
   record <- validate_dataset_record(record)
   data <- dataset_raw_data(record)
@@ -334,6 +373,33 @@ duplicate_dataset_record <- function(record, display_name) {
     duplicated_at = as.POSIXct(Sys.time(), tz = "UTC")
   )
   record$id <- new_stable_id("dataset")
+  bundle <- record$metadata_bundle
+  if (
+    length(bundle$sources) == 1L &&
+      !identical(bundle$sources[[1L]]$source_type, "append_source") &&
+      nrow(metadata_overlay_source_catalog(bundle)) == 0L &&
+      identical(bundle$overlay$overlay_version, metadata_overlay_version())
+  ) {
+    # Only fallback authoring keys refer to the library entry itself. A copy
+    # needs its own such keys; retained source keys and namespaces never change.
+    for (name in c("datasets", "sites", "variables")) {
+      values <- bundle$overlay$tables[[name]]
+      keep <- values$dataset_id == source_reference$dataset_id &
+        values$source_scope == metadata_overlay_scope(names(bundle$sources))
+      if (identical(name, "variables")) {
+        keep <- keep &
+          values$file_group_id ==
+            paste0("llw:import:", source_reference$dataset_id)
+        values$file_group_id[keep] <- paste0("llw:import:", record$id)
+      }
+      values$dataset_id[keep] <- record$id
+      bundle$overlay$tables[[name]] <- values
+    }
+    record$metadata_bundle <- new_metadata_bundle(
+      bundle$sources,
+      bundle$overlay
+    )
+  }
   record$display_name <- display_name
   record$revision <- 0L
   record["draft"] <- list(NULL)
@@ -663,7 +729,8 @@ validate_append_spec <- function(spec) {
   do.call(new_append_spec, unclass(spec))
 }
 
-append_mapping_record <- function(records, mapping) {
+append_mapping_record <- function(records, mapping, validate_record = TRUE) {
+  assert_flag(validate_record, "validate_record")
   if (!is.list(records) || is.null(names(records))) {
     abort_llw(
       "`records` must be a named list of dataset records.",
@@ -681,7 +748,7 @@ append_mapping_record <- function(records, mapping) {
       type = "validation"
     )
   }
-  validate_dataset_record(record)
+  if (validate_record) validate_dataset_record(record) else record
 }
 
 append_column_family <- function(value) {
@@ -1304,7 +1371,11 @@ append_overlap_flags <- function(data) {
 
 append_source_fingerprint <- function(records, spec) {
   references <- lapply(spec$mappings, function(mapping) {
-    record <- append_mapping_record(records, mapping)
+    # Preview freshness reads already validated store records; the explicit
+    # preview/build boundary still validates complete records and measurements.
+    record <- append_mapping_record(records, mapping, validate_record = FALSE)
+    if (!inherits(record, "llw_dataset_record"))
+      abort_llw("Append sources must be dataset records.", type = "validation")
     list(
       id = record$id,
       revision = record$revision,

@@ -99,6 +99,55 @@ test_that("metadata explorer presents discoverable source and overlay context", 
   expect_false(grepl("tags\\$script|<script", ui_source))
 })
 
+test_that("dataset details labels retain exact factual metadata identities", {
+  bundle <- new_metadata_bundle_from_factual(
+    factual_metadata = list(variables = list(MEDI = list(unit = "lux"))),
+    namespace_id = "dataset_m7wording",
+    label = "Imported dataset details",
+    source_type = "package_sample"
+  )
+  original <- serialize(bundle, NULL)
+  result <- metadata_index_query_groups(bundle$index, "unit")
+  group <- metadata_index_group(bundle$index, result$rows$group_id[[1L]])
+  roots <- metadata_hierarchy_logical_roots(bundle$index, group)
+  neighborhood <- metadata_index_group_neighborhood(bundle$index, group)
+  context <- metadata_hierarchy_node_context(
+    bundle$index,
+    neighborhood$representative_node_id
+  )
+  path <- metadata_hierarchy_full_path(context, roots)
+
+  expect_identical(
+    metadata_section_label("factual_metadata"),
+    "Dataset details"
+  )
+  expect_identical(
+    unique(metadata_section_index(bundle$index)$section_label),
+    "Dataset details"
+  )
+  expect_identical(
+    metadata_group_location_text(group$group),
+    "Dataset details / Variables / MEDI / Unit"
+  )
+  rendered <- lapply(
+    list(
+      metadata_group_choice_ui(group$group),
+      metadata_hierarchy_node_choice_ui(roots[1L, , drop = FALSE]),
+      metadata_hierarchy_path_ui(path, "compact"),
+      metadata_hierarchy_path_ui(path, "full", compact = FALSE)
+    ),
+    function(ui) htmltools::renderTags(ui)$html
+  )
+  for (html in rendered) {
+    expect_match(html, "Dataset details", fixed = TRUE)
+    expect_false(grepl("Factual Metadata|Record Summary", html))
+  }
+  expect_match(rendered[[3L]], "factual_metadata", fixed = TRUE)
+  expect_true("factual_metadata" %in% roots$label)
+  expect_match(group$group$group_path[[1L]], "/factual_metadata/", fixed = TRUE)
+  expect_identical(serialize(bundle, NULL), original)
+})
+
 test_that("one metadata explorer contains path, parent action, help, and contents", {
   shell <- htmltools::renderTags(
     metadata_hierarchy_shell_ui(NS("metadata"))
@@ -1953,6 +2002,204 @@ test_that("external crosslinks select one exact in-memory metadata context", {
       )
     }
   )
+})
+
+test_that("removing a crosslink target clears obsolete success without replaying it", {
+  original <- metadata_explorer_showcase_records()[[3L]]
+  context <- metadata_overlay_context(original)
+  annotated <- apply_metadata_overlay(
+    original,
+    context,
+    metadata_overlay_focus_preview(
+      original,
+      context,
+      "MEDI",
+      "Temporary label",
+      ""
+    )
+  )
+  for (action in c("undo", "clear")) {
+    selected <- shiny::reactiveVal(annotated)
+    focus <- shiny::reactiveVal(NULL)
+    testServer(
+      metadata_explorer_server,
+      args = list(dataset = selected, focus_request = focus),
+      {
+        session$flushReact()
+        request <- metadata_resolve_variable(selected(), "MEDI")$target
+        focus(request)
+        session$flushReact()
+        target <- selected_group()$group$group_id[[1L]]
+        session$setInputs(query = "MEDI", group_id = target, sort_by = "field")
+        expect_identical(status()$external_focus$state, "resolved")
+        expect_match(
+          output$focus_status$html,
+          "exact retained field",
+          fixed = TRUE
+        )
+
+        removed <- if (action == "undo") {
+          undo_metadata_overlay(selected(), context)
+        } else {
+          apply_metadata_overlay(
+            selected(),
+            context,
+            metadata_overlay_focus_preview(selected(), context, "MEDI", "", "")
+          )
+        }
+        selected(removed)
+        session$flushReact()
+        expect_null(status()$external_focus)
+        expect_null(output$focus_status)
+        expect_null(status()$selected_group_id)
+        expect_null(status()$focused_node_id)
+        expect_null(metadata_resolve_variable(selected(), "MEDI")$target)
+        expect_identical(input$query, "MEDI")
+        expect_identical(input$sort_by, "field")
+        expect_identical(selected()$raw_payload, original$raw_payload)
+        expect_identical(
+          selected()$metadata_bundle$sources,
+          original$metadata_bundle$sources
+        )
+        expect_match(
+          output$hierarchy_content$html,
+          "No retained metadata fields",
+          fixed = TRUE
+        )
+
+        # Restoring the field does not replay an old crosslink. A fresh explicit
+        # request can select it again and publish a current success notice.
+        selected(apply_metadata_overlay(
+          selected(),
+          context,
+          metadata_overlay_focus_preview(
+            selected(),
+            context,
+            "MEDI",
+            "Temporary label",
+            ""
+          )
+        ))
+        session$flushReact()
+        expect_null(status()$external_focus)
+        expect_null(output$focus_status)
+        request$request_id <- paste0(request$request_id, "_again")
+        focus(request)
+        session$flushReact()
+        expect_identical(status()$external_focus$state, "resolved")
+        expect_identical(status()$selected_group_id, target)
+      }
+    )
+  }
+})
+
+test_that("removed overlay crosslinks clear while unrelated source fields remain usable", {
+  original <- new_dataset_record(
+    data.frame(
+      Id = "P01",
+      Datetime = as.POSIXct("2026-01-01", tz = "UTC"),
+      MEDI = 125
+    ),
+    "Unrelated retained facts",
+    new_source_manifest("test", source_timezone = "UTC"),
+    factual_metadata = list(study = list(title = "Retained study")),
+    analysis_settings = list(primary_variable = "MEDI"),
+    id = "dataset_r61partial"
+  )
+  context <- metadata_overlay_context(original)
+  annotated <- apply_metadata_overlay(
+    original,
+    context,
+    metadata_overlay_focus_preview(
+      original,
+      context,
+      "MEDI",
+      "Temporary label",
+      ""
+    )
+  )
+  selected <- shiny::reactiveVal(annotated)
+  focus <- shiny::reactiveVal(NULL)
+  testServer(
+    metadata_explorer_server,
+    args = list(dataset = selected, focus_request = focus),
+    {
+      session$flushReact()
+      focus(metadata_resolve_variable(selected(), "MEDI")$target)
+      session$flushReact()
+      session$setInputs(query = "MEDI", namespace = "all", layer = "all")
+      selected(apply_metadata_overlay(
+        selected(),
+        context,
+        metadata_overlay_focus_preview(selected(), context, "MEDI", "", "")
+      ))
+      session$flushReact()
+      expect_null(status()$external_focus)
+      expect_null(output$focus_status)
+      expect_null(status()$selected_group_id)
+      expect_identical(input$query, "MEDI")
+      expect_identical(input$namespace, "all")
+      expect_identical(input$layer, "all")
+      expect_identical(
+        selected()$metadata_bundle$sources,
+        original$metadata_bundle$sources
+      )
+      groups <- selected()$metadata_bundle$index$groups
+      title <- groups$group_id[groups$field == "title"][[1L]]
+      session$setInputs(query = "", group_id = title)
+      expect_identical(selected_group()$entries$value, "Retained study")
+      expect_null(status()$external_focus)
+    }
+  )
+})
+
+test_that("retained factual and inventory crosslinks survive overlay updates", {
+  records <- list(
+    metadata_explorer_showcase_records()[[1L]],
+    m7_fixture_record()
+  )
+  for (original in records) {
+    context <- metadata_overlay_context(original)
+    selected <- shiny::reactiveVal(original)
+    focus <- shiny::reactiveVal(NULL)
+    testServer(
+      metadata_explorer_server,
+      args = list(dataset = selected, focus_request = focus),
+      {
+        session$flushReact()
+        focus(metadata_resolve_variable(selected(), "MEDI")$target)
+        session$flushReact()
+        before <- status()
+        state <- metadata_overlay_focus_state(selected(), context, "MEDI")
+        selected(apply_metadata_overlay(
+          selected(),
+          context,
+          metadata_overlay_focus_preview(
+            selected(),
+            context,
+            "MEDI",
+            "Retained target",
+            state$fields$unit$value
+          )
+        ))
+        session$flushReact()
+        expect_identical(status()$external_focus, before$external_focus)
+        expect_identical(status()$selected_group_id, before$selected_group_id)
+        expect_identical(status()$focused_node_id, before$focused_node_id)
+        selected(undo_metadata_overlay(selected(), context))
+        session$flushReact()
+        expect_identical(status()$external_focus, before$external_focus)
+        expect_identical(status()$selected_group_id, before$selected_group_id)
+        expect_identical(status()$focused_node_id, before$focused_node_id)
+
+        selected(metadata_explorer_showcase_records()[[3L]])
+        session$flushReact()
+        expect_null(status()$external_focus)
+        expect_null(output$focus_status)
+        expect_null(status()$selected_group_id)
+      }
+    )
+  }
 })
 
 test_that("explorer pivots among item properties and logical hierarchy roots", {
