@@ -36,6 +36,55 @@ glc_source_test_search <- function(packages, query = NULL) {
   result
 }
 
+test_that("GLC registry defaults to the official endpoint and preserves overrides", {
+  previous <- options(LightLogWeb.glc_registry_url = NULL)
+  tryCatch(
+    {
+      expect_identical(
+        glc_default_registry_url(),
+        "https://registry.globallightcommons.org/registry.json"
+      )
+      options(
+        LightLogWeb.glc_registry_url = "https://example.org/registry.json"
+      )
+      expect_identical(
+        glc_default_registry_url(),
+        "https://example.org/registry.json"
+      )
+      options(LightLogWeb.glc_registry_url = "")
+      expect_error(glc_default_registry_url(), class = "llw_validation_error")
+    },
+    finally = options(previous)
+  )
+})
+
+test_that("registry loading forwards the exact endpoint and refresh request", {
+  calls <- list()
+  testthat::local_mocked_bindings(
+    glc_packages = function(registry, refresh = FALSE) {
+      calls[[length(calls) + 1L]] <<- list(
+        registry = registry,
+        refresh = refresh
+      )
+      glc_source_test_registry()
+    },
+    .package = "glcdp"
+  )
+  endpoint <- "https://registry.globallightcommons.org/registry.json"
+  expect_identical(glcdp_registry_load(endpoint), glc_source_test_registry())
+  expect_identical(
+    glcdp_registry_load("https://example.org/registry.json", refresh = TRUE),
+    glc_source_test_registry()
+  )
+  expect_identical(
+    calls,
+    list(
+      list(registry = endpoint, refresh = FALSE),
+      list(registry = "https://example.org/registry.json", refresh = TRUE)
+    )
+  )
+})
+
 test_that("GLC deep links decode once and accept at most one strict repository", {
   expect_identical(parse_glc_repository_query(NULL)$state, "absent")
   expect_identical(parse_glc_repository_query("?other=value")$state, "absent")
@@ -217,12 +266,15 @@ test_that("GLC source module preselects one exact deep link without data access"
       expect_identical(returned$status()$state, "queued")
       expect_identical(returned$status()$heading, "Loading registry")
       initialization <- new.env(parent = emptyenv())
-      later::later(function() {
-        initialization$result <- tryCatch(
-          returned$initialize(),
-          error = identity
-        )
-      }, delay = 0)
+      later::later(
+        function() {
+          initialization$result <- tryCatch(
+            returned$initialize(),
+            error = identity
+          )
+        },
+        delay = 0
+      )
       later::run_now(timeoutSecs = 0.1)
       expect_true(exists("result", initialization, inherits = FALSE))
       expect_false(inherits(initialization$result, "error"))
@@ -536,7 +588,11 @@ test_that("failed registry refresh preserves the last successful view", {
 test_that("GLC source UI states that selection performs no data transfer", {
   html <- htmltools::renderTags(glcSourceUI("glc"))$html
   expect_match(html, "Discover validated GLC packages", fixed = TRUE)
-  expect_match(html, "never reads, downloads, or creates a dataset", fixed = TRUE)
+  expect_match(
+    html,
+    "never reads, downloads, or creates a dataset",
+    fixed = TRUE
+  )
   expect_match(html, "Refresh registry", fixed = TRUE)
   expect_match(html, "Search registry", fixed = TRUE)
   expect_false(grepl("Selected source", html, fixed = TRUE))

@@ -31,7 +31,7 @@ Imports:
     DT,
     ggplot2,
     ggtext,
-    glcdp (>= 1.0.0.9000),
+    glcdp (>= 1.1.0),
     gt,
     htmltools,
     jsonlite,
@@ -57,7 +57,7 @@ Suggests:
     shinytest2 (>= 0.5.1),
     testthat (>= 3.3.2)
 Remotes:
-    tscnlab/glc-dp-r@e49fcf153a114916ce2680f8b40eb475e694e10d
+    tscnlab/glc-dp-r@58a16400dc6d30ec2686ebf1898f938d3721eb2c
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown
 Config/roxygen2/version: 8.0.0

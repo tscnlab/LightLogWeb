@@ -262,7 +262,7 @@ test_that("documented glcdp conditions map to recoverable public errors", {
 })
 
 test_that("the installed glcdp seam matches the reviewed public export contract", {
-  skip_if_not_installed("glcdp", minimum_version = "1.0.0.9000")
+  skip_if_not_installed("glcdp", minimum_version = "1.1.0")
   exports <- getNamespaceExports("glcdp")
 
   expect_true(all(glcdp_export_contract() %in% exports))
@@ -299,10 +299,10 @@ test_that("the installed glcdp seam matches the reviewed public export contract"
     )
   )
   provenance <- glcdp_runtime_provenance()
-  expect_identical(provenance$version, "1.0.0.9000")
+  expect_identical(provenance$version, "1.1.0")
   expect_identical(
     provenance$revision,
-    "e49fcf153a114916ce2680f8b40eb475e694e10d"
+    "58a16400dc6d30ec2686ebf1898f938d3721eb2c"
   )
 })
 test_that("task payload construction rejects a live glcdp package handle", {
@@ -2278,7 +2278,7 @@ test_that("public collection refinement is exact, serializable, and zero access"
 })
 
 test_that("installed planner API matches the exact reviewed public contract", {
-  skip_if_not_installed("glcdp", minimum_version = "1.0.0.9000")
+  skip_if_not_installed("glcdp", minimum_version = "1.1.0")
   expect_identical(
     names(formals(glcdp::glc_collection_plan)),
     c(
@@ -2296,9 +2296,9 @@ test_that("installed planner API matches the exact reviewed public contract", {
     c("plan", "file_group", "compatibility_id")
   )
   provenance <- glcdp_runtime_provenance()
-  expect_identical(provenance$version, "1.0.0.9000")
+  expect_identical(provenance$version, "1.1.0")
   expect_identical(
     provenance$revision,
-    "e49fcf153a114916ce2680f8b40eb475e694e10d"
+    "58a16400dc6d30ec2686ebf1898f938d3721eb2c"
   )
 })

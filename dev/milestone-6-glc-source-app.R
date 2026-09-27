@@ -1,7 +1,7 @@
 pkgload::load_all(".", export_all = TRUE, quiet = TRUE)
 
 glc_source_showcase_registry_url <- function() {
-  "https://tscnlab.github.io/glc-registry/registry.json"
+  glc_default_registry_url()
 }
 
 glc_source_showcase_deep_link_query <- function(packages, raw_query = "") {

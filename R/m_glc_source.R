@@ -5,7 +5,7 @@ glc_deep_link_states <- function() {
 glc_default_registry_url <- function() {
   configured <- getOption(
     "LightLogWeb.glc_registry_url",
-    "https://tscnlab.github.io/glc-registry/registry.json"
+    "https://registry.globallightcommons.org/registry.json"
   )
   assert_scalar_string(configured, "GLC registry URL")
   configured

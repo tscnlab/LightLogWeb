@@ -1,6 +1,6 @@
 test_that("Milestone 7 uses the exact pinned exported glcdp metadata API", {
   description <- utils::packageDescription("glcdp")
-  expected_sha <- "e49fcf153a114916ce2680f8b40eb475e694e10d"
+  expected_sha <- "58a16400dc6d30ec2686ebf1898f938d3721eb2c"
   expected_formals <- list(
     glc_resources = "x",
     glc_metadata = c("x", "resources"),
@@ -24,7 +24,7 @@ test_that("Milestone 7 uses the exact pinned exported glcdp metadata API", {
     )
   )
 
-  expect_identical(description$Version, "1.0.0.9000")
+  expect_identical(description$Version, "1.1.0")
   expect_identical(description$RemoteSha, expected_sha)
   for (name in names(expected_formals)) {
     fun <- getExportedValue("glcdp", name)
