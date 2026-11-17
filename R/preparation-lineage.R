@@ -65,12 +65,7 @@ preparation_value_step <- function(step) {
 preparation_step_arguments <- function(step, args) {
   step$parameters$arguments <- preparation_arguments(step$type, args)
   if (preparation_value_step(step))
-    step$parameters$mapping_version <- if (
-      (step$type == "variability" && "unevaluable" %in% names(args)) ||
-        (step$type == "invalidate" && "source" %in% names(args)) ||
-        (step$type == "transform" && "offset" %in% names(args))
-    )
-      3L else if (is.null(args$output)) 1L else 2L
+    step$parameters$mapping_version <- preparation_mapping_version(step$type, args)
   step
 }
 

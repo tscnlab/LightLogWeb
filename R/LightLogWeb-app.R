@@ -279,8 +279,10 @@ lightlogweb_app <- function(
   initial_records = list(),
   registry_loader = glcdp_registry_load,
   initial_panel = if (length(initial_records)) "metadata" else "Import",
-  preparation_worker = preparation_task_worker
+  preparation_worker = preparation_task_worker,
+  prepare_presentation = c("flow", "classic")
 ) {
+  prepare_presentation <- match.arg(prepare_presentation)
   initial_records <- lapply(initial_records, validate_dataset_record)
   runtime_profile <- resolve_runtime_profile(
     profile = profile,
@@ -356,7 +358,8 @@ lightlogweb_app <- function(
       tags$main(
         class = "llw-main-shell",
         `aria-label` = "Prepare the selected dataset",
-        prepare_ui("prepare")
+        if (prepare_presentation == "flow") prepare_flow_ui("prepare") else
+          prepare_ui("prepare")
       )
     ),
     nav_panel(
@@ -473,7 +476,8 @@ lightlogweb_app <- function(
         )
           dashboard$plot_settings() else NULL
       }),
-      color_mode = color_mode
+      color_mode = color_mode,
+      flow = identical(prepare_presentation, "flow")
     )
     metadata <- metadata_explorer_server(
       "metadata",

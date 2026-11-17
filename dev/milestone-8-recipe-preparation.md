@@ -10,11 +10,11 @@ Its final gate includes 1,328 focused assertions, 44 independent metadata
 contracts and independent responsive/browser review. Previously deferred narrow
 layout notes remain nonblocking; no data-processing issue remains open.
 
-The owner separately requested an experimental redesign of the Prepare user
-journey. That work starts after the accepted milestone commit, on a separate
-branch. It does not reopen the preparation engine, change operation semantics
-or replace the accepted interface without a further review. The R14 showcase
-remains available for comparison. No deployment is requested.
+The owner accepted the follow-up Prepare workspace in R11 on 2026-11-17.
+It is now the default Prepare page in `LightLogWeb()`. The recipe sidebar
+keeps the editor and preview within reach for repeated adjustments. The
+[workspace closeout](prepare-flow-experiment.md) records the review, the
+extended Variability and Aggregate options, and how to run the offline example.
 
 The following development and review history is retained as evidence. This
 closeout supersedes earlier pending-acceptance and no-commit/no-push statements.

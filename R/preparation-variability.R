@@ -22,12 +22,14 @@ preparation_variability_arguments <- function(args) {
   }
   choices <- list(
     unit = c("seconds", "minutes", "hours"),
-    alignment = c("centered", "trailing"),
+    alignment = c("centered", "trailing", "leading"),
     statistic = c("sd", "cv"),
     direction = c("below", "above")
   )
   if ("unevaluable" %in% names(args))
     choices$unevaluable <- c("keep", "missing")
+  if ("no_change" %in% names(args))
+    choices$no_change <- c("rule", "keep", "missing")
   for (field in names(choices)) {
     value <- args[[field]]
     if (
@@ -101,6 +103,7 @@ preparation_rolling_variability <- function(
   window_first <- integer(n)
   window_last <- integer(n)
   duplicate <- rep(FALSE, n)
+  constant <- logical(n)
   if (!n || !is.finite(epoch) || epoch <= 0)
     return(data.frame(
       statistic = window_sd,
@@ -109,12 +112,16 @@ preparation_rolling_variability <- function(
       observations = observations,
       first = window_first,
       last = window_last,
-      duplicate = duplicate
+      duplicate = duplicate,
+      constant = constant
     ))
-  # Both forms include the current observation. Centred windows are [a, b);
-  # trailing windows are (a, b], with b at the current timestamp.
-  lower <- time - if (alignment == "centered") width / 2 else width
-  upper <- time + if (alignment == "centered") width / 2 else 0
+  # Centred and leading windows use [a, b). Trailing windows use (a, b].
+  # Each includes the anchor, whose target receives the decision.
+  before <- switch(alignment, centered = width / 2, trailing = width, leading = 0)
+  lower <- time - before
+  upper <- time + (width - before)
+  trailing <- alignment == "trailing"
+  value <- as.double(value)
   finite <- is.finite(value)
   coverage <- preparation_window_coverage(
     time,
@@ -127,7 +134,7 @@ preparation_rolling_variability <- function(
   duplicate_count <- c(0L, cumsum(duplicates))
   finite_count <- c(0L, cumsum(finite))
   observed <- value[finite]
-  changes <- cumsum(c(FALSE, diff(observed) != 0))
+  changes <- cumsum(c(FALSE, observed[-1L] != observed[-length(observed)]))
   offset <- if (any(finite)) value[which(finite)[[1L]]] else 0
   left <- 1L
   right <- 0L
@@ -138,8 +145,8 @@ preparation_rolling_variability <- function(
     rebase <- FALSE
     while (
       right < n &&
-        if (alignment == "centered") time[right + 1L] < upper[[i]] else
-          time[right + 1L] <= upper[[i]]
+        if (trailing) time[right + 1L] <= upper[[i]] else
+          time[right + 1L] < upper[[i]]
     ) {
       right <- right + 1L
       if (finite[[right]]) {
@@ -152,8 +159,8 @@ preparation_rolling_variability <- function(
     }
     while (
       left <= right &&
-        if (alignment == "centered") time[[left]] < lower[[i]] else
-          time[[left]] <= lower[[i]]
+        if (trailing) time[[left]] <= lower[[i]] else
+          time[[left]] < lower[[i]]
     ) {
       if (finite[[left]]) {
         if (count <= 1L) {
@@ -187,7 +194,8 @@ preparation_rolling_variability <- function(
       last <- finite_count[[right + 1L]]
       # Exact equality, not a numerical tolerance, establishes constant data.
       # This also resets accumulated removal roundoff without erasing small SD.
-      if (changes[[first]] == changes[[last]]) {
+      constant[[i]] <- changes[[first]] == changes[[last]]
+      if (constant[[i]]) {
         offset <- observed[[first]]
         mean <- 0
         m2 <- 0
@@ -224,7 +232,8 @@ preparation_rolling_variability <- function(
     observations = observations,
     first = window_first,
     last = window_last,
-    duplicate = duplicate
+    duplicate = duplicate,
+    constant = constant
   )
 }
 
@@ -261,6 +270,7 @@ preparation_mask_variability <- function(data, args, reference) {
   )
   width <- args$length *
     switch(args$unit, seconds = 1, minutes = 60, hours = 3600)
+  no_change <- args$no_change %||% "rule"
   for (g in seq_along(rows)) {
     index <- rows[[g]]
     index <- index[order(data$Datetime[index], na.last = TRUE)]
@@ -308,19 +318,23 @@ preparation_mask_variability <- function(data, args, reference) {
     reason <- rep("assessed", length(index))
     reason[!is.finite(statistic)] <- "nonfinite statistic"
     reason[zero_mean] <- "undefined CV"
+    reason[rolling$constant & (no_change != "rule" | is.finite(statistic))] <-
+      "no change"
     reason[rolling$observations < 2L] <- "fewer than two finite observations"
     reason[rolling$coverage + 1e-8 < args$coverage] <- "insufficient coverage"
     reason[rolling$duplicate] <- "duplicate timestamps"
     if (!is.finite(epoch) || epoch <= 0) reason[] <- "unknown sampling interval"
     diagnostics$statistic[index] <- statistic
     diagnostics$coverage[index] <- rolling$coverage
-    diagnostics$evaluable[index] <- reason == "assessed"
+    diagnostics$evaluable[index] <- reason %in% c("assessed", "no change")
     diagnostics$reason[index] <- reason
   }
   hit <- diagnostics$evaluable &
     if (args$direction == "above") diagnostics$statistic > args$threshold else
       diagnostics$statistic < args$threshold
   hit[is.na(hit)] <- FALSE
+  if (no_change != "rule")
+    hit[diagnostics$reason == "no change"] <- no_change == "missing"
   if (identical(args$unevaluable, "missing"))
     hit <- hit | !diagnostics$evaluable
   value <- data[[args$variable]]

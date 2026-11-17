@@ -35,7 +35,7 @@ preparation_time_ui <- function(ns) {
       ),
       shiny::selectInput(
         ns("aggregate_missing"),
-        "Missing numeric readings",
+        "Missing readings (all summary types)",
         c(
           "Any NA makes the bin NA" = "propagate",
           "Use available readings; all missing stays NA" = "available",
@@ -57,7 +57,7 @@ preparation_time_ui <- function(ns) {
         ),
         shiny::tags$p(
           class = "llw-prepare-hint",
-          "For each numeric variable, set the summary to NA when the percentage of missing readings exceeds this limit. At the limit, use available readings. All missing stays NA."
+          "For each numeric, categorical or logical variable, set its summary to NA when its missing readings exceed this limit. At the limit, use available readings. All missing stays NA."
         ),
         shiny::tags$p(
           class = "llw-prepare-hint",
@@ -88,7 +88,7 @@ preparation_time_ui <- function(ns) {
         ),
         shiny::tags$p(
           class = "llw-prepare-hint",
-          "Categories include NA. Most frequent uses LightLogR's tie rule: the first table category wins. First/last use timestamp order, retaining row order for ties. Logical summaries return NA if any reading is missing; a majority tie is TRUE."
+          "The missing-readings rule applies separately to each numeric, categorical and logical variable. When available readings are allowed, first/last skip NA and use timestamp order, retaining row order for ties. Most frequent uses LightLogR's tie rule: the first table category wins. A logical majority tie is TRUE. All-missing summaries stay NA."
         )
       ),
       shiny::tags$p(

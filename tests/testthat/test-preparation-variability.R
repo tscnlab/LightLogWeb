@@ -44,14 +44,17 @@ test_that("rolling SD matches direct sample SD for elapsed-time windows", {
   time <- sort(sample(0:700, 450)) * 10
   value <- rnorm(length(time), mean = 7, sd = 2)
   value[c(20, 30, 41)] <- c(NA, NaN, Inf)
-  for (alignment in c("centered", "trailing")) {
+  for (alignment in c("centered", "trailing", "leading")) {
+    members <- function(t) switch(alignment,
+      centered = time >= t - 90 & time < t + 90,
+      trailing = time > t - 180 & time <= t,
+      leading = time >= t & time < t + 180
+    )
     actual <- preparation_rolling_variability(time, value, 180, alignment, 10)
     expected <- vapply(
       time,
       function(t) {
-        use <- if (alignment == "centered") time >= t - 90 & time < t + 90 else
-          time > t - 180 & time <= t
-        stats::sd(value[use & is.finite(value)])
+        stats::sd(value[members(t) & is.finite(value)])
       },
       numeric(1)
     )
@@ -62,9 +65,7 @@ test_that("rolling SD matches direct sample SD for elapsed-time windows", {
     oracle <- vapply(
       time,
       function(t) {
-        use <- if (alignment == "centered") time >= t - 90 & time < t + 90 else
-          time > t - 180 & time <= t
-        stats::sd(shifted[use & is.finite(shifted)])
+        stats::sd(shifted[members(t) & is.finite(shifted)])
       },
       numeric(1)
     )
@@ -138,7 +139,8 @@ test_that("rolling boundary results retain their typed diagnostic columns", {
     observations = integer(),
     first = integer(),
     last = integer(),
-    duplicate = logical()
+    duplicate = logical(),
+    constant = logical()
   )
   expect_identical(
     preparation_rolling_variability(numeric(), numeric(), 60, "centered", 60),
@@ -151,7 +153,8 @@ test_that("rolling boundary results retain their typed diagnostic columns", {
     observations = integer(3),
     first = integer(3),
     last = integer(3),
-    duplicate = rep(FALSE, 3)
+    duplicate = rep(FALSE, 3),
+    constant = rep(FALSE, 3)
   )
   for (epoch in c(NA_real_, 0, -1, Inf))
     expect_identical(
@@ -171,7 +174,7 @@ test_that("subprecision positive windows preserve targets as unevaluable", {
   record <- variability_fixture()
   raw <- dataset_raw_data(record)
   reference <- preparation_variability_reference(raw)
-  for (alignment in c("centered", "trailing")) {
+  for (alignment in c("centered", "trailing", "leading")) {
     step <- variability_step(
       m8_context(record),
       length = 1e-10,
@@ -294,6 +297,8 @@ test_that("unevaluable-window policy preserves legacy results or masks the targe
       args$unevaluable <- "keep"
       keep <- preparation_mask_variability(data, args, ref)
       expect_identical(keep, legacy, info = paste(name, output))
+      args$no_change <- "rule"
+      expect_identical(preparation_mask_variability(data, args, ref), legacy)
       args$unevaluable <- "missing"
       masked <- preparation_mask_variability(data, args, ref)
       expected <- legacy$data[[output]]
@@ -373,6 +378,71 @@ test_that("CV uses the absolute mean and leaves undefined windows unchanged", {
   args$direction <- "below"
   equal <- preparation_mask_variability(raw, args, reference)
   expect_identical(equal$data$MEDI, raw$MEDI)
+})
+
+test_that("forward CV separates constant sources from invalid windows at each anchor", {
+  record <- variability_fixture()
+  raw <- dataset_raw_data(record)
+  raw$Movement[1:10] <- c(0, 0, 2, 2, -2, 2, NA, 5, 5.001, 5)
+  raw$Movement[11:20] <- 0
+  raw$MEDI[12] <- NA_integer_
+  ref <- preparation_variability_reference(raw)
+  step <- variability_step(m8_context(record), length = 2, alignment = "leading",
+    statistic = "cv", threshold = 5, coverage = 80, no_change = "keep",
+    unevaluable = "missing", output = "checked")
+  args <- step$parameters$arguments
+  keep <- preparation_mask_variability(raw, args, ref)
+  rows <- c(1L, 2L, 3L, 4L, 8L, 12L, 19L, 20L)
+  expect_identical(keep$diagnostics$reason[rows], c(
+    "no change", "assessed", "no change", "undefined CV", "assessed",
+    "no change", "insufficient coverage", "insufficient coverage"
+  ))
+  # The reading exactly two minutes ahead belongs to the next window.
+  expect_identical(keep$data$checked[rows], c(100L, 101L, 102L, NA_integer_,
+    NA_integer_, NA_integer_, NA_integer_, NA_integer_))
+  expect_true(is.na(keep$diagnostics$statistic[1L]))
+  expect_equal(keep$diagnostics$statistic[3L], 0)
+  args$no_change <- "missing"
+  args$unevaluable <- "keep"
+  mask <- preparation_mask_variability(raw, args, ref)
+  expect_identical(mask$diagnostics, keep$diagnostics)
+  expect_identical(mask$data$checked[rows], c(NA_integer_, 101L, NA_integer_,
+    103L, NA_integer_, NA_integer_, 118L, 119L))
+  expect_identical(mask$data[names(raw)], raw)
+  # Only supported windows can use the constant policy, even for all-zero data.
+  duplicate <- raw
+  duplicate$Datetime[14] <- duplicate$Datetime[13]
+  expect_identical(preparation_mask_variability(duplicate, args, ref)$diagnostics$reason[13],
+    "duplicate timestamps")
+  single <- raw[1L, ]
+  expect_identical(preparation_mask_variability(single, args,
+    preparation_variability_reference(single))$diagnostics$reason, "unknown sampling interval")
+  args$coverage <- 0
+  expect_identical(preparation_mask_variability(raw, args, ref)$diagnostics$reason[20],
+    "fewer than two finite observations")
+  # Flatness uses exact readings even if their sample variance underflows.
+  tiny <- preparation_rolling_variability(0:2, c(0, 1e-200, 1e-200), 2, "leading", 1)
+  expect_identical(tiny$constant, c(FALSE, TRUE, FALSE))
+})
+
+test_that("forward and no-change settings survive recipe validation and retargeting", {
+  record <- variability_fixture()
+  context <- m8_context(record)
+  for (step in list(variability_step(context, alignment = "leading"),
+                    variability_step(context, no_change = "missing"))) {
+    expect_identical(step$parameters$mapping_version, 4L)
+    args <- step$parameters$arguments
+    args$output <- "MEDI_checked"
+    revised <- preparation_step_arguments(step, args)
+    expect_identical(revised$parameters$mapping_version, 4L)
+    recipe <- new_recipe(list(revised))
+    expect_silent(validate_preparation_recipe(recipe, context))
+    saved <- m8_preview(record, recipe)$candidate$recipe$steps[[1L]]
+    expect_identical(saved$parameters$arguments, args)
+    revised$parameters$mapping_version <- 3L
+    expect_error(validate_preparation_recipe(new_recipe(list(revised)), context),
+      "Version 4")
+  }
 })
 
 test_that("gaps and duplicate timestamps remain unevaluable with unchanged targets", {
@@ -522,6 +592,8 @@ test_that("variability validates typed arguments and refuses output collisions",
     list(statistic = "mean"),
     list(alignment = "bad"),
     list(direction = "bad"),
+    list(no_change = "bad"),
+    list(no_change = NA_character_),
     list(unevaluable = "bad"),
     list(unevaluable = NA_character_),
     list(unit = "days")
@@ -549,6 +621,7 @@ test_that("variability validates typed arguments and refuses output collisions",
   expect_identical(defaults$measurement_output, defaults$measurement_variable)
   expect_equal(defaults$variability_coverage, 80)
   expect_identical(defaults$variability_unevaluable, "keep")
+  expect_identical(defaults$variability_no_change, "rule")
 })
 
 test_that("strict threshold equality uses a direct check at floating-point boundaries", {
@@ -645,6 +718,8 @@ test_that("variability saves, previews, edits and applies through the module", {
       session$setInputs(
         variability_statistic = "cv",
         variability_threshold = 50,
+        variability_alignment = "leading",
+        variability_no_change = "keep",
         variability_unevaluable = "missing"
       )
       session$setInputs(save_step = 1L)
@@ -654,13 +729,18 @@ test_that("variability saves, previews, edits and applies through the module", {
         "cv"
       )
       expect_true(result$preview()$comparison$steps$unevaluable_windows > 0)
+      expect_true(result$preview()$comparison$steps$no_change_windows > 0)
+      expect_match(as.character(output$comparison), "Windows assessed as constant")
       updated <- result$recipe()$steps[[1]]
       expect_identical(updated$parameters$arguments$unevaluable, "missing")
-      expect_identical(updated$parameters$mapping_version, 3L)
+      expect_identical(updated$parameters$arguments$no_change, "keep")
+      expect_identical(updated$parameters$mapping_version, 4L)
       expect_match(output$recipe_choices$html, "target set to NA")
       session$setInputs(apply = 2L)
       session$setInputs(selected_step = step$id, edit = 2L)
       expect_identical(form_base()$variability_unevaluable, "missing")
+      expect_identical(form_base()$variability_alignment, "leading")
+      expect_identical(form_base()$variability_no_change, "keep")
     }
   )
 })

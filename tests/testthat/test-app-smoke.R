@@ -13,6 +13,8 @@ test_that("the packaged application can be constructed", {
   production_html <- htmltools::renderTags(app_environment$ui)$html
   expect_identical(app_environment$import_presentation, "wizard")
   expect_match(production_html, "llw-import-wizard", fixed = TRUE)
+  expect_match(production_html, 'id="prepare-flow_root"', fixed = TRUE)
+  expect_match(production_html, 'id="prepare-flow_add"', fixed = TRUE)
   expect_match(production_html, "GLC Import", fixed = TRUE)
   expect_match(production_html, "Metadata", fixed = TRUE)
   expect_match(production_html, "Explore metadata", fixed = TRUE)

@@ -181,6 +181,7 @@ preparation_form_defaults <- function(context) {
     variability_direction = "below",
     variability_coverage = 80,
     variability_unevaluable = "keep",
+    variability_no_change = "rule",
     measurement_lower = 0,
     measurement_upper = 100000,
     calibration_multiplier = 1,
@@ -475,7 +476,8 @@ preparation_form_arguments <- function(form, context) {
       threshold = form$variability_threshold,
       direction = form$variability_direction,
       coverage = form$variability_coverage,
-      unevaluable = form$variability_unevaluable
+      unevaluable = form$variability_unevaluable,
+      no_change = form$variability_no_change
     ),
     invalidate = list(
       variable = form$measurement_variable,
@@ -628,7 +630,8 @@ prepare_server <- function(
   focus_variable = NULL,
   active = NULL,
   on_draft = NULL,
-  color_mode = NULL
+  color_mode = NULL,
+  flow = FALSE
 ) {
   if (!shiny::is.reactive(dataset) || !is.function(on_commit))
     abort_llw(
@@ -819,6 +822,7 @@ prepare_server <- function(
       variability_direction = input$variability_direction %||% "below",
       variability_coverage = as.numeric(input$variability_coverage %||% 80),
       variability_unevaluable = input$variability_unevaluable %||% "keep",
+      variability_no_change = input$variability_no_change %||% "rule",
       measurement_lower = as.numeric(input$measurement_lower %||% 0),
       measurement_upper = as.numeric(input$measurement_upper %||% 100000),
       calibration_multiplier = as.numeric(input$calibration_multiplier %||% 1),
@@ -1118,6 +1122,7 @@ prepare_server <- function(
         "variability_statistic",
         "variability_direction",
         "variability_unevaluable",
+        "variability_no_change",
         "transform_base",
         "transform_invalid"
       )
@@ -1795,6 +1800,10 @@ prepare_server <- function(
           class = "llw-prepare-recipe-label",
           shiny::tags$span(
             class = "llw-prepare-recipe-title",
+            shiny::icon(
+              preparation_step_icon(steps[[i]]$type),
+              class = "llw-prepare-recipe-icon"
+            ),
             preparation_step_label(steps[[i]], i)
           ),
           shiny::tags$span(
@@ -1858,6 +1867,8 @@ prepare_server <- function(
             )
               paste0(
                 " \u00b7 ",
+                format(count$no_change_windows, big.mark = ","),
+                " windows assessed as constant \u00b7 ",
                 format(count$unevaluable_windows, big.mark = ","),
                 " unevaluable windows (",
                 if (
@@ -1881,7 +1892,8 @@ prepare_server <- function(
         labels,
         ids,
         selected,
-        disabled = dirty()
+        disabled = dirty(),
+        flow = flow
       )
     })
 
@@ -2141,7 +2153,13 @@ prepare_server <- function(
       safely({
         shiny::req(context())
         set_form(new_form_defaults())
-        notice("New step. Save it to add it to the recipe.")
+        if (flow) {
+          notice(
+            "Unsaved step changes discarded. Updating the saved recipe preview."
+          )
+          auto_preview(TRUE)
+          flow_navigation$cleared()
+        } else notice("New step. Save it to add it to the recipe.")
       })
     )
     shiny::observeEvent(input$all_streams, {
@@ -2218,6 +2236,7 @@ prepare_server <- function(
           ))
             values[[paste0("variability_", name)]] <- args[[name]]
           values$variability_unevaluable <- args$unevaluable %||% "keep"
+          values$variability_no_change <- args$no_change %||% "rule"
         } else if (step$type == "invalidate") {
           values$measurement_lower <- args$lower
           values$measurement_upper <- args$upper
@@ -2319,6 +2338,7 @@ prepare_server <- function(
       safely({
         edit_step(input$selected_step)
         notice("Editing the selected step. Save it to update the recipe.")
+        if (flow) flow_navigation$edit()
       })
     )
     save_filter <- function(as_new = FALSE)
@@ -2406,6 +2426,7 @@ prepare_server <- function(
               "Step saved. Updating the preview from the original source."
           )
           auto_preview(TRUE)
+          if (flow) flow_navigation$saved()
         },
         editor = TRUE
       )
@@ -2670,14 +2691,17 @@ prepare_server <- function(
           "Ready to add a new step." else if (
           !identical(form_type(), saved_type)
         )
-          "Browsing another operation. Adjust current step replaces the selected step; Save as new step adds it." else
+          if (flow)
+            "Browsing another operation. Save changes replaces the selected step; Save as another step adds it." else
+            "Browsing another operation. Adjust current step replaces the selected step; Save as new step adds it." else
           "Saved in your recipe."
         ui_state$has_steps <- if (has_steps) "yes" else "no"
         ui_state$work_active <- if (active) "yes" else "no"
         ui_state$preview_ready <- if (current) "yes" else "no"
         update_button(
           "save_step",
-          label = "Adjust current step",
+          label = if (flow) "Save changes and preview" else
+            "Adjust current step",
           disabled = is.null(editing_id()) || loading
         )
         update_button(
@@ -2854,7 +2878,8 @@ prepare_server <- function(
         recipe(),
         dataset()$recipe %||% new_recipe()
       )
-      if (!length(steps) && !length(removed))
+      if (!length(steps) && !length(removed)) {
+        if (flow) return(NULL)
         return(shiny::tags$div(
           class = "llw-prepare-empty-recipe",
           shiny::icon("list-check"),
@@ -2865,16 +2890,20 @@ prepare_server <- function(
             )
           )
         ))
-      shiny::tags$p(
-        class = "llw-prepare-recipe-summary",
-        paste(
-          length(steps),
-          "saved step(s) \u00b7",
-          sum(vapply(steps, `[[`, logical(1), "enabled")),
-          "enabled",
-          if (length(removed))
-            paste0(" \u00b7 ", length(removed), " removal(s) pending")
-        )
+      }
+      shiny::tagList(
+        shiny::tags$p(
+          class = "llw-prepare-recipe-summary",
+          paste(
+            length(steps),
+            "saved step(s) \u00b7",
+            sum(vapply(steps, `[[`, logical(1), "enabled")),
+            "enabled",
+            if (length(removed))
+              paste0(" \u00b7 ", length(removed), " removal(s) pending")
+          )
+        ),
+        if (flow && length(steps)) preparation_recipe_order_help(session$ns, flow = TRUE)
       )
     })
     output$pending_removals <- shiny::renderUI({
@@ -3137,6 +3166,14 @@ prepare_server <- function(
                 values$created
               ))
             ),
+          if (nrow(comparison$steps) && any(comparison$steps$no_change_windows > 0)) {
+            constant <- which(comparison$steps$no_change_windows > 0)
+            data.frame(
+              Measure = paste("Windows assessed as constant, step", constant),
+              Source = "",
+              Preview = as.character(comparison$steps$no_change_windows[constant])
+            )
+          },
           if (
             nrow(comparison$steps) &&
               any(comparison$steps$unevaluable_windows > 0)
@@ -3186,7 +3223,7 @@ prepare_server <- function(
         ),
         shiny::tags$p(
           class = "llw-prepare-hint",
-          "First 100 occupied bins for the focus variable. Missing readings (%) counts NA among input rows; absent timestamps do not count. The optional missingness limit applies separately to each numeric variable. Time coverage uses full bins, including empty intervals; unknown cadence is reported as NA. Low coverage does not change the aggregate. Later steps do not change this report."
+          "First 100 occupied bins for the focus variable. Missing readings (%) counts NA among input rows; absent timestamps do not count. The optional missingness limit applies separately to each numeric, categorical and logical variable. Time coverage uses full bins, including empty intervals; unknown cadence is reported as NA. Low coverage does not change the aggregate. Later steps do not change this report."
         ),
         shiny::uiOutput(session$ns("aggregation_note")),
         shiny::tags$div(
@@ -3323,6 +3360,19 @@ prepare_server <- function(
           ))
         )
       })
+    flow_navigation <- if (flow)
+      preparation_flow_navigation(
+        input,
+        output,
+        session,
+        context,
+        form_type,
+        editing_id,
+        loading_form,
+        dirty,
+        new_form_defaults,
+        set_form
+      )
     list(
       recipe = shiny::reactive(recipe()),
       preview = shiny::reactive(preview()),

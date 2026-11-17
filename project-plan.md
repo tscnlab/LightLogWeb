@@ -1666,12 +1666,11 @@ and independent responsive/browser review. The accepted frozen source index is
 Deferred narrow-layout notes remain nonblocking. Detailed evidence and the
 acceptance record are in `dev/milestone-8-recipe-preparation.md`.
 
-The next authorized work is a separate experimental Prepare user-journey
-redesign, beginning after the milestone commit. It changes presentation and
-navigation while preserving the accepted preparation engine and operation
-semantics. It is not Milestone 9 and does not authorize deployment. The accepted
-R14 showcase remains available for comparison. This closeout supersedes the
-pending acceptance and authorization statements in the history below.
+The owner also accepted the redesigned Prepare workspace on 2026-11-17 after
+independent review of R11. The application now opens Prepare with a recipe
+sidebar, an operation picker and a preview alongside the editor on wide
+screens. The [workspace closeout](dev/prepare-flow-experiment.md) records the
+accepted changes to Variability and Aggregate and the browser verification.
 
 Historical review progression:
 

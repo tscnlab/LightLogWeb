@@ -83,7 +83,10 @@ test_that("unsaved edits and source changes cannot publish a stale preview", {
       expect_length(result$recipe()$steps, 0L)
       session$setInputs(preview = 2L)
       expect_match(result$notice(), "clock times")
-      expect_match(output$preview_notice$html, "Save the step")
+      expect_match(
+        output$preview_notice$html,
+        "save this step and update the preview"
+      )
       next_record <- m1_showcase_record()
       record(next_record)
       session$flushReact()
@@ -728,6 +731,9 @@ test_that("drag ordering previews the new sequence and supports Undo and repeate
         duration_unit = "hours",
         save_new = 2L
       )
+      # R13 updates inactive dates as part of the save transaction, before the
+      # worker runs. Acknowledge that browser update before awaiting the result.
+      acknowledge()
       m8_wait(session, function() !is.null(result$preview()))
       # Simulate the browser acknowledging controls updated by the worker.
       acknowledge()

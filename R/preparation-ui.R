@@ -408,7 +408,8 @@ preparation_measurements_ui <- function(ns) {
           "Window position",
           c(
             "Centred on each reading" = "centered",
-            "Ending at each reading" = "trailing"
+            "Ending at each reading" = "trailing",
+            "Starting at each reading" = "leading"
           ),
           width = "100%"
         ),
@@ -441,14 +442,25 @@ preparation_measurements_ui <- function(ns) {
           width = "100%"
         )
       ),
+      shiny::numericInput(
+        ns("variability_coverage"),
+        "Minimum window coverage (%)",
+        80,
+        min = 0,
+        max = 100,
+        width = "100%"
+      ),
       shiny::tags$div(
         class = "llw-prepare-field-pair",
-        shiny::numericInput(
-          ns("variability_coverage"),
-          "Minimum window coverage (%)",
-          80,
-          min = 0,
-          max = 100,
+        shiny::selectInput(
+          ns("variability_no_change"),
+          "No change in source readings",
+          c(
+            "Use the variability rule" = "rule",
+            "Keep target unchanged" = "keep",
+            "Set target to NA" = "missing"
+          ),
+          selected = "rule",
           width = "100%"
         ),
         shiny::selectInput(
@@ -461,7 +473,7 @@ preparation_measurements_ui <- function(ns) {
       ),
       shiny::tags$p(
         class = "llw-prepare-hint",
-        "Unevaluable windows are reported in the preview."
+        "The no-change setting applies when the window meets coverage and all its finite source readings are equal. The preview reports constant and unevaluable windows."
       )
     ),
     shiny::conditionalPanel(
@@ -680,13 +692,16 @@ preparation_measurements_ui <- function(ns) {
         "input.value_type === 'variability'",
         ns = ns,
         shiny::tags$p(
-          "Sample SD uses the finite source readings within the window. CV is 100 \u00d7 SD / |mean|; a zero mean is unevaluable. Equality with the threshold keeps the target value."
+          "Sample SD uses the finite source readings. CV is 100 \u00d7 SD / |mean|. Under the variability rule, a zero mean makes CV undefined and the unevaluable-window setting applies. Equality with the threshold keeps the target."
         ),
         shiny::tags$p(
-          "Windows use elapsed time within each current group and participant/file recording. Coverage is the observed time in the full window, using the original recording's sampling interval. Missing values and gaps are not filled; windows at recording edges may have lower coverage."
+          "Each window makes one decision for the target at the anchor reading. Starting windows include the anchor and exclude the far end. Ending windows exclude the far start and include the anchor. Centred windows include the left edge and exclude the right."
         ),
         shiny::tags$p(
-          "At least two finite source readings and the selected coverage are required. Duplicate timestamps or an unknown sampling interval make a window unevaluable. The check source stays fixed when the target changes; if unavailable, its recorded source is used and the change is shown."
+          "At least two finite source readings, sufficient coverage, unique timestamps and a known sampling interval are required. Once these checks pass, an explicit no-change choice also applies to all-zero readings, even for CV. A varying source with a zero mean still has undefined CV."
+        ),
+        shiny::tags$p(
+          "Windows use elapsed time within each current group and participant/file recording. Coverage measures observed time across the full window using the recording's sampling interval. Gaps, missing readings and recording edges can lower coverage. The check source stays fixed when the target changes. If it becomes unavailable, the recipe uses its recorded source and shows the change."
         )
       ),
       shiny::conditionalPanel(
@@ -1145,12 +1160,58 @@ preparation_existing_filters_ui <- function(ns) {
   )
 }
 
+preparation_step_icon <- function(type) {
+  switch(
+    type,
+    participants = "users",
+    dates = , datetimes = , clock = "calendar",
+    duration = "hourglass-half",
+    photoperiod = "sun",
+    variable = "filter",
+    coverage = "chart-bar",
+    invalidate = "ruler",
+    calibrate = , transform = "sliders",
+    variability = "wave-square",
+    timezone = "globe",
+    dst = "clock",
+    gaps = "equals",
+    aggregate = "layer-group",
+    "list-check"
+  )
+}
+
+preparation_recipe_source_ui <- function() {
+  bslib::popover(
+    shiny::tags$button(
+      type = "button",
+      class = "llw-flow-source",
+      `aria-label` = "Original data, show recipe help",
+      shiny::icon("database"),
+      "Original data",
+      shiny::icon("circle-info", class = "llw-flow-source-info")
+    ),
+    "Your original data stay available throughout. Choose Add step below to begin or extend your recipe.",
+    title = "Your recipe starts here",
+    options = list(trigger = "hover click")
+  )
+}
+
+preparation_recipe_order_help <- function(ns, flow = FALSE) {
+  shiny::tags$p(
+    id = ns("recipe_order_help"),
+    class = "llw-prepare-hint",
+    if (flow) "Select a step to edit.",
+    "Drag the grip to reorder, or use Earlier / Later."
+  )
+}
+
 preparation_recipe_choices_ui <- function(
   ns,
   labels,
   ids,
   selected,
-  disabled = FALSE
+  disabled = FALSE,
+  flow = FALSE
 ) {
   if (!length(ids)) return(NULL)
   choices <- shiny::radioButtons(
@@ -1164,6 +1225,8 @@ preparation_recipe_choices_ui <- function(
   query <- htmltools::tagQuery(choices)
   query$addAttrs(`aria-describedby` = ns("recipe_order_help"))
   query$find(".shiny-options-group")$addAttrs(id = ns("recipe_order"))
+  if (flow)
+    query$find(".control-label")$addClass("visually-hidden")
   query$find(".radio")$each(function(tag, i) {
     tag$attribs[["data-rank-id"]] <- ids[[i]]
   })
@@ -1174,11 +1237,7 @@ preparation_recipe_choices_ui <- function(
     shiny::icon("grip-vertical")
   ))
   shiny::tagList(
-    shiny::tags$p(
-      id = ns("recipe_order_help"),
-      class = "llw-prepare-hint",
-      "Drag the grip to reorder, or use Earlier / Later."
-    ),
+    if (!flow) preparation_recipe_order_help(ns),
     query$allTags(),
     sortable::sortable_js(
       css_id = ns("recipe_order"),

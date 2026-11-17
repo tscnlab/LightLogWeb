@@ -249,16 +249,20 @@ preparation_aggregate <- function(
       "Choose an aggregation interval at least as long as every recording's sampling interval entering this step. Aggregation does not upsample readings.",
       "preparation"
     )
+  missing_summary <- function(x) {
+    !length(x) || all(is.na(x)) ||
+      (args$missing == "propagate" && anyNA(x)) ||
+      (args$missing == "threshold" &&
+        100 * sum(is.na(x)) > args$max_missing * length(x))
+  }
   numeric_handler <- function(x) {
     # Duration is numeric to LightLogR. Summarise its seconds, then restore its
     # class consistently; median otherwise returns different classes for odd
     # and even counts, and a missing bin can fail to bind to a Duration bin.
     duration <- inherits(x, "Duration")
     if (duration) x <- as.numeric(x)
-    exceeds_limit <- args$missing == "threshold" &&
-      100 * sum(is.na(x)) > args$max_missing * length(x)
-    if (args$missing %in% c("available", "threshold")) x <- x[!is.na(x)]
-    value <- if (exceeds_limit || !length(x) || anyNA(x)) NA_real_ else
+    value <- if (missing_summary(x)) NA_real_ else {
+      x <- x[!is.na(x)]
       switch(
         args$numeric,
         mean = mean(x),
@@ -267,17 +271,22 @@ preparation_aggregate <- function(
         max = max(x),
         sum = sum(x)
       )
+    }
     if (duration) lubridate::dseconds(value) else value
   }
   categorical_handler <- function(x) {
+    if (missing_summary(x)) return(x[NA_integer_])
+    x <- x[!is.na(x)]
     if (args$categorical == "first") return(x[1L])
     if (args$categorical == "last") return(x[length(x)])
-    # Retain LightLogR's mode, including its NA and tie handling.
-    value <- names(which.max(table(x, useNA = "ifany")))
-    if (is.factor(x)) factor(value) else value
+    # Use LightLogR's table-order tie rule among the available categories.
+    # Index the input to retain factor levels and ordered-factor class.
+    value <- names(which.max(table(x)))
+    x[match(value, as.character(x))]
   }
   logical_handler <- function(x) {
-    if (!length(x) || anyNA(x)) return(NA)
+    if (missing_summary(x)) return(NA)
+    x <- x[!is.na(x)]
     switch(args$logical, majority = mean(x) >= 0.5, any = any(x), all = all(x))
   }
   # First/last means chronological order, with original row order for ties.

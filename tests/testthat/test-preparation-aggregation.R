@@ -103,7 +103,7 @@ test_that("absent timestamps affect the missingness limit only after explicit Ga
   expect_identical(explicit$candidate$raw_payload, record$raw_payload)
 })
 
-test_that("common type summaries retain defaults and use chronological first and last", {
+test_that("common type summaries use available readings and chronological first and last", {
   raw <- data.frame(
     Id = "P",
     file_group_id = "file",
@@ -129,8 +129,9 @@ test_that("common type summaries retain defaults and use chronological first and
     type = "floor"
   )
   expect_equal(defaults$Text, public$Text)
-  expect_equal(defaults$Category, public$Category)
-  expect_equal(defaults$Flag, public$Flag)
+  expect_equal(as.character(defaults$Category), as.character(public$Category))
+  expect_identical(levels(defaults$Category), levels(raw$Category))
+  expect_equal(defaults$Flag, c(FALSE, TRUE))
   for (method in c("first", "last")) {
     result <- preparation_aggregate(
       raw,
@@ -141,7 +142,7 @@ test_that("common type summaries retain defaults and use chronological first and
     expect_identical(
       result$Text,
       if (method == "first") c("z", NA_character_) else
-        c(NA_character_, NA_character_)
+        c("c", NA_character_)
     )
     expect_true(is.ordered(result$Category))
     expect_identical(levels(result$Category), levels(raw$Category))
@@ -154,7 +155,7 @@ test_that("common type summaries retain defaults and use chronological first and
       reference,
       "MEDI"
     )$data
-    expect_identical(result$Flag, c(method == "any", NA))
+    expect_identical(result$Flag, c(method == "any", TRUE))
     expect_identical(result$is.implicit, c(FALSE, TRUE))
   }
   tie <- raw[1:2, ]
@@ -179,6 +180,62 @@ test_that("common type summaries retain defaults and use chronological first and
     )$data$Text,
     "z"
   )
+})
+
+test_that("all summary types apply missingness independently with typed NA results", {
+  raw <- data.frame(
+    Id = "P", file_group_id = "file",
+    Datetime = as.POSIXct("2026-01-01", tz = "UTC") + 0:14 * 60,
+    MEDI = c(1:4, NA, 1:3, NA, NA, rep(NA_real_, 5)),
+    Text = c(NA, "b", "a", "a", "b", "c", "c", "c", NA, NA, rep(NA_character_, 5)),
+    Flag = c(TRUE, NA, TRUE, FALSE, FALSE, TRUE, NA, NA, TRUE, FALSE, rep(NA, 5))
+  )
+  raw$Category <- ordered(raw$Text, levels = c("c", "b", "a"))
+  raw$Complete <- rep("recorded", nrow(raw))
+  raw$is.implicit <- rep(FALSE, nrow(raw))
+  reference <- preparation_variability_reference(raw)
+  args <- list(length = 5, unit = "minutes", numeric = "mean",
+    categorical = "first", logical = "any", missing = "threshold", max_missing = 20)
+  run <- function() preparation_aggregate(raw, args, reference, "MEDI")$data
+  result <- run()
+  expect_equal(result$MEDI, c(2.5, NA, NA))
+  expect_identical(result$Text, c("b", NA_character_, NA_character_))
+  expect_identical(as.character(result$Category), result$Text)
+  expect_identical(result$Flag, c(TRUE, NA, NA))
+  expect_true(is.ordered(result$Category))
+  expect_identical(levels(result$Category), levels(raw$Category))
+  expect_identical(result$Complete, rep("recorded", 3))
+  expect_identical(result$is.implicit, rep(FALSE, 3))
+
+  args$max_missing <- 40
+  result <- run()
+  expect_identical(result$Text, c("b", "c", NA_character_))
+  expect_identical(result$Flag, c(TRUE, TRUE, NA))
+  args$missing <- "propagate"
+  for (method in c("mode", "first", "last")) {
+    args$categorical <- method
+    result <- run()
+    expect_true(all(is.na(result$MEDI)))
+    expect_identical(result$Text, rep(NA_character_, 3))
+    expect_true(all(is.na(result$Category)))
+    expect_identical(result$Flag, rep(NA, 3))
+    expect_true(is.ordered(result$Category))
+  }
+  for (policy in c("available", "threshold")) {
+    args$missing <- policy
+    args$max_missing <- 100
+    for (method in c("majority", "any", "all")) {
+      args$logical <- method
+      result <- run()
+      expect_identical(result$Flag,
+        c(method != "all", method != "all", NA))
+      expect_identical(result$Text, c("b", "c", NA_character_))
+    }
+  }
+  args$categorical <- "mode"
+  result <- run()
+  expect_identical(result$Text, c("a", "c", NA_character_))
+  expect_identical(as.character(result$Category), c("b", "c", NA_character_))
 })
 
 test_that("aggregation settings reject invalid limits and remain compatible", {
@@ -674,6 +731,11 @@ test_that("multiple aggregation steps follow the explicit ordered pipeline", {
     LightLogR::aggregate_Datetime(unit = "15 minutes", type = "floor") |>
     LightLogR::aggregate_Datetime(unit = "1 hours", type = "floor") |>
     dplyr::ungroup()
+  # The typed handlers preserve source levels, including unused levels. Public
+  # LightLogR's default mode drops levels that are absent from the summaries.
+  for (name in names(raw)[vapply(raw, is.factor, logical(1))])
+    expected[[name]] <- factor(expected[[name]], levels = levels(raw[[name]]),
+      ordered = is.ordered(raw[[name]]))
   expect_equal(result$data, expected[, names(raw)])
   expect_true(all(result$removed_at == 0))
   expect_equal(sum(!is.na(result$source_membership)), nrow(raw))

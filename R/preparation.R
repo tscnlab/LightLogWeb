@@ -73,7 +73,7 @@ preparation_call_map <- function() {
       "Independent numeric interval or categorical source condition; explicit missing-source policy; rows and existing target missingness retained",
       "new = old * multiplier + offset; missing preserved; nonfinite results rejected; units unchanged",
       "Typed log/root/power/exponential/absolute value; explicit invalid-result policy; source rows preserved",
-      "Elapsed-time SD or CV within current groups and participant/file identity; minimum observed-time coverage; explicit unevaluable-window policy"
+      "Elapsed-time SD or CV within current groups and participant/file identity, with observed-time coverage and separate policies for constant and unevaluable windows"
     ),
     stringsAsFactors = FALSE
   )
@@ -92,7 +92,7 @@ preparation_call_map <- function() {
         "lubridate::with_tz / force_tz",
         "UTC-offset difference from recording start",
         "LightLogR::gap_handler(full_sequence); full-day base::seq/dplyr::full_join adapter",
-        "LightLogR::aggregate_Datetime(type = floor); typed summary handlers, numeric missingness policy and observed-duration coverage"
+        "LightLogR::aggregate_Datetime(type = floor); typed summary handlers, per-variable missingness policy and observed-duration coverage"
       ),
       boundary = c(
         "Keep instant or explicitly reinterpret clock; skipped times rejected",
@@ -329,6 +329,24 @@ preparation_arguments <- function(type, args) {
   args
 }
 
+preparation_mapping_version <- function(type, args) {
+  if (type == "variability" &&
+      ("no_change" %in% names(args) || identical(args$alignment, "leading")))
+    return(4L)
+  if ((type == "coverage" && "mode" %in% names(args)) ||
+      (type == "variability" && "unevaluable" %in% names(args)) ||
+      (type == "invalidate" && "source" %in% names(args)) ||
+      (type == "transform" && "offset" %in% names(args)))
+    return(3L)
+  if (type == "coverage" ||
+      (type %in% c("dates", "clock") && identical(args$timezone, "native")) ||
+      (type %in% c("invalidate", "calibrate", "transform", "variability") &&
+        "output" %in% names(args)) ||
+      (type == "datetimes" && "start_timezone" %in% names(args)))
+    return(2L)
+  1L
+}
+
 new_preparation_step <- function(
   type,
   args,
@@ -340,23 +358,7 @@ new_preparation_step <- function(
   new_recipe_step(
     type,
     list(
-      mapping_version = if (
-        (type == "coverage" && "mode" %in% names(args)) ||
-          (type == "variability" && "unevaluable" %in% names(args)) ||
-          (type == "invalidate" && "source" %in% names(args)) ||
-          (type == "transform" && "offset" %in% names(args))
-      )
-        3L else if (
-        type == "coverage" ||
-          (type %in%
-            c("dates", "clock") &&
-            identical(args$timezone, "native")) ||
-          (type %in%
-            c("invalidate", "calibrate", "transform", "variability") &&
-            "output" %in% names(args)) ||
-          (type == "datetimes" && "start_timezone" %in% names(args))
-      )
-        2L else 1L,
+      mapping_version = preparation_mapping_version(type, args),
       dataset_id = context$dataset_id,
       raw_checksum = context$raw_checksum,
       arguments = args
@@ -408,7 +410,8 @@ validate_preparation_recipe <- function(recipe, context) {
             identical(p$mapping_version, 2L)) ||
           (step$type %in%
             c("coverage", "variability", "invalidate", "transform") &&
-            identical(p$mapping_version, 3L))) ||
+            identical(p$mapping_version, 3L)) ||
+          (step$type == "variability" && identical(p$mapping_version, 4L))) ||
         !identical(p$dataset_id, context$dataset_id) ||
         !identical(p$raw_checksum, context$raw_checksum)
     )
@@ -453,7 +456,7 @@ validate_preparation_recipe <- function(recipe, context) {
     if (
       step$type %in%
         c("invalidate", "calibrate", "transform", "variability") &&
-        !identical(p$mapping_version, 3L) &&
+        p$mapping_version <= 2L &&
         (identical(p$mapping_version, 2L) != ("output" %in% names(args)))
     )
       abort_llw(
@@ -462,10 +465,10 @@ validate_preparation_recipe <- function(recipe, context) {
       )
     if (
       step$type == "variability" &&
-        (identical(p$mapping_version, 3L) != ("unevaluable" %in% names(args)))
+        !identical(p$mapping_version, preparation_mapping_version(step$type, args))
     )
       abort_llw(
-        "An explicit unevaluable-window policy requires variability version 3.",
+        "Variability version 3 records the unevaluable-window policy. Version 4 adds forward windows and the no-change policy. The saved version must match its settings.",
         "preparation"
       )
     if (
@@ -831,6 +834,8 @@ evaluate_preparation <- function(
           sum(as.numeric(before_times) != as.numeric(data$Datetime)) else 0L,
         evaluated_windows = if (is.null(variability_diagnostics)) 0L else
           sum(variability_diagnostics$evaluable),
+        no_change_windows = if (is.null(variability_diagnostics)) 0L else
+          sum(variability_diagnostics$reason == "no change"),
         unevaluable_windows = if (is.null(variability_diagnostics)) 0L else
           sum(!variability_diagnostics$evaluable),
         variability_notes = if (is.null(variability_diagnostics)) "" else {

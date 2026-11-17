@@ -45,8 +45,8 @@ preparation_value_arguments <- function(type, args) {
       "coverage"
     )
   )
-  if (type == "variability" && is.list(args) && "unevaluable" %in% names(args))
-    expected <- c(expected, "unevaluable")
+  if (type == "variability")
+    expected <- c(expected, intersect(c("unevaluable", "no_change"), names(args)))
   if (
     type == "transform" &&
       is.list(args) &&

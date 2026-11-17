@@ -155,6 +155,7 @@ test_that("the full app keeps drafts across navigation and applies to the select
     session$setInputs(main_nav = "prepare")
     m8_wait(session, function() !is.null(prepared$context()))
     m8_integration_form(session, prepared$context())
+    expect_identical(output[["prepare-flow_editing"]], "no")
     dashboard_revision <- dashboard$ready()$revision
     m8_integration_form(session, prepared$context(), "clock")
     session$setInputs(`prepare-save_new` = 1L)

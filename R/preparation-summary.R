@@ -368,10 +368,16 @@ preparation_step_label <- function(step, index) {
       " ",
       args$unit,
       ", ",
-      args$alignment,
+      switch(args$alignment, leading = "starting at each reading", args$alignment),
       " \u00b7 \u2265 ",
       args$coverage,
-      "% window coverage \u00b7 unevaluable: ",
+      "% window coverage",
+      switch(args$no_change %||% "rule",
+        keep = " \u00b7 keep constant windows",
+        missing = " \u00b7 mask constant windows",
+        rule = ""
+      ),
+      " \u00b7 unevaluable: ",
       if (identical(args$unevaluable, "missing")) "NA" else "keep"
     ) else if (step$type == "invalidate" && !is.null(args$source))
     paste0(

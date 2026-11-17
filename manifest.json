@@ -6247,7 +6247,7 @@
       "checksum": "4a3720ccae0892ddd2e430654577139c"
     },
     "R/LightLogWeb-app.R": {
-      "checksum": "fc3b6ae5650bb1f1fad651e810bfd384"
+      "checksum": "a00e089e9b20f464d7d88f245f1c144c"
     },
     "R/LightLogWeb-package.R": {
       "checksum": "0bc9a1573a5671e182f7708e61df8695"
@@ -6322,7 +6322,7 @@
       "checksum": "55b352a247039ff05793bf739f5423ae"
     },
     "R/m_prepare.R": {
-      "checksum": "3ee64d003760640192e3c7ea4093f1f2"
+      "checksum": "32167cc0920698cd021247c56f7c70ff"
     },
     "R/metadata-model.R": {
       "checksum": "13e4d78e15becf97cf739ae56a326d8a"
@@ -6337,16 +6337,16 @@
       "checksum": "70d40136b72b184d48eda3ee71a47867"
     },
     "R/preparation-summary.R": {
-      "checksum": "5838e43a48806c2ebffe5c5312a03ba9"
+      "checksum": "940f57a57e2ca3eac93abab5e3a9f491"
     },
     "R/preparation-ui.R": {
-      "checksum": "d6262e1a5379888f2fda84b92c90ecf4"
+      "checksum": "1cbd6a4c5290a1c00f67e831a1eb001b"
     },
     "R/preparation-values.R": {
-      "checksum": "6d43d8c5d68798a4fd50f991e92db955"
+      "checksum": "353e858738e1d74c73a5eec29a5d9bf6"
     },
     "R/preparation.R": {
-      "checksum": "719782e9245553bd69149789a24c7f2d"
+      "checksum": "813c8da636cb3253329ebb98144cac32"
     },
     "R/raw-import-preflight.R": {
       "checksum": "3c6369e9c5aa4cbaeaa571149a9e32c0"
@@ -7261,7 +7261,7 @@
       "checksum": "d4615ae7d3924bd5cc48dc2f3f3f66d0"
     },
     "inst/app/scss/lightlogweb.scss": {
-      "checksum": "33dd4601b8cc56b2a62b1120281b2d88"
+      "checksum": "05ce9b3add7a04240773a4ae62e3922a"
     },
     "inst/app/www/brand/apple-touch-icon.png": {
       "checksum": "4f38b00ff91d95b2bef3f64e5360c9b9"
@@ -7381,7 +7381,7 @@
       "checksum": "5c5b2b47f5267f269c9fac20e70ab65f"
     },
     "project-plan.md": {
-      "checksum": "dbc665d21d30a7e991a057fe9fae65d5"
+      "checksum": "8da707fa2da53f6e6f5ec9bc8a4eb31c"
     },
     "renv.lock": {
       "checksum": "367690283440244161612a9d4d38cd7a"
@@ -7498,7 +7498,7 @@
       "checksum": "7ad1b3d365572801d7c3aa60cb55f722"
     },
     "tests/testthat/test-app-smoke.R": {
-      "checksum": "47ef9f87ac2be7d27b5852608457eb2f"
+      "checksum": "698bb496120e82bb5c092083a3fcbdc7"
     },
     "tests/testthat/test-append-merge.R": {
       "checksum": "50f421cb771463ff58ea1bac05c3398e"
@@ -7555,25 +7555,25 @@
       "checksum": "0b57572244e560e221a00b952b7fbd8a"
     },
     "R/preparation-lineage.R": {
-      "checksum": "5ee717eff32c7e49ab1459893a564ea8"
+      "checksum": "1f9a3bd8d0fdae8061960053eca37253"
     },
     "R/preparation-variability.R": {
-      "checksum": "a82bc29a1dd01799d37e153c4cd22804"
+      "checksum": "1834624d872a12928a5033ad85341a29"
     },
     "R/preparation-time.R": {
       "checksum": "9e31ce644327b408d6dd7d0991685c85"
     },
     "R/preparation-time-ui.R": {
-      "checksum": "511214f4a9783dda9a24c97652261d22"
+      "checksum": "a46bbbd8291c588a788d6f11e12f6149"
     },
     "R/preparation-time-preview.R": {
       "checksum": "9327647581055479c06b049621f80340"
     },
     "R/preparation-aggregation.R": {
-      "checksum": "19dd8bf8e35f2295dee5bc5fad7573b1"
+      "checksum": "eec06dc5fd431f50db20efa9e21fe1c9"
     },
     "tests/testthat/test-preparation-aggregation.R": {
-      "checksum": "960cd28a5f114d0da01f59bf3060c630"
+      "checksum": "c1354e9358f4e53e9fdfd65094534b95"
     },
     "tests/testthat/test-preparation.R": {
       "checksum": "310a3015d9640f081fd9773beb59b855"
@@ -7582,16 +7582,37 @@
       "checksum": "42c5465fd7cab7eecedb2311da775461"
     },
     "dev/milestone-8-recipe-preparation.md": {
-      "checksum": "3b2d160337b8278d721e5ed661d02573"
+      "checksum": "39ec4829c20da6aebc447ef80987da48"
     },
     "tests/testthat/test-preparation-integration.R": {
-      "checksum": "c706f6f5db921a43b83705c764e5e479"
+      "checksum": "0ec5d0d30716789a684832677f3d63ef"
     },
     "dev/milestone-8-integration-app.R": {
       "checksum": "da072791b4a556c0175685950522f609"
     },
     "R/preparation-integration.R": {
       "checksum": "13b38567e26968c8e9346fe7e2ab6b4b"
+    },
+    "R/preparation-flow.R": {
+      "checksum": "b69480281dcd3945fcf2ba8b2ae05702"
+    },
+    "dev/prepare-flow-app.R": {
+      "checksum": "819325ecfe38080770067f55d59d70ab"
+    },
+    "dev/prepare-flow-experiment.md": {
+      "checksum": "8d29a8701559ccf17c4622062be7a690"
+    },
+    "inst/app/www/js/prepare-flow-navigation.js": {
+      "checksum": "111a1735a341ae650ab30c54f599dae7"
+    },
+    "tests/testthat/test-preparation-variability.R": {
+      "checksum": "48bc847986eff04a3a9757c03a2dfcbf"
+    },
+    "tests/testthat/test-prepare-flow.R": {
+      "checksum": "0e8864d1a70cbbcf1062e3abeb98cab0"
+    },
+    "tests/testthat/test-prepare-module.R": {
+      "checksum": "c30d1741f3c36efe0dee76101d653395"
     }
   },
   "users": null
