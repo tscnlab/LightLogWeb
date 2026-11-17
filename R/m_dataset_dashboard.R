@@ -1772,7 +1772,12 @@ datasetDashboardServer <- function(
       active <- isolate(active_snapshot_result())
       if (
         inherits(active, "llw_dashboard_snapshot") &&
-          identical(record, active$record)
+          # Draft settings do not change any committed dashboard content. Keep
+          # the active snapshot stable while Prepare edits its saved recipe.
+          identical(
+            record[setdiff(names(record), "draft")],
+            active$record[setdiff(names(active$record), "draft")]
+          )
       ) {
         dashboard_switch_state(list(
           active = FALSE,
@@ -1914,10 +1919,21 @@ datasetDashboardServer <- function(
     }
 
     input_snapshot_signature <- NULL
+    input_snapshot_recipe <- NULL
     observe({
       value <- snapshot()
       signature <- active_snapshot_signature()
       current_focus <- isolate(input$focus_variable)
+      if (
+        !is.null(input_snapshot_recipe) &&
+          identical(input_snapshot_recipe$id, value$record$id) &&
+          !identical(input_snapshot_recipe$recipe, value$record$recipe)
+      )
+        current_focus <- preparation_follow_focus(
+          current_focus,
+          value$record$recipe,
+          input_snapshot_recipe$recipe
+        )
       selected_focus <- if (
         is.character(current_focus) &&
           length(current_focus) == 1L &&
@@ -1951,6 +1967,10 @@ datasetDashboardServer <- function(
         server = TRUE
       )
       input_snapshot_signature <<- signature
+      input_snapshot_recipe <<- list(
+        id = value$record$id,
+        recipe = value$record$recipe
+      )
     })
 
     snapshot_signature <- reactive({
@@ -2881,7 +2901,9 @@ datasetDashboardServer <- function(
 
     output$facet_pagination <- renderUI({
       value <- base_selection()
-      navigator <- available_page_navigator()
+      # Keep empty cells so participant rows and time columns stay aligned.
+      navigator <- page_navigator_data()
+      available <- available_page_navigator()
       if (nrow(navigator) <= 1L) {
         return(NULL)
       }
@@ -2895,9 +2917,9 @@ datasetDashboardServer <- function(
       pages <- current_page_state()
       current_participant <- pages[["participant"]]
       current_time <- pages[["time"]]
-      participant_pages <- sort(unique(navigator$participant_page))
-      time_pages <- sort(unique(navigator$time_page[
-        navigator$participant_page == current_participant
+      participant_pages <- sort(unique(available$participant_page))
+      time_pages <- sort(unique(available$time_page[
+        available$participant_page == current_participant
       ]))
       time_choices <- as.list(as.character(time_pages))
       names(time_choices) <- value$time_chunks$Label[time_pages]
@@ -2919,12 +2941,17 @@ datasetDashboardServer <- function(
             big.mark = ",",
             scientific = FALSE
           ),
-          " observed focus value(s)"
+          " observed focus value(s)",
+          if (!navigator$has_data[[index]]) "; unavailable" else ""
         )
         tags$span(
           class = paste(
             "llw-dashboard-page-navigator__cell",
-            "llw-dashboard-page-navigator__cell--available",
+            if (navigator$has_data[[index]]) {
+              "llw-dashboard-page-navigator__cell--available"
+            } else {
+              "llw-dashboard-page-navigator__cell--empty"
+            },
             if (current) {
               "llw-dashboard-page-navigator__cell--current"
             }
@@ -2957,16 +2984,21 @@ datasetDashboardServer <- function(
         `aria-label` = "Participant and time page map",
         style = paste0(
           "--llw-time-page-count:",
-          max(1L, max(table(navigator$participant_page))),
+          value$time_pages,
           ";--llw-participant-page-count:",
-          length(participant_pages),
+          value$participant_pages,
           ";--llw-navigator-width:",
-          max(3, min(18, 1.1 * max(table(navigator$participant_page)))),
+          max(3, min(18, 1.1 * value$time_pages)),
           "rem;--llw-navigator-row-size:",
-          max(0.32, min(0.9, 3.5 / length(participant_pages))),
+          max(0.32, min(0.9, 3.5 / value$participant_pages)),
           "rem;"
         )
       )
+      navigator_control <- htmltools::tagQuery(navigator_control)$find(
+        "input"
+      )$filter(function(tag, index) {
+        tag$attribs$value %in% navigator_values[!navigator$has_data]
+      })$addAttrs(disabled = "disabled")$allTags()
       pagination_class <- paste(
         "llw-dashboard-pagination",
         if (
@@ -3162,6 +3194,15 @@ datasetDashboardServer <- function(
         participant_page <- suppressWarnings(as.integer(pages[[1L]]))
         time_page <- suppressWarnings(as.integer(pages[[2L]]))
         if (is.na(participant_page) || is.na(time_page)) return()
+        navigator <- page_navigator_data()
+        if (
+          !any(
+            navigator$has_data &
+              navigator$participant_page == participant_page &
+              navigator$time_page == time_page
+          )
+        )
+          return()
         set_page_state(
           participant = participant_page,
           time = time_page
@@ -3374,9 +3415,17 @@ datasetDashboardServer <- function(
       )
     })
     output$summary_date_span <- renderUI({
+      endpoints <- strsplit(
+        dashboard_compact_span_label(snapshot()),
+        " \u2013 ",
+        fixed = TRUE
+      )[[1L]]
       dashboard_value_box(
         "Date span",
-        dashboard_compact_span_label(snapshot()),
+        paste(
+          gsub(" ", "\u00a0", endpoints, fixed = TRUE),
+          collapse = " \u2013 "
+        ),
         "calendar",
         paste(
           dashboard_span_label(snapshot()),
@@ -3389,7 +3438,7 @@ datasetDashboardServer <- function(
     output$summary_sampling <- renderUI({
       dashboard_value_box(
         "Sampling",
-        dashboard_sampling_label(snapshot()$quality),
+        dashboard_sampling_label(snapshot()$prepared_quality),
         "history",
         paste(
           "Distinct dominant timestamp epochs estimated per participant.",
@@ -3476,9 +3525,9 @@ datasetDashboardServer <- function(
                 session$ns("missingness_scope"),
                 label = NULL,
                 choices = c(
-                  "Recorded times" = "recorded",
-                  "Regular span" = "regular",
-                  "Full days" = "full_days"
+                  "Based on observations" = "recorded",
+                  "Based on observed time span" = "regular",
+                  "Based on full observed days" = "full_days"
                 ),
                 selected = scope
               )
@@ -3549,7 +3598,10 @@ datasetDashboardServer <- function(
           resolved_detail,
           placement = "bottom"
         ),
-        "."
+        ".",
+        if (identical(value$data_stage, "source")) {
+          dashboard_source_focus_note(snapshot(), selected_focus_variable())
+        }
       )
     })
 
@@ -4461,7 +4513,8 @@ datasetDashboardServer <- function(
           "Source checksum: ",
           value$record$raw_checksum,
           ". This view is not modified by table search, sorting, visibility, ",
-          "or pagination."
+          "or pagination. ",
+          dashboard_source_focus_note(value, selected_focus_variable()) %||% ""
         ),
         heading = "Immutable source data",
         compact = TRUE
@@ -4733,6 +4786,15 @@ datasetDashboardServer <- function(
 
     list(
       event = reactive(event_value()),
+      focus_variable = selected_focus_variable,
+      plot_settings = reactive(list(
+        scale = plot_scale(),
+        symlog_threshold = symlog_threshold(),
+        y_limits = y_axis_limits(),
+        y_scope = y_axis_scope(),
+        domain = preview()$focus_domain,
+        positive_domain = preview()$positive_focus_domain
+      )),
       recommendation = reactive(view_recommendation()),
       request_switch = request_switch,
       switching = reactive({

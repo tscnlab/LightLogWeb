@@ -2635,11 +2635,19 @@ metadata_factual_variable_focus <- function(record, variable) {
   if (length(targets) == 1L) targets[[1L]] else NULL
 }
 
-metadata_resolve_variable <- function(record, variable) {
+metadata_resolve_variable <- function(
+  record,
+  variable,
+  include_preparation = TRUE
+) {
   if (!inherits(record, "llw_dataset_record") || !is.list(record)) {
     abort_llw("A dataset record is required.", type = "validation")
   }
   assert_scalar_string(variable, "variable")
+  if (include_preparation) {
+    derived <- preparation_derived_metadata(record, variable)
+    if (!is.null(derived)) return(derived)
+  }
   candidates <- metadata_variable_candidate_rows(record, variable)
   legacy <- record$factual_metadata$variables[[variable]] %||% list()
   legacy_units <- record$source_manifest$details$units %||% list()

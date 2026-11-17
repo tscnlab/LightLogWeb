@@ -6,6 +6,6 @@
 #' @import LightLogR
 #' @import shiny
 #' @import bslib
-#' @importFrom rlang `%||%`
+#' @importFrom rlang `%||%` .data
 ## usethis namespace: end
 NULL

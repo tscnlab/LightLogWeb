@@ -543,6 +543,73 @@ metadata_overlay_presentation <- function(context, overlay) {
   list(entries = entries, groups = groups, revision = overlay$revision)
 }
 
+metadata_overlay_preparation_catalog <- function(record) {
+  identities <- preparation_metadata_identities(record)
+  # Retain dormant assertion identities for Metadata inspection and Undo. They
+  # are not active focus targets, and a new creator gets a different row key.
+  stored <- record$metadata_bundle$overlay$tables$variables
+  if ("source_scope" %in% names(stored)) {
+    scope <- metadata_overlay_scope(c("llw_preparation", record$id))
+    stored <- stored[
+      which(
+        stored$source_scope == scope &
+          stored$dataset_id == record$id &
+          startsWith(stored$file_group_id, "llw:prepare:")
+      ),
+      ,
+      drop = FALSE
+    ]
+    for (i in seq_len(nrow(stored))) {
+      row <- as.list(stored[
+        i,
+        c("source_scope", "dataset_id", "file_group_id", "name")
+      ])
+      active <- identities[[row$name]]
+      if (
+        !is.null(active) && identical(active$file_group_id, row$file_group_id)
+      )
+        next
+      row$source <- "an earlier preparation recipe"
+      identities[[paste0("retained_", i)]] <- row
+    }
+  }
+  rows <- lapply(identities, function(identity) {
+    fields <- c("label", "unit")
+    keys <- unlist(
+      identity[c("source_scope", "dataset_id", "file_group_id", "name")],
+      use.names = FALSE
+    )
+    dplyr::tibble(
+      target_id = vapply(
+        fields,
+        function(field)
+          paste0(
+            "overlay_target_",
+            digest::digest(c("preparation", keys, field), algo = "sha256")
+          ),
+        character(1)
+      ),
+      source_scope = identity$source_scope,
+      source_label = paste("Prepared variable derived from", identity$source),
+      table = "variables",
+      entity_id = identity$name,
+      dataset_id = identity$dataset_id,
+      participant_id = "",
+      device_id = "",
+      file_group_id = identity$file_group_id,
+      name = identity$name,
+      field = fields,
+      field_label = unname(metadata_overlay_fields()$variables[fields]),
+      cohort = paste("variables", fields, identity$name, sep = "/"),
+      source_value = list(NA_character_, NA_character_),
+      value_type = "character",
+      variable_type = "numeric",
+      source_path = NA_character_
+    )
+  })
+  dplyr::bind_rows(c(list(metadata_overlay_empty_catalog()), rows))
+}
+
 metadata_overlay_context <- function(record) {
   if (!inherits(record, "llw_dataset_record"))
     abort_llw("Select a dataset first.", type = "validation")
@@ -614,6 +681,9 @@ metadata_overlay_context <- function(record) {
     catalog$source_path <- NA_character_
     catalog$source_label <- paste(source$label, "(imported identities)")
   }
+  prepared_catalog <- metadata_overlay_preparation_catalog(record)
+  if (nrow(prepared_catalog))
+    catalog <- dplyr::bind_rows(catalog, prepared_catalog)
   source_index <- metadata_overlay_source_index(bundle$index)
   navigation_targets <- metadata_overlay_navigation_targets(
     source_index,
@@ -627,6 +697,7 @@ metadata_overlay_context <- function(record) {
   structure(
     list(
       dataset_id = record$id,
+      preparation_identities = preparation_metadata_identities(record),
       source_fingerprint = bundle$source_fingerprint,
       catalog = catalog,
       navigation_targets = navigation_targets,
@@ -709,6 +780,10 @@ metadata_overlay_assert_context <- function(record, context) {
   if (
     !inherits(context, "llw_overlay_context") ||
       !identical(context$dataset_id, record$id) ||
+      !identical(
+        context$preparation_identities,
+        preparation_metadata_identities(record)
+      ) ||
       !identical(
         context$source_fingerprint,
         record$metadata_bundle$source_fingerprint
@@ -1016,6 +1091,29 @@ metadata_overlay_preview <- function(
 metadata_overlay_focus_targets <- function(record, context, variable) {
   metadata_overlay_assert_context(record, context)
   assert_scalar_string(variable, "variable")
+  identity <- context$preparation_identities[[variable]]
+  if (!is.null(identity)) {
+    targets <- context$catalog
+    keep <- targets$table == "variables"
+    for (key in c("source_scope", "dataset_id", "file_group_id", "name"))
+      keep <- keep & targets[[key]] == identity[[key]]
+    targets <- targets[keep, ]
+    inherited <- preparation_derived_metadata(
+      record,
+      variable,
+      include_overlay = FALSE
+    )
+    for (field in c("label", "unit")) {
+      value <- inherited[[field]]
+      if (
+        identical(inherited[[paste0(field, "_provenance")]], "Not specified") ||
+          identical(value, "varies by retained source")
+      )
+        value <- NA_character_
+      targets$source_value[targets$field == field] <- list(value)
+    }
+    return(targets)
+  }
   append_sources <- record$provenance$append_merge$source_records %||% list()
   if (length(append_sources) > 0L) {
     explicit <- vapply(
@@ -1888,6 +1986,13 @@ metadata_overlay_replace <- function(
   }
   record$metadata_bundle <- bundle
   record$revision <- record$revision + 1L
+  if (identical(record$draft$kind, "preparation")) {
+    record <- preparation_stage_recipe(
+      record,
+      record$draft$values$recipe,
+      preparation_binding(record)
+    )
+  }
   # Disposable, context-local accounting for one committed bundle only. It is
   # never serialized into the record or used as a source-integrity assertion.
   context$size_cache$bundle <- bundle
@@ -1913,7 +2018,7 @@ apply_metadata_overlay <- function(record, context, preview) {
       type = "validation"
     )
   }
-  if (!is.null(record$draft)) {
+  if (!is.null(record$draft) && !identical(record$draft$kind, "preparation")) {
     abort_llw(
       "Finish or discard the dataset preparation draft before editing metadata.",
       type = "validation"
@@ -1988,7 +2093,7 @@ undo_metadata_overlay <- function(record, context) {
       type = "validation"
     )
   }
-  if (!is.null(record$draft)) {
+  if (!is.null(record$draft) && !identical(record$draft$kind, "preparation")) {
     abort_llw(
       "Finish or discard the dataset preparation draft before undoing metadata.",
       type = "validation"

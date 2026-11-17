@@ -277,7 +277,9 @@ lightlogweb_app <- function(
   max_upload_mb = 200,
   workers = NULL,
   initial_records = list(),
-  registry_loader = glcdp_registry_load
+  registry_loader = glcdp_registry_load,
+  initial_panel = if (length(initial_records)) "metadata" else "Import",
+  preparation_worker = preparation_task_worker
 ) {
   initial_records <- lapply(initial_records, validate_dataset_record)
   runtime_profile <- resolve_runtime_profile(
@@ -296,7 +298,7 @@ lightlogweb_app <- function(
     title = lightlogweb_wordmark(),
     window_title = "LightLogWeb - Make light exposure legible",
     id = "main_nav",
-    selected = if (length(initial_records) > 0L) "metadata" else "Import",
+    selected = initial_panel,
     theme = lightlogweb_theme(),
     navbar_options = navbar_options(theme = "auto", underline = TRUE),
     header = tagList(
@@ -349,6 +351,15 @@ lightlogweb_app <- function(
       )
     ),
     nav_panel(
+      "Prepare",
+      value = "prepare",
+      tags$main(
+        class = "llw-main-shell",
+        `aria-label` = "Prepare the selected dataset",
+        prepare_ui("prepare")
+      )
+    ),
+    nav_panel(
       "Metadata",
       value = "metadata",
       tags$main(
@@ -358,7 +369,7 @@ lightlogweb_app <- function(
           llw_status_callout(
             "idle",
             "Offline integration showcase. Bounded derived fixtures, not complete published datasets or live evidence. Edits are disposable within this session.",
-            heading = "Milestone 7 final integration",
+            heading = "Offline integration showcase",
             compact = TRUE
           ),
         metadata_explorer_ui(
@@ -427,12 +438,12 @@ lightlogweb_app <- function(
     )
     manager <- datasetManagerServer(
       "datasets",
-      datasets = store$datasets,
+      datasets = store$committed_datasets,
       selected_dataset_id = store$selected_dataset_id
     )
     dashboard <- datasetDashboardServer(
       "dashboard",
-      dataset = store$selected_dataset,
+      dataset = store$selected_committed_dataset,
       active_panel = reactive(input$main_nav),
       color_mode = color_mode,
       snapshot_cache_max_bytes = min(
@@ -442,9 +453,31 @@ lightlogweb_app <- function(
       snapshot_cache_max_entries = 3L,
       record_bytes = store$record_bytes
     )
+    prepared <- prepare_server(
+      "prepare",
+      dataset = store$selected_dataset,
+      runtime = runtime,
+      on_commit = store$commit_preparation,
+      on_draft = store$stage_preparation,
+      worker = preparation_worker,
+      active = reactive(identical(input$main_nav, "prepare")),
+      focus_variable = reactive({
+        if (
+          identical(dashboard$ready()$dataset_id, store$selected_dataset_id())
+        )
+          dashboard$focus_variable() else NULL
+      }),
+      plot_settings = reactive({
+        if (
+          identical(dashboard$ready()$dataset_id, store$selected_dataset_id())
+        )
+          dashboard$plot_settings() else NULL
+      }),
+      color_mode = color_mode
+    )
     metadata <- metadata_explorer_server(
       "metadata",
-      dataset = store$selected_dataset,
+      dataset = store$selected_committed_dataset,
       focus_request = reactive(metadata_focus_request_value()),
       editable = TRUE,
       presentation = reactive(editor$presentation()),
@@ -452,7 +485,7 @@ lightlogweb_app <- function(
     )
     editor <- metadata_overlay_server(
       "overlay",
-      store$selected_dataset,
+      store$selected_committed_dataset,
       store$apply_overlay,
       selection = reactive(list(
         group = metadata$selected_group(),
@@ -461,7 +494,7 @@ lightlogweb_app <- function(
     )
     appended <- append_merge_server(
       "append",
-      datasets = store$datasets,
+      datasets = store$committed_datasets,
       selected_dataset_id = store$selected_dataset_id
     )
     pending_name_retry <- reactiveVal(NULL)

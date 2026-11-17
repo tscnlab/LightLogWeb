@@ -1,6 +1,6 @@
 # LightLogWeb full implementation plan
 
-Last updated: 2026-08-31
+Last updated: 2026-11-17
 
 This is the governing implementation plan for LightLogWeb. It is tracked in
 version control but excluded from package builds by the exact
@@ -70,10 +70,11 @@ old dependency choices are not inherited by default.
 
 ### 2.3 GLC/glcdp integration basis
 
-- The integration target is glcdp 1.0.0.9000 at exact Git commit
-  `e49fcf153a114916ce2680f8b40eb475e694e10d`. DESCRIPTION and renv.lock pin
-  that same revision. The Milestone 7 public-API audit on 2026-08-31 found no
-  reason to repin, so the exact-commit policy remains in force.
+- The current integration target is glcdp 1.1.0 at exact Git commit
+  `58a16400dc6d30ec2686ebf1898f938d3721eb2c`, as pinned in DESCRIPTION,
+  renv.lock and manifest.json after the 2026-09-27 registry upgrade. The
+  default registry is https://registry.globallightcommons.org/registry.json.
+  Earlier milestone records retain their historical pins and evidence.
 - glcdp is the sole boundary for GLC registry discovery, immutable validated
   revision selection, Git/Git-LFS transport, schema-normalized inventories,
   metadata reads/search, data import, compatible collection, subset download,
@@ -174,6 +175,143 @@ old dependency choices are not inherited by default.
 - Every feature milestone ends with automated tests, a build-ignored internal
   module showcase, browser inspection, and owner acceptance before the next
   milestone starts.
+- Owner direction, 2026-11-11: the independent review chat must review every
+  revision before it is handed to the owner, including layout and rapid
+  refinement iterations. Programmer checks alone do not satisfy this gate.
+  Resolve blocking review findings and obtain acceptance of the exact candidate
+  before owner handoff; keep the review proportional to the changed surface.
+
+### 2.7 Vision-first delivery from Milestone 9
+
+Owner direction, 2026-11-11: every future milestone starts with **Slice 1:
+Vision and app-context prototype**. This rule begins with Milestone 9. It does
+not restart, renumber, redesign or change the approval gates of the current
+Milestone 8, which the owner is directing separately. The owner has invited the
+Milestone 8 programmer to decide how much of the vision-first, design-led and
+real-world-data guidance is useful for the current task/slice, without a
+mandatory restart. The capability lists in Section 4 remain the scope, not a
+mandatory implementation order.
+
+Start by showing the complete intended user experience, not a collection of
+isolated controls or a technical foundation. The vision is a useful direction,
+not a fixed final layout. A short read-only capability and feasibility audit
+may inform it, but must not turn into substantial implementation before the
+owner can see and assess the direction.
+
+**The vision slice is design-led.** Its primary deliverable is a clear,
+usable concept for the whole workflow, not technical completeness. Established
+UI, interaction-design and UX principles must guide the structure before
+implementation convenience determines it. Scientific meaning and safety remain
+constraints throughout. These principles also apply to later slices, but the
+vision slice is where the main design decisions receive the most attention:
+
+- Organize the interface around user goals and familiar concepts, not internal
+  modules or a form exposing every function argument.
+- Establish clear information hierarchy, a visible next action and enough
+  nearby context to make each choice understandable. Prefer recognition over
+  remembering settings from another screen.
+- Keep the common path short. Reveal advanced choices when relevant without
+  hiding scientifically consequential assumptions, scope or defaults.
+- Make current state, feedback, error prevention, recovery and reversibility
+  part of the proposed flow, not details added at the end.
+- Design keyboard access, focus, readable contrast and responsive behaviour
+  from the beginning. Use consistent language, spacing and controls from the
+  existing app design system rather than introducing a separate visual style.
+- Show useful results and the effect of choices close to the controls when
+  that helps understanding. Keep dense detail available without overwhelming
+  the main task.
+
+Resolve workflow and information structure before fine visual polish. Where a
+major interaction choice is unclear, compare a small number of lightweight
+alternatives and explain their tradeoffs. The vision brief records the main
+design decisions and why they suit LightLogWeb's users. A first-time-user
+walkthrough must test whether the intended task, current state, next action,
+result and recovery route are clear; attractive screenshots alone are not
+sufficient. Do not add design machinery or extra controls merely to satisfy a
+generic checklist.
+
+The vision slice contains three connected deliverables:
+
+1. **A short vision brief.** Explain:
+   - the user's goal, what a successful result looks like, and what is outside
+     the milestone;
+   - the complete journey from entry to useful output, including one ordinary
+     case and one more demanding case;
+   - where the feature belongs in the app, what it takes from earlier work,
+     what it passes to later work, and how the user returns without losing
+     context;
+   - how complexity is managed: a simple default path, advanced choices shown
+     when needed, clear prerequisites, and helpful incomplete/error states;
+   - the moving parts in plain language: inputs, settings, draft and committed
+     state, operations, outputs and dependencies, including which changes
+     invalidate results and which do not;
+   - the intended straightforward R/tidyverse/public LightLogR workflow, and
+     which interactions should be immediate versus explicit background work.
+     Keep app safety and task handling separate from the scientific steps.
+2. **A lightweight app-context prototype.** Prefer a runnable, clickable
+   Shiny demonstration using the existing design system and real-world data or
+   documented participant subsets under Section 2.8. Show it in the current app
+   shell or a clearly identified development shell that preserves the relevant
+   navigation and neighbouring sections. The owner must be able to understand
+   the intended end-to-end workflow before detailed implementation. Use
+   recorded results from those data or clearly labelled unimplemented UI
+   placeholders where needed; distinguish working, simulated and undecided
+   interactions. Do not invent measurements to make the main journey look
+   complete or build the whole backend just to make the prototype appear
+   finished. No new live-data access or production integration is implied.
+3. **An implementation-slice map.** Derive the remaining slices from that
+   overall journey. For each slice, name the useful outcome, dependencies,
+   important risks and acceptance checks. Show how the slices build toward
+   the proposed whole rather than presenting unrelated technical tasks.
+
+The independent reviewer first checks whether the vision is understandable,
+fits the app, makes the main components and boundaries clear, and handles
+complexity sensibly, using the design priorities above in concrete user
+journeys. The owner then approves or revises that direction before
+the first implementation slice begins. Vision acceptance is not proof of
+scientific correctness, performance or production readiness; simulated output
+cannot count as functional evidence. Later slices still require the normal
+R tests, performance checks, frozen-build review and owner acceptance.
+
+Keep the vision visible as development progresses. Every later showcase must
+locate the completed work within the full intended workflow and state what is
+working, still provisional or not yet implemented. Record meaningful changes
+to the vision and their reasons. Seek owner agreement when they change the
+user workflow, scientific meaning or milestone scope; do not turn the initial
+prototype into an inflexible layout requirement. Full production integration
+still occurs at its explicitly agreed gate.
+
+### 2.8 Real-world data as the milestone default
+
+Owner direction, 2026-11-11: use the available real-world data for milestone
+design, prototypes, ordinary development journeys, demonstrations and
+acceptance. Synthetic data are an exception for proving a specific point or
+testing an edge case, not the default material for building the feature.
+
+- Reuse existing authorized local datasets and retained public-data snapshots.
+  Offline real-world fixtures are suitable; fresh network access is not a
+  prerequisite. Keep their provenance and known limitations visible.
+- When computation would be too expensive, use a reproducible subset of a few
+  participants. Retain enough of their recordings to exercise the actual
+  workflow, including relevant days, windows and source variation. A few
+  initial rows per file cannot establish full-day or long-duration behaviour.
+- Preserve the real values and relevant characteristics, including missing
+  values, gaps and irregularity. Do not silently clean away the features that
+  make the example realistic. Document the source/version, participant and
+  file selection, retained variables and any time restriction. Perform data
+  subsetting and verification in R.
+- Every synthetic fixture must have a named purpose, such as an exact boundary,
+  a rare DST case, controlled failure or a defined scaling experiment. Label
+  it as synthetic and state the point it proves. It supplements, rather than
+  replaces, the ordinary real-data journey. Focused unit tests may use these
+  small constructed cases.
+- The independent reviewer exercises the primary journey with real-world data
+  and suitable variation. Synthetic edge-case passes alone do not establish
+  milestone usability or readiness. Label subsets as subsets, and do not
+  present their runtime as evidence for a complete dataset or larger workload.
+- Data choice remains subject to existing access, privacy, licence and resource
+  limits. Prefer the available retained data; obtain separate authorization
+  when an additional live transfer or other new data access is needed.
 
 ## 3. Public and internal contracts
 
@@ -1519,6 +1657,353 @@ Slice 1 evidence:
 - tests/testthat/fixtures/milestone-7/manifest.json
 
 ### Milestone 8 — Recipe-based preprocessing
+
+Closed, 2026-11-17: the owner accepted Slice 5 R14 and authorized committing and
+pushing the completed milestone. All five slices are accepted. The final
+candidate passed 1,328 focused assertions, 44 independent metadata contracts
+and independent responsive/browser review. The accepted frozen source index is
+`d0d71ba567501bcef3fef479a1ca1eae50bc4c5a3af35b6fa3adce209b7ebdc0`.
+Deferred narrow-layout notes remain nonblocking. Detailed evidence and the
+acceptance record are in `dev/milestone-8-recipe-preparation.md`.
+
+The next authorized work is a separate experimental Prepare user-journey
+redesign, beginning after the milestone commit. It changes presentation and
+navigation while preserving the accepted preparation engine and operation
+semantics. It is not Milestone 9 and does not authorize deployment. The accepted
+R14 showcase remains available for comparison. This closeout supersedes the
+pending acceptance and authorization statements in the history below.
+
+Historical review progression:
+
+Subsequent owner retest, 2026-11-17: R13 fixes hidden date-control resets that
+cancelled automatic preview after the duration/range/variability sequence, and
+adds independent metadata editing for Prepare-created variables. Assertions are
+scoped to the dataset and creator; source metadata and history remain intact.
+Independent review confirmed both reported flows. R14 corrects its nonlinear
+parent-unit inheritance follow-up and adds the owner's bounded presentation-only
+Prepare cleanup. Inputs, defaults and outputs are structurally unchanged. Final
+independent checks and owner retesting remain required; Slice 5 stays open.
+
+R14 handoff: independent review accepts the frozen candidate for owner final
+review. The consolidated focused suite passes 1,328 assertions and the reviewer
+passes 44 independent metadata contracts plus the six-width light/dark browser
+checks. The showcase is `http://127.0.0.1:7455/`; only that instance remains running.
+The 221-file source index is
+`d0d71ba567501bcef3fef479a1ca1eae50bc4c5a3af35b6fa3adce209b7ebdc0`.
+Dense 1024-pixel wrapping and earlier owner-deferred mobile notes remain
+nonblocking. The report and sealed evidence are retained in the independent
+review chat's `m8-s5-integration-20261117-r14-review` folder. The two presentation
+files have a separate patch so that the owner can assess that bounded proposal
+independently of the fixes. Slice 5 remains open until the owner's acceptance.
+
+Current owner review, 2026-11-17: Slice 5 remains open. The owner reviewed R7 and
+authorized the accumulated feedback for R8: elapsed 24-hour days by default,
+preview-queue recovery, non-dirty operation browsing, an explicit Save-and-preview
+action, visible busy status, taller plots, bottom legends, Only-step comparisons,
+and optional split plots with each stage's time zone. Apply synchronizes the
+Dashboard's derived focus and time zone. Zero-inflated log/inverse operations
+use LightLogR with recorded base and offset. Long axis labels wrap and the
+missingness denominator choices use the owner's wording. Independent review
+and the revised showcase precede the owner's retest; this is not slice closeout.
+Final review corrections in R9 include automatic axes covering transformed
+values, nearest-ancestor focus after removing a derived branch, and clean editor
+restoration after Dashboard focus changes while retaining genuine unsaved edits.
+Independent R9 review cleared these functional corrections. R12 aligns the
+time-zone fields when their labels wrap, separates plot caption lines and
+clarifies Save-and-preview guidance. Independent presentation review passed R12
+at the six required widths with light/dark samples. The final owner showcase is
+`http://127.0.0.1:7453/`; obsolete runtimes are closed. The 320-pixel empty-stage
+subtitle note remains nonblocking. Slice 5 is open pending the owner's retest.
+
+Latest gate, 2026-11-16: the owner accepted Slice 4 r6 and authorized Slice 5,
+including independent review before handoff. Slice 4 is closed. Slice 5 now
+covers full-app Prepare/library/dashboard wiring, shared focus and plot settings,
+effective metadata labels/units, retained recipe drafts, task recovery and
+performance/responsive verification. Project/script export stays in Milestone 13.
+Independent R3 review closed derived Dashboard focus/labels, summary-card layout
+and stale-draft restoration after Reset. It identified R37: reordering took
+171.6 ms p95 when required browser acknowledgement work was included. R4 retains
+those updates but avoids unchanged control/catalogue and date-widget rebuilds.
+Its complete local matrix reached 96.8 ms p95, but independent R4 review measured
+108 ms at 250k and retained R37. The affected functional and layout checks passed.
+R5 keeps clean editor acknowledgements from redrawing unchanged dirty-state
+outputs. Saved-step reordering can replace an outstanding clean editor update;
+unsaved edits remain protected and Save/Apply still wait for acknowledgement.
+Independent R5 review retained R37 at 102.4 ms and opened R38 for unexpected user
+input lost during a pending control update. R6 merges that input into the draft
+transaction, including across dataset switches, and batches stable UI state.
+It reclaims temporary objects after full refreshes, avoiding major-GC pauses in
+subsequent ordinary edits at the cost of cleanup time at refresh completion.
+Independent R6 review passes the complete performance gate at a maximum p95
+of 83.8 ms, but retains R38 for returning an acknowledged field to its former
+value while another field is pending. R7 retires old values per field after
+acknowledgement or a captured user edit. All 11 full-parent draft-preservation
+checks now pass. Its complete local 25k/250k control matrix has a maximum p95
+of 67.6 ms, including acknowledgements, with no source-payload decoding or
+Dashboard rebuilds. The R7 consolidated suite passes 3,964 assertions in 257
+cases, with three expected cancellation warnings and no failures, errors or
+skips. Independent R7 review accepts the candidate for owner final review:
+R38 closes with 14 state checks and the browser Save/reorder/Apply flow; the
+complete timing gate passes with a maximum p95 of 72.2 ms. The source-package
+R3 check was Status: OK. The owner deferred their review until later and asked
+for all instances closed. Servers 7433/7437/7440/7449 and showcase tabs are
+stopped; frozen R7, its evidence and restart instructions are saved. Slice 5
+owner acceptance remains pending.
+No commit, push or deployment is authorized.
+
+Historical Slice 4 handoff, 2026-11-16: Slice 3 was accepted and closed, including the final
+conditional gap-legend refinement independently accepted in
+`m8-s3-gap-marks-20261116-r2`. The owner authorized Slice 4 aggregation.
+The owner chose to keep low-coverage aggregates and report coverage separately,
+and clarified that simple controls must still allow multiple aggregation steps.
+Slice 4 uses public LightLogR aggregation with explicit numeric and NA policies,
+actual local bin windows, bounded coverage reports, and compact source-to-bin
+provenance. Fresh-from-source one-hour-to-fifteen-minute parity is a required
+acceptance check. Candidate `m8-s4-aggregation-20261116-r6` passed independent
+review and awaits owner acceptance at `http://127.0.0.1:7440/`. R31, R32 and R33
+are closed. The owner's follow-up refinements add prominent failure alerts,
+simple categorical/logical summaries, numeric sum and an optional row-based
+missingness limit. The limit counts NA among existing readings; the UI explains
+that Gaps must precede Aggregate to count absent timestamps. Inactive invalid
+limits do not block another missing-data policy. Existing defaults and multiple
+aggregation steps remain supported. Consolidated affected verification contains
+1,804 passing assertions across 128 cases, with no failures/errors/skips and
+three expected cancellation warnings. Independent review adds 125 refinement
+checks, 24 final correction checks, browser recovery and six responsive widths.
+The existing 320 px summary-number alignment note remains deferred. The detailed
+contract and durable evidence are in `dev/milestone-8-recipe-preparation.md` and
+the frozen r6 artifact. Superseded runtimes 7438/7439 are stopped; owner drafts
+7433/7437 remain untouched. Slice 4 is open for owner acceptance; full-app
+integration remains Slice 5.
+
+Prior progression: the owner accepted independently reviewed Slice 1 r9b,
+closed Slice 1 and authorized Slice 2 (measurement values). Slice 2 r3 has now
+passed independent review, including the owner-requested operation choices
+and coverage duration thresholds. The owner's further request for derived
+measurement variables, editable collision-free defaults, inherited metadata and
+transformation history has passed independent review on frozen build
+`m8-s2-r7-bcedbce71b7f`. Recovery issues R13-R15 are closed. Three nonblocking
+layout notes remain at 320-336 pixels. The owner then requested a two-input
+Target variable / Write to editor, connected variable chains across edits and
+reordering, globally centered dropdowns and a taller plot using dashboard axis
+settings. That refinement passed independent review on frozen build
+`m8-s2-r10-dcc985cff4e9` at port 7416. Full-app
+axis wiring remains part of Slice 5; the modules now expose the reactive contract.
+The owner explicitly accepted this boundary and requires the integrated preview
+to inherit both the dashboard focus variable and plot settings. Participant/day
+selection remains local; other relevant display preferences will be assessed at
+integration. Frozen candidate `m8-s2-r8-14de6805ddc1` passes 1,663 assertions in
+130 affected test blocks. Independent review found R17, an exact-category editor
+loading failure after reorder. The follow-up preserves saved categories that are
+absent from the new input catalog. R9 passes 333 focused assertions, and its
+browser recheck preserves categories, completes editor loading and restores the
+original recipe on Undo. R17 and R18 (compact dashboard selector wrapping) are
+closed. R10 passes focused dashboard checks at desktop/390/320 pixels and a
+derived-variable Prepare journey through Apply. Independent R verification
+covers 20 chain scenarios and 12 plot-setting combinations. Minor R16 totals
+alignment at 336 pixels remains nonblocking. The M8 note records the frozen
+identity, acceptance report hash and runtime cleanup. Owner acceptance is pending.
+The owner's r11 follow-up corrects inactive variable-tool defaults when reopening
+a later saved step: use the preceding recipe context while retaining explicitly
+saved selections. The same defaults now refresh after direct Save as new step
+(r11 review finding R20). Recipe controls text is also enlarged. The owner added
+a Variability operation: elapsed-time SD or CV, separate pinned source channel,
+target/output lineage, adjustable 80% window coverage, and reported unevaluable
+windows that leave target values unchanged. This follow-up passes independent
+review on frozen `m8-s2-r13-1946f73d90c0` at port 7420: 46 independent numerical
+fixtures, real-data SD/CV browser parity, source fallback and recovery, and phone
+layout checks. The programmer's r13 focused suite passes 108 assertions; the
+964-assertion r12 suite remains supporting evidence. Long Measures diagnostic
+labels still need horizontal scrolling, a nonblocking layout note. Owner 7416
+is preserved; released review runtimes are stopped. The owner's subsequent
+create-then-switch issue passes independent review on frozen r14,
+`m8-s2-r14-4cd689ffc532` at port 7421: saving a new-variable creator
+now prepares a next-step draft with that output selected, while Edit restores
+the creator's original inputs. A separate read-only slider performance/outcome
+comparison passed independent methodological review with documented threshold,
+adapter and run-provenance limitations. It changes no production engine or
+dependency. The r14 focused suite passes 493 assertions in 46 blocks; browser
+review confirms defaults, saved creator inputs, collision refusal, Undo/Apply
+recovery and the 320-pixel layout.
+Owner acceptance is pending. Every
+slice requires independent acceptance followed by owner acceptance before the
+next slice begins. Full application wiring is Slice 5. No commit, push or
+deployment is authorized by this milestone gate.
+
+On 13 November the owner authorized the vector-storage optimization and requested
+independent review before the updated showcase. R15 changes only rolling result
+storage, preserving the numerical operations and return contract. Exact parity,
+fresh fingerprinted performance evidence and a focused browser check are the
+acceptance requirements. R15 passed independent review as the storage-only
+baseline, with exact parity and the source/derived-variable, Apply and Reset
+journeys verified. The owner then requested an explicit unevaluable-window policy:
+keep target unchanged by default, or set target to NA. R16 adds this choice with
+versioned recipe/history support and passed focused independent review as the
+intermediate baseline. The owner also requested independent numeric/categorical condition
+sources for Valid range. R17 adds pinned check sources, lineage fallback,
+matching/non-matching conditions and explicit missing-source handling, preserving
+legacy range recipes and the optimized rolling engine. The combined candidate
+`m8-s2-r17-f3ebdb5e9888` at port 7424 passed independent review, including 64
+complete-output condition cases, source fallback and visible keyboard/Edit/Apply/
+Reset/Transform journeys. The focused suite passes 921 assertions in 64 blocks.
+Acceptance report:
+`/Users/zauner/.codex/visualizations/2026/09/28/01a0e6e3-2a52-7a11-a322-1c2dc553b423/m8-s2-r17-review/review-acceptance.md`,
+SHA-256 `9cc026bccd6e31da77dcfcc8b6ad948d5396e68ac5e1422019a4525c99479074`.
+Released review runtimes 7422/7423 are closed; owner draft sessions are preserved.
+The owner accepted Slice 2 on 2026-11-13. The reviewed source remains frozen;
+closeout changes only the acceptance records and manifest. No slider dependency
+or algorithm replacement was introduced.
+
+The owner additionally requires simple, learnable R: short explicit functions,
+existing tidyverse components and documented public LightLogR calls. Each step
+must have a readable plain-R equivalent and a versioned public-call mapping
+with explicit arguments. Complete-recipe parity tests use independently
+written R pipelines. Safety checks, provenance, resource control and reactive
+orchestration remain separate from the scientific pipeline. Do not introduce a
+generic workflow framework, expression language, arbitrary R evaluation, a
+whole-tidyverse dependency or unapproved dependency changes. Milestone 13 owns
+script/project export UI.
+
+1. Recipe foundation and selection: ordered add/edit/reorder/enable/disable/
+   remove, participant selection, date/datetime ranges, recurring cross-midnight
+   clock windows, Preview, Apply, Reset and Undo.
+2. Typed conditions, numeric filtering/invalidation and explicit calibration.
+3. Time integrity and gaps: DST diagnosis/correction, timezone semantics,
+   marked gap expansion and resource estimates.
+4. Aggregation, intended-window coverage and observed-duration rules, including
+   fresh-from-raw one-hour versus fifteen-minute parity.
+5. Full-app integration and hardening: dashboard/library, metadata compatibility,
+   task recovery, performance/responsiveness and retained serializable recipe.
+
+The bounded Slice 1 contract, startup baseline and verification record are in
+`dev/milestone-8-recipe-preparation.md`. Independent r1 review requested three
+corrections: action-local feedback, settled cancellation feedback, and truthful
+selection scope/temporal diagnostics when file identity is absent. Revision r2
+addresses these within Prepare and has 174 passing focused assertions. The
+independent r2 re-review accepted build `m8-s1-r2-ca277661989a` for the owner's
+final check and closed R01-R03 and R05. Owner acceptance is pending. The packaged
+suite retains its known GLC retry failure. No later slice is authorized by these
+checks or by independent acceptance.
+Owner feedback on the r2 showcase accepts the broad functionality but requests
+bounded dashboard-style date pickers, native date/clock selection, separate
+date/time/native-or-Olson-zone controls for both datetime endpoints, a clearer
+editing/preview layout, and duration selection from either end with overall or
+per-dataset scope. Slice 1 revision r3 implemented these requests; its independent
+review passed the controls and requested one date-recovery correction, R06.
+Revision r4 adds field-specific available-range guidance and an eligible month
+when a cleared picker opens, without substituting a date. Focused r4 checks pass
+257 assertions. The independent r4 review accepted build `m8-s1-r4-20456c80a1c9`
+and closed R06 after both date-recovery paths, mouse Save and endpoint Edit
+passed. Owner acceptance of the controls and provisional layout is pending.
+Ordinary edit p95 is 51 ms, above the 50 ms target and below the 100 ms hard gate.
+R2's independent acceptance applies only to its preserved snapshot. Duration now
+offers elapsed units and whole local calendar days, from either end, with
+explicit overall, source-dataset, participant and retained-identity scopes.
+Source-dataset scope requires complete retained source identifiers. Explicit
+`with_tz` (preserve instants) and `force_tz` (preserve wall-clock readings)
+operations are recorded for Slice 3 rather than silently altering timestamps.
+The owner's earlier mockups are selective inspiration. Prepare changes the
+observations; Group defines analysis units in Milestone 9. The clock control
+now explicitly describes row filtering. Effective variable labels/units remain
+an open, nonblocking reviewer requirement to carry into Slice 5 integration.
+On 2026-11-11 the owner requested a further layout iteration before moving on.
+The isolated showcase now uses numbered selection and recipe-review cards with
+an adjacent impact preview, and defaults to four participants from the standard
+IZTECH fixture. This exposed a grouped-input clock-mask defect, corrected within
+the existing selection pipeline with independent R parity checks. Focused checks
+pass 263 assertions; browser checks cover the revised flow, Apply/Undo and narrow
+stacking. This workspace iteration is provisional and is not covered by r4's
+independent acceptance. The owner subsequently required independent review before
+every handoff, including layout iterations. Frozen r5 build
+`m8-s1-r5-91bbda0c35f1` has now passed that independent review: no new functional
+or alignment blocker across six widths, protected R01-R03/R05/R06, and independent
+R parity for the real grouped-data daytime and overnight selections. Existing
+narrow-table readability and R04 labels/units remain nonblocking integration
+notes. All 200 frozen file hashes matched before and after review. The M8 note
+records the report and evidence. Owner acceptance, Slice 2 and full-app
+integration remain gated.
+The owner then completed another feedback batch authorizing the one-recipe
+layout and automatic-preview revision, plus typed variable/NA, photoperiod and
+daily coverage filters. Frozen r6 build `m8-s1-r6-fcb0da9ce616` has passed
+independent review for owner design feedback. It moves
+the editor to the full left column and the recipe and overlaid day preview to
+the right, keeps Apply/Reset visible, removes the data-loss acknowledgement,
+and shows per-step removal and applied/preview status. Repeated Apply starts
+from the original source. The other transformation slices remain deferred;
+no full-app integration is authorized. The independent pass found no new
+acceptance or alignment defect across six widths and verified new-filter,
+source-row and per-step-denominator parity in R. All 204 frozen files remained
+unchanged; r5 is preserved. Focused checks pass 307 assertions. The real-worker
+automatic-preview benchmark passes the 100 ms p95 limit at 73 ms for 250k rows
+and 84 ms for 1m, while missing the 50 ms target. Narrow sample-table readability
+is resolved in the exercised views; R04 metadata integration remains nonblocking.
+The M8 note records the exact report and evidence. Owner design acceptance
+is pending.
+The subsequent r7 owner refinement moves the recipe below a natural-height
+editor and places impact at the top right, with compact toolbar and plot controls
+so common editor controls and the full plot fit together on a laptop viewport.
+It reuses dashboard symlog axis behavior with threshold 1 for this showcase.
+Focused R, Sass and responsive checks plus independent review are required;
+the full regression suite and resource benchmark are deferred during this
+bounded layout iteration. R6 remains frozen and preserved.
+The independent review prompted two bounded follow-ups: a shorter plot clears
+the fixed footer at 1366 by 768, and an unchanged preview no longer leaves the
+participant/day controls waiting indefinitely for browser acknowledgement.
+The latter has a module regression and a focused preparation test rerun,
+passing 311 assertions in 33 blocks. Frozen r7c (`m8-s1-r7c-66cfb8c68b5f`)
+passed independent re-review, closing M8-S1-UX-R07 and R08. The complete plot
+and both save buttons fit at actual CSS viewports 1280 by 800 and 1366 by 768;
+manual selectors recover after refresh, disable and Undo. Owner design feedback
+is next, with full-app integration still pending. The M8 note records the exact
+source index, review report and preserved evidence.
+The owner's subsequent r8 feedback clarifies the duration scope as "Per recording"
+with plain-language help and expands the recipe action buttons across each row.
+The combined revision also adds whole-group coverage with or without gap
+handling, using the current dataset groups as the owner explicitly requested,
+and a default-on automatic informative-day checkbox that switches off when
+the participant or date is manually selected. Frozen r8b
+(`m8-s1-r8b-c4ab4fd965e5`) passed independent review, with 18 independent
+coverage comparisons and 401 focused test assertions passing. Responsive
+action rows and automatic/pinned behavior through recipe edits, Apply and
+dataset reset passed. The exact source and report hashes are recorded in the
+M8 note. The owner superseded the
+earlier close/advance instruction: Slice 1 stays open for one final comprehensive
+view, and Slice 2 remains deferred. Sections 2.7 and 2.8 are adopted here through
+the existing compact design and the four-participant IZTECH primary journey,
+with synthetic fixtures limited to named edge cases. M8 is not restarted or
+expanded with a new vision slice.
+Further r9 owner feedback adds an explicit current-group duration scope,
+renames the existing recording scope to "Per participant and file", centers
+filter button contents, and keeps removed applied steps visible as pending
+removals until Apply. Group definition controls remain in Milestone 9.
+R9b passed independent review and was accepted by the owner on 2026-11-12.
+Slice 1 is closed. The accepted build is `m8-s1-r9b-6eb6a5f6c7dd` at port 7403.
+The M8 note records source and report hashes, 473 passing focused assertions,
+40 independent duration comparisons and browser acceptance. The owner
+explicitly authorized the `sortable` dependency for
+drag-and-drop ordering, with Earlier/Later keyboard controls retained and
+reordering connected to automatic preview and recipe Undo.
+Slice 2 now adds range invalidation and explicit multiplier/offset calibration
+in Measurement values, plus transformed-value previews and counts. Typed
+filtering is already covered by accepted Slice 1. Build
+`m8-s2-r2-e360c61a912d` passed independent review at port 7406, with 555 focused
+assertions and six supplied independent IZTECH pipelines passing. It also
+implements the owner's equal-height editor/preview cards, full-width recipe
+below, and recipe/navigation split with Apply/Reset inside the card. R09
+worker error guidance and R10 badge alignment are closed; R11 narrow-caption
+fit and the known R04 metadata integration item remain nonblocking. The M8
+note records the frozen identity and evidence. Later slices remain gated.
+The owner then requested additional mathematical transformations and duration
+coverage thresholds. Revision `m8-s2-r3-761164f70f3f` at port 7407 passed
+independent review: 712 focused assertions in 52 blocks, 22 independent
+transformation pipelines and 63 independent coverage comparisons. Coverage
+failure now explicitly removes the entire current group or local group/day;
+minimum available and maximum missing duration are supported. Scale/offset,
+logarithm, root, power, exponential and absolute value use typed arguments and
+explicit invalid-result handling. Two minor 320 px fit issues are recorded in
+the M8 note. Owner acceptance remains pending; later slices are gated.
+The following original requirements
+continue to govern the complete milestone.
 
 1. Support ordered steps for participant selection, date/datetime ranges,
    recurring cross-midnight clock windows, typed conditions, numeric range

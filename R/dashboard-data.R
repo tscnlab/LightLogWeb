@@ -98,7 +98,13 @@ dashboard_valid_timezone <- function(value) {
 }
 
 dashboard_display_timezone <- function(record, data) {
+  changed_zone <- any(vapply(
+    record$recipe$steps,
+    function(step) isTRUE(step$enabled) && identical(step$type, "timezone"),
+    logical(1)
+  ))
   candidates <- c(
+    if (changed_zone) lubridate::tz(data$Datetime),
     record$analysis_settings$analysis_timezone %||% NA_character_,
     record$source_manifest$source_timezone %||% NA_character_,
     lubridate::tz(data$Datetime)
@@ -219,6 +225,10 @@ dashboard_variable_metadata <- function(record, variable) {
     label_provenance = resolved$label_provenance,
     unit_provenance = resolved$unit_provenance,
     calibration_provenance = resolved$calibration_provenance,
+    source_variable = resolved$source_variable,
+    inherited_metadata = resolved$inherited_metadata,
+    inherited_factual_metadata = resolved$inherited_factual_metadata,
+    transformation_history = resolved$transformation_history,
     conflict = resolved$conflict,
     candidates = resolved$candidates,
     target = resolved$target
@@ -1151,6 +1161,7 @@ dashboard_daily_coverage <- function(
 #' between consecutive timestamps, so ordinary phase shifts are diagnostics
 #' rather than missing epochs. "full_days" adds participant-local boundary
 #' padding to that same interval accounting.
+#' @noRd
 dashboard_focus_missingness <- function(
   data,
   quality,
@@ -1641,6 +1652,16 @@ dashboard_dataset_snapshot <- function(record) {
     raw_data,
     lubridate::tz(raw_data$Datetime)
   )
+  prepared_quality <- if (
+    identical(record$raw_payload, record$prepared_payload)
+  ) {
+    quality_info$quality
+  } else {
+    summarize_raw_import_quality(
+      prepared_data,
+      lubridate::tz(prepared_data$Datetime)
+    )
+  }
   raw_local_dates <- as.Date(
     lubridate::with_tz(raw_data$Datetime, tzone = timezone),
     tz = timezone
@@ -1662,11 +1683,16 @@ dashboard_dataset_snapshot <- function(record) {
     record,
     prepared_data
   )
+  derived_focus_variables <- intersect(
+    names(preparation_variable_lineage(record$recipe)),
+    dashboard_numeric_focus_variables(prepared_data)
+  )
   focus_variables <- names(prepared_data)[
     names(prepared_data) %in%
       unique(c(
         focus_variables,
-        mapped_focus_variables
+        mapped_focus_variables,
+        derived_focus_variables
       ))
   ]
   if (!primary_variable %in% focus_variables) {
@@ -1680,7 +1706,7 @@ dashboard_dataset_snapshot <- function(record) {
   )
   coverage <- dashboard_daily_coverage(
     prepared_data,
-    quality_info$quality,
+    prepared_quality,
     timezone,
     focus_variable = primary_variable
   )
@@ -1721,6 +1747,7 @@ dashboard_dataset_snapshot <- function(record) {
       variable_metadata_provenance = variable_metadata$provenance,
       variable_inventory = inventory,
       quality = quality_info$quality,
+      prepared_quality = prepared_quality,
       quality_origin = quality_info$origin,
       coverage = coverage,
       recipe = dashboard_recipe_summary(record),
@@ -1733,6 +1760,39 @@ dashboard_dataset_snapshot <- function(record) {
   )
 }
 
+dashboard_stage_focus <- function(snapshot, focus_variable, data_stage) {
+  if (
+    !is.character(focus_variable) ||
+      length(focus_variable) != 1L ||
+      is.na(focus_variable)
+  )
+    return(focus_variable)
+  if (
+    identical(data_stage, "source") &&
+      !focus_variable %in% names(snapshot$raw_data)
+  ) {
+    lineage <- preparation_variable_lineage(snapshot$record$recipe)[[
+      focus_variable
+    ]]
+    if (!is.null(lineage) && lineage$source %in% names(snapshot$raw_data)) {
+      return(lineage$source)
+    }
+  }
+  focus_variable
+}
+
+dashboard_source_focus_note <- function(snapshot, focus_variable) {
+  source <- dashboard_stage_focus(snapshot, focus_variable, "source")
+  if (identical(source, focus_variable)) return(NULL)
+  paste0(
+    "The source has no ",
+    focus_variable,
+    "; showing its original variable ",
+    source,
+    "."
+  )
+}
+
 dashboard_focus_view <- function(
   snapshot,
   focus_variable = snapshot$primary_variable,
@@ -1742,6 +1802,7 @@ dashboard_focus_view <- function(
     abort_llw("`snapshot` must be a dashboard snapshot.", type = "validation")
   }
   data_stage <- match.arg(data_stage)
+  focus_variable <- dashboard_stage_focus(snapshot, focus_variable, data_stage)
   data <- if (identical(data_stage, "source")) {
     snapshot$raw_data
   } else {
@@ -1772,13 +1833,10 @@ dashboard_focus_view <- function(
       )
     )
   }
-  quality <- if (
-    identical(data_stage, "source") ||
-      identical(snapshot$record$raw_payload, snapshot$record$prepared_payload)
-  ) {
+  quality <- if (identical(data_stage, "source")) {
     snapshot$quality
   } else {
-    summarize_raw_import_quality(data, snapshot$display_timezone)
+    snapshot$prepared_quality
   }
   metadata <- dashboard_variable_metadata(snapshot$record, focus_variable)
   missing_count <- sum(is.na(data[[focus_variable]]))
@@ -3679,6 +3737,7 @@ dashboard_elapsed_axis_labels <- function(value) {
 #'
 #' Returns a non-throwing validation state so Shiny can surface user-input
 #' errors next to the controls before attempting to draw the plot.
+#' @noRd
 dashboard_y_axis_limits <- function(
   minimum = NULL,
   maximum = NULL,
@@ -4787,6 +4846,7 @@ dashboard_datatable <- function(
 
 dashboard_main_columns <- function(snapshot, focus_variable, data_stage) {
   data_stage <- match.arg(data_stage, c("preprocessed", "source"))
+  focus_variable <- dashboard_stage_focus(snapshot, focus_variable, data_stage)
   data <- if (identical(data_stage, "source")) {
     snapshot$raw_data
   } else {

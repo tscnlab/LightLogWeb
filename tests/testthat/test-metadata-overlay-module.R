@@ -60,6 +60,68 @@ test_that("Dashboard quick dialog is atomic, recoverable and never writes on ope
   )
 })
 
+test_that("quick editor refreshes cached identities after Prepare creates a variable", {
+  source <- m8_record()
+  current <- shiny::reactiveVal(source)
+  commit <- function(context, preview = NULL, undo = FALSE) {
+    value <- shiny::isolate(current())
+    value <- if (undo) undo_metadata_overlay(value, context) else
+      apply_metadata_overlay(value, context, preview)
+    current(value)
+    value
+  }
+  shiny::testServer(
+    metadata_overlay_server,
+    args = list(dataset = current, apply_callback = commit),
+    {
+      returned <- session$getReturned()
+      session$flushReact()
+      returned$open_focus(source$id, "MEDI")
+      expect_true(returned$status()$editing)
+      session$setInputs(focus_discard = 1L)
+      creator <- new_preparation_step(
+        "calibrate",
+        list(
+          variable = "MEDI",
+          multiplier = 2,
+          offset = 0,
+          reference = "",
+          output = "MEDI_processed"
+        ),
+        m8_context(source)
+      )
+      applied <- m8_preview(source, new_recipe(list(creator)))$candidate
+      current(applied)
+      session$flushReact()
+      returned$open_focus(source$id, "MEDI_processed")
+      expect_true(returned$status()$editing)
+      expect_identical(focus_draft()$variable, "MEDI_processed")
+      expect_length(focus_draft()$context$preparation_identities, 1L)
+      session$setInputs(
+        focus_label = "Processed signal",
+        focus_unit = "lx",
+        focus_save = 1L
+      )
+      expect_false(returned$status()$editing)
+      expect_identical(
+        metadata_resolve_variable(current(), "MEDI_processed")$label,
+        "Processed signal"
+      )
+      expect_identical(current()$prepared_payload, applied$prepared_payload)
+      expect_identical(
+        metadata_resolve_variable(current(), "MEDI")$label,
+        "MEDI"
+      )
+      returned$open_focus(source$id, "MEDI_processed")
+      expect_identical(
+        focus_draft()$state$fields$label$value,
+        "Processed signal"
+      )
+      session$setInputs(focus_discard = 2L)
+    }
+  )
+})
+
 test_that("overlay module previews batch defaults and applies only reviewed inputs", {
   record <- m7_fixture_record("iztech-light-subset")
   current <- shiny::reactiveVal(record)

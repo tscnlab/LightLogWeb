@@ -1,0 +1,101 @@
+{
+  "report_version": "1.2.0",
+  "generated_at": "2026-11-11 10:59:49 UTC",
+  "R": "R version 4.6.1 (2026-06-24)",
+  "source_sha256": {
+    "R/preparation.R": "01ac9681bf397156525b6dbe5817d373f2bad47f7265a81c57ce1271d8005038",
+    "R/preparation-filters.R": "dd43bf2c41f94d185d385fec8fa2096bf72f53e7d4b4c425195f181663b460d1",
+    "R/preparation-preview.R": "680f1fb0b61461375a8ba0e006cd908b1000bd5bee5e2ab0d8660d09d07e3eea",
+    "R/preparation-ui.R": "a1f1890972487fc2952831c5eaa56ad7c1cd7b26ecd0df570d71971aa1119c5a",
+    "R/preparation-summary.R": "1fcb90f73ab722f0bf97217dbc4ea63ddcc8d1af2a44b8047b7d35e7a07b6d9f",
+    "R/m_prepare.R": "34785eed446ce3e19066634254691c4af6368abc29b49c0f90ab5e10c8c05ca7",
+    "dev/milestone-8-prepare-app.R": "40734f2e7282f9a2b557ae9e52891a33400ac7b9ef8ea910d2fef93edbd8edad",
+    "dev/run-milestone-8-acceptance.R": "960daf88a6efc76637fabe9d870844c2cc58b918a9ff74289337f62e63fd4e39",
+    "tests/testthat/helper-milestone-8.R": "8a3038b69135fa18f5b1af3a5e3152c77c998d76642247c4a34906dfb0bef761"
+  },
+  "packages": {
+    "LightLogR": "0.10.3",
+    "glcdp": "1.1.0",
+    "shiny": "1.14.0",
+    "bslib": "0.11.0",
+    "dplyr": "1.2.1",
+    "lubridate": "1.9.5",
+    "mirai": "2.7.2",
+    "promises": "1.5.0",
+    "testthat": "3.3.2"
+  },
+  "command": "RENV_CONFIG_SANDBOX_ENABLED=FALSE Rscript dev/run-milestone-8-acceptance.R",
+  "inputs": "Explicitly synthetic R fixtures from dev/milestone-8-prepare-app.R; no published measurements",
+  "measurement_scope": "Main-session control latency with one real background worker and automatic preview enabled; preparation computation timed separately. Not browser or deployed concurrency latency. Total allocations are not simultaneous RSS.",
+  "target_ms": 50,
+  "hard_gate_ms": 100,
+  "cases": [
+    {
+      "rows": 250000,
+      "profile": "hosted",
+      "preview_seconds": 1.188,
+      "raw_serialized_bytes": 5001066,
+      "estimated_working_bytes": 147125920,
+      "retained_candidate_bytes": 12087416,
+      "transient_total_allocated_bytes": 617786272,
+      "maximum_r_vector_heap_MiB": 113.3362,
+      "budget_bytes": 268435456,
+      "ordinary": {
+        "edit": {
+          "p95_ms": 73,
+          "maximum_ms": 101,
+          "repetitions": 40
+        },
+        "enable_disable": {
+          "p95_ms": 64.05,
+          "maximum_ms": 65,
+          "repetitions": 40
+        },
+        "reorder": {
+          "p95_ms": 64,
+          "maximum_ms": 64,
+          "repetitions": 40
+        }
+      },
+      "ordinary_p95_ms": 73,
+      "full_payload_decodes_during_controls": 0,
+      "independent_raw_pipeline_identical": true,
+      "controls_hard_gate_pass": true,
+      "controls_design_target_pass": false
+    },
+    {
+      "rows": 1000000,
+      "profile": "local",
+      "preview_seconds": 3.069,
+      "raw_serialized_bytes": 20001066,
+      "estimated_working_bytes": 387125920,
+      "retained_candidate_bytes": 46695416,
+      "transient_total_allocated_bytes": 2343114304,
+      "maximum_r_vector_heap_MiB": 344.553,
+      "budget_bytes": 1073741824,
+      "ordinary": {
+        "edit": {
+          "p95_ms": 84,
+          "maximum_ms": 101,
+          "repetitions": 40
+        },
+        "enable_disable": {
+          "p95_ms": 78.05,
+          "maximum_ms": 80,
+          "repetitions": 40
+        },
+        "reorder": {
+          "p95_ms": 79.1,
+          "maximum_ms": 82,
+          "repetitions": 40
+        }
+      },
+      "ordinary_p95_ms": 84,
+      "full_payload_decodes_during_controls": 0,
+      "independent_raw_pipeline_identical": true,
+      "controls_hard_gate_pass": true,
+      "controls_design_target_pass": false
+    }
+  ],
+  "all_hard_gates_pass": true
+}

@@ -528,17 +528,17 @@ test_that("module exposes recommendation, missingness, table, and range controls
       )
       expect_match(
         missingness_html,
-        "Recorded times",
+        "Based on observations",
         fixed = TRUE
       )
       expect_match(
         missingness_html,
-        "Regular span",
+        "Based on observed time span",
         fixed = TRUE
       )
       expect_match(
         missingness_html,
-        "Full days",
+        "Based on full observed days",
         fixed = TRUE
       )
       expect_match(

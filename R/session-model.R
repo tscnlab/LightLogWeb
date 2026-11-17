@@ -783,7 +783,10 @@ rename_dataset_record <- function(record, display_name) {
   record <- push_dataset_history(record, dataset_snapshot(record))
   record$display_name <- display_name
   record$revision <- record$revision + 1L
-  record["draft"] <- list(NULL)
+  if (identical(record$draft$kind, "preparation")) {
+    record$draft$base_revision <- record$revision
+    record$draft$values$display_name <- display_name
+  } else record["draft"] <- list(NULL)
   validate_dataset_record(record)
 }
 
@@ -1057,7 +1060,13 @@ dataset_record_same_data <- function(previous, current) {
       !inherits(current, "llw_dataset_record")
   )
     return(FALSE)
-  exclude <- c("display_name", "revision", "history", "metadata_bundle")
+  exclude <- c(
+    "display_name",
+    "revision",
+    "history",
+    "metadata_bundle",
+    "draft"
+  )
   identical(
     previous[setdiff(names(previous), exclude)],
     current[setdiff(names(current), exclude)]
@@ -1135,6 +1144,7 @@ new_session_store <- function(profile) {
 
   model <- shiny::reactive(model_value())
   datasets_value <- shiny::reactiveVal(list())
+  committed_datasets_value <- shiny::reactiveVal(list())
   selected_id_value <- shiny::reactiveVal(NULL)
   sized_record <- NULL
   size_account <- NULL
@@ -1164,6 +1174,14 @@ new_session_store <- function(profile) {
     }
     model_value(value)
     datasets_value(value$datasets)
+    # Prepare owns unapplied recipe settings. Other screens consume committed
+    # records and need no invalidation when only those settings change.
+    committed <- lapply(value$datasets, function(record) {
+      if (identical(record$draft$kind, "preparation"))
+        record["draft"] <- list(NULL)
+      record
+    })
+    committed_datasets_value(committed)
     selected_id_value(value$selected_dataset_id)
     invisible(value)
   }
@@ -1172,6 +1190,10 @@ new_session_store <- function(profile) {
     # methods below. Reading this private store must not decode every dataset.
     id <- selected_dataset_id()
     if (is.null(id)) NULL else datasets()[[id]]
+  })
+  selected_committed_dataset <- shiny::reactive({
+    id <- selected_dataset_id()
+    if (is.null(id)) NULL else committed_datasets_value()[[id]]
   })
 
   dispatch <- function(event) {
@@ -1221,11 +1243,32 @@ new_session_store <- function(profile) {
     updated
   }
 
+  stage_preparation <- function(recipe, expected) {
+    current <- shiny::isolate(model_value())
+    record <- current$datasets[[current$selected_dataset_id]]
+    updated <- preparation_stage_recipe(record, recipe, expected)
+    if (!identical(record, updated)) {
+      current$datasets[[updated$id]] <- updated
+      set_model(current)
+    }
+    invisible(updated)
+  }
+  commit_preparation <- function(candidate, expected) {
+    current <- shiny::isolate(model_value())
+    record <- current$datasets[[current$selected_dataset_id]]
+    updated <- preparation_commit_record(record, candidate, expected)
+    current$datasets[[updated$id]] <- updated
+    set_model(current)
+    updated
+  }
+
   list(
     model = model,
     datasets = datasets,
+    committed_datasets = shiny::reactive(committed_datasets_value()),
     selected_dataset_id = selected_dataset_id,
     selected_dataset = selected_dataset,
+    selected_committed_dataset = selected_committed_dataset,
     revision = function(dataset_id) {
       record <- shiny::isolate(model_value())$datasets[[dataset_id]]
       if (is.null(record)) NULL else record$revision
@@ -1233,6 +1276,8 @@ new_session_store <- function(profile) {
     dispatch = dispatch,
     select_dataset = select_dataset,
     record_bytes = record_bytes,
-    apply_overlay = apply_overlay
+    apply_overlay = apply_overlay,
+    stage_preparation = stage_preparation,
+    commit_preparation = commit_preparation
   )
 }

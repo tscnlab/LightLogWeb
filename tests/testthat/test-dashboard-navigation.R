@@ -598,6 +598,98 @@ test_that("navigator changes participant and time pages atomically", {
   )
 })
 
+test_that("sparse navigator keeps disabled cells in participant rows and time columns", {
+  record <- new_dataset_record(
+    raw_data = data.frame(
+      Id = rep(c("P01", "P02", "P03"), each = 3L),
+      Datetime = rep(
+        as.POSIXct("2026-01-01 00:00:00", tz = "UTC") +
+          c(0, 86400, 172800),
+        3L
+      ),
+      MEDI = c(0, 1, NA, 2, NA, NA, 3, NA, 4)
+    ),
+    display_name = "Sparse navigator fixture",
+    source_manifest = new_source_manifest(
+      source_type = "test",
+      source_timezone = "UTC"
+    ),
+    analysis_settings = list(
+      primary_variable = "MEDI",
+      analysis_timezone = "UTC"
+    )
+  )
+
+  shiny::testServer(
+    datasetDashboardServer,
+    args = list(
+      dataset = shiny::reactiveVal(record),
+      active_panel = shiny::reactive("dashboard"),
+      color_mode = shiny::reactive("light")
+    ),
+    {
+      session$setInputs(
+        focus_variable = "MEDI",
+        data_stage = "preprocessed",
+        participants = character(),
+        show_all_participants = TRUE,
+        participants_per_page = "1",
+        time_basis = "participant",
+        measurement_window = c(1L, 3L),
+        view_mode = "timeline",
+        days_per_page = "1",
+        plot_scale = "symlog",
+        symlog_threshold = "1",
+        preprocessed_main_only = TRUE,
+        source_main_only = TRUE
+      )
+      session$flushReact()
+
+      html <- output$facet_pagination$html
+      inputs <- regmatches(html, gregexpr("<input\\b[^>]*>", html))[[1L]]
+      cells <- inputs[grepl('name="[^"]*page_navigator"', inputs)]
+      values <- sub('.*value="([^"]+)".*', "\\1", cells)
+      expect_identical(
+        values,
+        c("1:1", "1:2", "1:3", "2:1", "2:2", "2:3", "3:1", "3:2", "3:3")
+      )
+      expect_identical(
+        values[grepl("disabled=", cells, fixed = TRUE)],
+        c("1:3", "2:2", "2:3", "3:2")
+      )
+      expect_match(html, "--llw-time-page-count:3;", fixed = TRUE)
+      expect_match(html, "--llw-participant-page-count:3;", fixed = TRUE)
+      expect_match(
+        html,
+        "0 observed focus value(s); unavailable",
+        fixed = TRUE
+      )
+
+      returned <- session$getReturned()
+      session$setInputs(page_navigator = "2:1")
+      session$flushReact()
+      expect_identical(returned$status()$participant_page, 2L)
+      expect_identical(returned$status()$time_page, 1L)
+
+      # Even a stale or manually supplied empty-cell event must not move pages.
+      session$setInputs(page_navigator = "1:3")
+      session$flushReact()
+      expect_identical(returned$status()$participant_page, 2L)
+      expect_identical(returned$status()$time_page, 1L)
+
+      session$setInputs(page_navigator = "3:3")
+      session$flushReact()
+      expect_identical(returned$status()$participant_page, 3L)
+      expect_identical(returned$status()$time_page, 3L)
+
+      session$setInputs(time_previous = 1L)
+      session$flushReact()
+      expect_identical(returned$status()$participant_page, 3L)
+      expect_identical(returned$status()$time_page, 1L)
+    }
+  )
+})
+
 test_that("time-window handles expose the boundary they change", {
   dataset <- shiny::reactiveVal(dashboard_showcase_record(
     participants = 2L,

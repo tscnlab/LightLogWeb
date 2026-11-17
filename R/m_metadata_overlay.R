@@ -200,6 +200,10 @@ metadata_overlay_server <- function(
       if (
         is.null(prior) ||
           !identical(
+            prior$preparation_identities,
+            preparation_metadata_identities(record)
+          ) ||
+          !identical(
             prior$source_fingerprint,
             record$metadata_bundle$source_fingerprint
           )
@@ -224,7 +228,10 @@ metadata_overlay_server <- function(
               "The selected dataset changed. Open the editor again from its Dashboard.",
               type = "validation"
             )
-          if (!is.null(record$draft))
+          if (
+            !is.null(record$draft) &&
+              !identical(record$draft$kind, "preparation")
+          )
             abort_llw(
               "Finish or discard the dataset preparation draft before editing metadata.",
               type = "validation"
@@ -281,13 +288,21 @@ metadata_overlay_server <- function(
                 " | ",
                 shiny::tags$code(variable)
               ),
-              shiny::tags$p(paste(
-                "Applies to all",
-                count,
-                "exact variable occurrences across",
-                length(unique(state$targets$source_scope)),
-                "retained source scope(s) in this library dataset. Dashboard filters do not reduce this scope."
-              )),
+              shiny::tags$p(
+                if (!is.null(context$preparation_identities[[variable]]))
+                  paste(
+                    "Applies only to",
+                    variable,
+                    "created by the applied recipe. Its source variable and transformation history stay unchanged."
+                  ) else
+                  paste(
+                    "Applies to all",
+                    count,
+                    "exact variable occurrences across",
+                    length(unique(state$targets$source_scope)),
+                    "retained source scope(s) in this library dataset. Dashboard filters do not reduce this scope."
+                  )
+              ),
               shiny::tags$div(
                 class = "llw-overlay-value-input",
                 field_input("label", "Label"),
@@ -564,7 +579,10 @@ metadata_overlay_server <- function(
               type = "validation"
             )
           }
-          if (!is.null(record$draft)) {
+          if (
+            !is.null(record$draft) &&
+              !identical(record$draft$kind, "preparation")
+          ) {
             abort_llw(
               "Finish or discard the dataset preparation draft before editing metadata.",
               type = "validation"

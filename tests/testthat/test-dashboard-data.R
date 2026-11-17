@@ -2866,6 +2866,11 @@ test_that("dashboard module reports bounded reactive state", {
       expect_identical(returned$status()$data_stage, "preprocessed")
       expect_identical(returned$status()$plot_scale, "symlog")
       expect_identical(returned$status()$symlog_threshold, 0.1)
+      expect_true(shiny::is.reactive(returned$plot_settings))
+      axis <- preparation_axis_settings(settings = returned$plot_settings())
+      expect_identical(axis$scale, "symlog")
+      expect_identical(axis$symlog_threshold, 0.1)
+      expect_equal(axis$domain, preview()$focus_domain)
       expect_false(returned$status()$recommendation_active)
       expect_identical(
         returned$status()$recommendation_differences,
